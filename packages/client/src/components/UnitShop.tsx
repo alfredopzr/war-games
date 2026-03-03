@@ -74,10 +74,15 @@ export function UnitShop(): ReactElement | null {
 
   const resources = gameState.players[currentPlayerView].resources;
 
+  const playerSide = currentPlayerView === 'player1' ? 'left' : 'right';
+
   return (
     <div className="unit-shop">
       <h3>DEPLOY UNITS</h3>
       <div className="resources">{resources}g</div>
+      <div className="shop-help-tip">
+        Select a unit below, then click a highlighted hex on the <strong>{playerSide}</strong> side to place it. Right-click a placed unit to remove it. Click a placed unit to assign a directive.
+      </div>
       {UNIT_TYPES.map((type) => {
         const stats = UNIT_STATS[type];
         return (

@@ -23,6 +23,8 @@ import { TurnTransition } from './components/TurnTransition';
 import { RoundResult } from './components/RoundResult';
 import { GameOverScreen } from './components/GameOverScreen';
 import { StartMenu } from './components/StartMenu';
+import { TerrainLegend } from './components/TerrainLegend';
+import { BattleHelp } from './components/BattleHelp';
 
 const DAMAGE_FLASH_DURATION = 500; // ms
 
@@ -441,6 +443,8 @@ export function App(): ReactElement {
           <DirectiveSelector />
           <UnitInfoPanel />
           <CommandMenu />
+          <TerrainLegend />
+          <BattleHelp />
         </>
       )}
       {showTransition && <TurnTransition />}

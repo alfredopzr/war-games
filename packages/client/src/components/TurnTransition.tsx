@@ -24,11 +24,16 @@ export function TurnTransition(): ReactElement | null {
     ? `${playerLabel(nextPlayer)}: Build Phase`
     : `${playerLabel(nextPlayer)}'s Turn`;
 
+  const hint = isBuildPhase
+    ? 'Buy and place units in your highlighted deployment zone. Assign directives to control their battle behavior.'
+    : 'Your units will act on their directives. Spend Command Points to give direct orders.';
+
   return (
     <div className="turn-transition" onClick={dismissTransition} role="button" tabIndex={0}>
       <h1 className={playerTextClass(nextPlayer)}>
         {heading}
       </h1>
+      <p className="transition-hint">{hint}</p>
       <p>Click anywhere to continue</p>
     </div>
   );
