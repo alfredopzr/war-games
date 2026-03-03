@@ -2,15 +2,21 @@ import { useRef, useEffect, useCallback, type ReactElement } from 'react';
 import {
   createGame, placeUnit, startBattlePhase,
   getAllHexes, hexToKey, calculateVisibility,
+  canAttack, cubeDistance, UNIT_STATS,
 } from '@hexwar/engine';
-import type { GameState, CubeCoord, Unit, PlayerId } from '@hexwar/engine';
+import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
 import { HEX_SIZE, TERRAIN_COLORS, TERRAIN_BORDER_COLORS } from './renderer/constants';
 import { hexToPixel, pixelToHex, drawHex } from './renderer/hex-render';
 import { drawUnit } from './renderer/unit-render';
+import { drawObjective } from './renderer/objective-render';
 import { drawFog, drawGhostMarker } from './renderer/fog-render';
 import { createCamera } from './renderer/camera';
 import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
+import { BattleHUD } from './components/BattleHUD';
+import { CommandMenu } from './components/CommandMenu';
+
+const DAMAGE_FLASH_DURATION = 500; // ms
 
 function initGameState(): GameState {
   const state = createGame(42);
@@ -68,6 +74,7 @@ function getEnemyPlayer(player: PlayerId): PlayerId {
 export function App(): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boundsRef = useRef<{ minX: number; minY: number; width: number; height: number } | null>(null);
+  const animFrameRef = useRef<number>(0);
 
   const gameState = useGameStore((s) => s.gameState);
   const selectedUnit = useGameStore((s) => s.selectedUnit);
@@ -105,11 +112,7 @@ export function App(): ReactElement {
     for (const enemy of enemies) {
       const key = hexToKey(enemy.position);
       if (vis.has(key)) {
-        // Enemy is visible now — update last-known position and remove ghost
         updated.delete(enemy.id);
-      } else {
-        // Enemy not visible — if we saw them before, keep a ghost
-        // (We only set ghosts for enemies we previously saw)
       }
     }
 
@@ -117,7 +120,7 @@ export function App(): ReactElement {
   }, [gameState, currentPlayerView, setVisibleHexes]);
 
   const render = useCallback(
-    (canvas: HTMLCanvasElement, state: GameState): void => {
+    (canvas: HTMLCanvasElement, state: GameState, time: number): void => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
@@ -147,21 +150,27 @@ export function App(): ReactElement {
         drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'transparent', '#ffdd44', 3);
       }
 
-      // Draw objective marker
+      // Draw objective with pulsing glow
       const objPixel = hexToPixel(state.map.centralObjective, HEX_SIZE);
-      ctx.beginPath();
-      ctx.arc(objPixel.x + ox, objPixel.y + oy, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffd700';
-      ctx.fill();
-      ctx.strokeStyle = '#b8960c';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      drawObjective(
+        ctx,
+        objPixel.x + ox,
+        objPixel.y + oy,
+        HEX_SIZE,
+        state.round.objective,
+        time,
+      );
+
+      const now = Date.now();
+      const currentDamagedUnits = useGameStore.getState().damagedUnits;
 
       // Draw friendly units (always visible)
       const friendly = getPlayerUnits(state, currentPlayerView);
       for (const unit of friendly) {
         const { x, y } = hexToPixel(unit.position, HEX_SIZE);
-        drawUnit(ctx, unit, x + ox, y + oy);
+        const damageTime = currentDamagedUnits.get(unit.id);
+        const isDamaged = damageTime !== undefined && now - damageTime < DAMAGE_FLASH_DURATION;
+        drawUnit(ctx, unit, x + ox, y + oy, isDamaged);
       }
 
       // Draw enemy units only if in visible hexes
@@ -171,7 +180,9 @@ export function App(): ReactElement {
         const key = hexToKey(unit.position);
         if (visibleHexes.has(key)) {
           const { x, y } = hexToPixel(unit.position, HEX_SIZE);
-          drawUnit(ctx, unit, x + ox, y + oy);
+          const damageTime = currentDamagedUnits.get(unit.id);
+          const isDamaged = damageTime !== undefined && now - damageTime < DAMAGE_FLASH_DURATION;
+          drawUnit(ctx, unit, x + ox, y + oy, isDamaged);
         }
       }
 
@@ -190,7 +201,7 @@ export function App(): ReactElement {
     [selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies],
   );
 
-  // Canvas click handler
+  // Canvas click handler — handles unit selection AND command mode actions
   const handleClick = useCallback(
     (e: MouseEvent): void => {
       const canvas = canvasRef.current;
@@ -201,16 +212,58 @@ export function App(): ReactElement {
       const ox = camera.offsetX - bounds.minX;
       const oy = camera.offsetY - bounds.minY;
 
-      // Convert pixel click to hex grid coords
       const pixelX = e.clientX - ox;
       const pixelY = e.clientY - oy;
       const hex = pixelToHex(pixelX, pixelY, HEX_SIZE);
 
-      // Find unit at clicked hex
-      const unit = findUnitAtHex(gameState, hex);
+      const store = useGameStore.getState();
+      const mode = store.commandMode;
+      const selected = store.selectedUnit;
 
+      // Command mode: move
+      if (mode === 'move' && selected && selected.owner === currentPlayerView) {
+        const stats = UNIT_STATS[selected.type];
+        const dist = cubeDistance(selected.position, hex);
+        if (dist <= stats.moveRange && dist > 0) {
+          // Check hex is not occupied
+          const targetKey = hexToKey(hex);
+          const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
+          const isOccupied = allUnits.some((u) => hexToKey(u.position) === targetKey);
+          if (!isOccupied && gameState.map.terrain.has(targetKey)) {
+            const command: Command = { type: 'direct-move', unitId: selected.id, targetHex: hex };
+            useGameStore.getState().addPendingCommand(command);
+            useGameStore.getState().selectUnit(null);
+            return;
+          }
+        }
+        // Invalid target — cancel mode
+        useGameStore.getState().setCommandMode('none');
+        return;
+      }
+
+      // Command mode: attack
+      if (mode === 'attack' && selected && selected.owner === currentPlayerView) {
+        const targetUnit = findUnitAtHex(gameState, hex);
+        if (targetUnit && targetUnit.owner !== currentPlayerView) {
+          if (canAttack(selected, targetUnit)) {
+            const command: Command = {
+              type: 'direct-attack',
+              unitId: selected.id,
+              targetUnitId: targetUnit.id,
+            };
+            useGameStore.getState().addPendingCommand(command);
+            useGameStore.getState().selectUnit(null);
+            return;
+          }
+        }
+        // Invalid target — cancel mode
+        useGameStore.getState().setCommandMode('none');
+        return;
+      }
+
+      // Normal click: select/deselect unit
+      const unit = findUnitAtHex(gameState, hex);
       if (unit) {
-        // Only select units that are visible
         const key = hexToKey(unit.position);
         const isOwn = unit.owner === currentPlayerView;
         if (isOwn || visibleHexes.has(key)) {
@@ -225,7 +278,7 @@ export function App(): ReactElement {
     [gameState, currentPlayerView, visibleHexes, selectUnit],
   );
 
-  // Resize + render loop
+  // Animation loop + resize
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !gameState) return;
@@ -233,29 +286,36 @@ export function App(): ReactElement {
     const resize = (): void => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      render(canvas, gameState);
     };
 
     resize();
+
+    const loop = (time: number): void => {
+      const currentState = useGameStore.getState().gameState;
+      if (canvas && currentState) {
+        render(canvas, currentState, time);
+      }
+      animFrameRef.current = requestAnimationFrame(loop);
+    };
+
+    animFrameRef.current = requestAnimationFrame(loop);
+
     window.addEventListener('resize', resize);
     canvas.addEventListener('click', handleClick);
+
     return () => {
+      cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('click', handleClick);
     };
   }, [gameState, render, handleClick]);
 
-  // Re-render when selection or visibility changes
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !gameState) return;
-    render(canvas, gameState);
-  }, [gameState, render]);
-
   return (
     <>
       <canvas ref={canvasRef} className="game-canvas" />
+      <BattleHUD />
       <UnitInfoPanel />
+      <CommandMenu />
       <button
         className="view-switch-btn"
         onClick={switchPlayerView}

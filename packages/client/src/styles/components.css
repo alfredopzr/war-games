@@ -57,7 +57,7 @@
 
 .view-switch-btn {
   position: fixed;
-  top: 20px;
+  top: 68px;
   left: 20px;
   padding: 8px 16px;
   background: rgba(20, 20, 40, 0.9);
@@ -67,4 +67,149 @@
   font-family: monospace;
   font-size: 13px;
   cursor: pointer;
+}
+
+/* Battle HUD */
+
+.battle-hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: rgba(20, 20, 40, 0.95);
+  border-bottom: 1px solid #4a4a6a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  color: #e0e0e0;
+  font-family: monospace;
+  z-index: 10;
+}
+
+.battle-hud .phase-badge {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.battle-hud .phase-build { background: #2a5a3a; color: #6fc; }
+.battle-hud .phase-battle { background: #5a2a2a; color: #f88; }
+.battle-hud .phase-scoring { background: #4a4a2a; color: #ff8; }
+
+.battle-hud .turn-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.battle-hud .cp-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.battle-hud .cp-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid #888;
+}
+
+.battle-hud .cp-dot.filled { background: #ffd700; border-color: #ffd700; }
+.battle-hud .cp-dot.empty { background: transparent; }
+
+.battle-hud .objective-status {
+  font-size: 13px;
+  color: #aaa;
+}
+
+.battle-hud .round-info {
+  font-size: 13px;
+  color: #aaa;
+}
+
+.end-turn-btn {
+  padding: 8px 20px;
+  background: #4a6a8a;
+  border: 1px solid #6a8aaa;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.end-turn-btn:hover { background: #5a7a9a; }
+
+/* Command Menu */
+
+.command-menu {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  background: rgba(20, 20, 40, 0.95);
+  border: 1px solid #4a4a6a;
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 10;
+}
+
+.command-btn {
+  padding: 8px 16px;
+  background: #2a2a4a;
+  border: 1px solid #4a4a6a;
+  border-radius: 4px;
+  color: #ccc;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.command-btn:hover { background: #3a3a5a; border-color: #6a6a8a; }
+.command-btn.active { background: #4a4a6a; border-color: #8a8aaa; color: #fff; }
+.command-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.command-redirect-wrap {
+  position: relative;
+}
+
+.directive-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+  background: rgba(20, 20, 40, 0.95);
+  border: 1px solid #4a4a6a;
+  border-radius: 6px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+  z-index: 11;
+}
+
+.directive-option {
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: #ccc;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 12px;
+  text-align: left;
+}
+
+.directive-option:hover {
+  background: #3a3a5a;
+  color: #fff;
 }
