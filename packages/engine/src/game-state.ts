@@ -21,7 +21,7 @@ import { generateMap } from './map-gen';
 import { createUnit, UNIT_STATS } from './units';
 import { canAfford, calculateIncome, applyCarryover, applyMaintenance } from './economy';
 import { createCommandPool, spendCommand } from './commands';
-import { hexToKey, cubeDistance, hexNeighbors } from './hex';
+import { hexToKey, cubeDistance } from './hex';
 import { canAttack, calculateDamage } from './combat';
 import { findPath } from './pathfinding';
 import { executeDirective } from './directives';
@@ -152,7 +152,6 @@ export function executeTurn(
   const currentPlayer = state.round.currentPlayer;
   const enemyPlayer: PlayerId = currentPlayer === 'player1' ? 'player2' : 'player1';
   const friendlyUnits = state.players[currentPlayer].units;
-  const enemyUnits = state.players[enemyPlayer].units;
 
   // Track which units were directly commanded
   let commandPool = state.round.commandPool;
@@ -325,7 +324,7 @@ function applyCommand(
         );
         if (path && path.length > 1) {
           const stepIndex = Math.min(stats.moveRange, path.length - 1);
-          unit.position = path[stepIndex];
+          unit.position = path[stepIndex]!;
         }
       }
 

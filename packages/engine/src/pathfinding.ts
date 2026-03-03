@@ -133,7 +133,7 @@ export function pathCost(
 
   let total = 0;
   for (let i = 1; i < path.length; i++) {
-    const key = hexToKey(path[i]);
+    const key = hexToKey(path[i]!);
     const terrain = terrainMap.get(key);
     if (terrain === undefined) return Infinity;
     const cost = getMoveCost(terrain, unitType);

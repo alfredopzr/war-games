@@ -53,7 +53,7 @@ export function calculateVisibility(
 
       // Intermediate hexes = everything except first (start) and last (end)
       for (let i = 1; i < line.length - 1; i++) {
-        const intermediateKey = hexToKey(line[i]);
+        const intermediateKey = hexToKey(line[i]!);
         const intermediateTerrain = terrainMap.get(intermediateKey);
         if (intermediateTerrain && TERRAIN[intermediateTerrain].blocksLoS) {
           // The blocking hex itself is visible, but target is not

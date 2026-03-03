@@ -153,7 +153,7 @@ function tryAttackClosest(unit: Unit, context: DirectiveContext): UnitAction | n
     return a.enemy.hp - b.enemy.hp;
   });
 
-  return { type: 'attack', targetUnitId: targets[0].enemy.id };
+  return { type: 'attack', targetUnitId: targets[0]!.enemy.id };
 }
 
 /**
@@ -196,7 +196,7 @@ function moveToward(
 
   // Follow the path up to moveRange steps
   const stepIndex = Math.min(stats.moveRange, path.length - 1);
-  return { type: 'move', targetHex: path[stepIndex] };
+  return { type: 'move', targetHex: path[stepIndex]! };
 }
 
 /**
@@ -329,5 +329,5 @@ function scoutExplore(unit: Unit, context: DirectiveContext): UnitAction {
   }
 
   const stepIndex = Math.min(stats.moveRange, path.length - 1);
-  return { type: 'move', targetHex: path[stepIndex] };
+  return { type: 'move', targetHex: path[stepIndex]! };
 }
