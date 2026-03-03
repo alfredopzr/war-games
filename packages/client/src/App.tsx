@@ -120,14 +120,21 @@ export function App(): ReactElement {
 
       const isBuildPhase = state.phase === 'build';
 
-      // Build deployment zone lookup for build phase
-      const deploymentKeys = new Set<string>();
+      // Build deployment zone lookups for build phase
+      const friendlyDeployKeys = new Set<string>();
+      const enemyDeployKeys = new Set<string>();
       if (isBuildPhase) {
-        const zone = currentPlayerView === 'player1'
+        const friendlyZone = currentPlayerView === 'player1'
           ? state.map.player1Deployment
           : state.map.player2Deployment;
-        for (const h of zone) {
-          deploymentKeys.add(hexToKey(h));
+        const enemyZone = currentPlayerView === 'player1'
+          ? state.map.player2Deployment
+          : state.map.player1Deployment;
+        for (const h of friendlyZone) {
+          friendlyDeployKeys.add(hexToKey(h));
+        }
+        for (const h of enemyZone) {
+          enemyDeployKeys.add(hexToKey(h));
         }
       }
 
@@ -139,16 +146,29 @@ export function App(): ReactElement {
         const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#3d6b4c';
         drawHex(ctx, x + ox, y + oy, HEX_SIZE, fill, stroke, 1.5);
 
-        // During build phase: dim non-deployment hexes, tint deployment hexes
+        // During build phase: highlight both deployment zones, dim the rest
         if (isBuildPhase) {
           const key = hexToKey(hex);
-          if (deploymentKeys.has(key)) {
-            const tint = currentPlayerView === 'player1'
-              ? 'rgba(68, 136, 204, 0.25)'
-              : 'rgba(204, 68, 68, 0.25)';
-            drawHex(ctx, x + ox, y + oy, HEX_SIZE, tint, 'transparent', 0);
+          if (friendlyDeployKeys.has(key)) {
+            // Your zone: strong blue tint + border
+            const tintFill = currentPlayerView === 'player1'
+              ? 'rgba(68, 136, 204, 0.35)'
+              : 'rgba(204, 68, 68, 0.35)';
+            const tintBorder = currentPlayerView === 'player1'
+              ? 'rgba(68, 160, 255, 0.6)'
+              : 'rgba(255, 80, 80, 0.6)';
+            drawHex(ctx, x + ox, y + oy, HEX_SIZE, tintFill, tintBorder, 2);
+          } else if (enemyDeployKeys.has(key)) {
+            // Enemy zone: dimmed red tint + border
+            const enemyFill = currentPlayerView === 'player1'
+              ? 'rgba(204, 68, 68, 0.2)'
+              : 'rgba(68, 136, 204, 0.2)';
+            const enemyBorder = currentPlayerView === 'player1'
+              ? 'rgba(255, 80, 80, 0.35)'
+              : 'rgba(68, 160, 255, 0.35)';
+            drawHex(ctx, x + ox, y + oy, HEX_SIZE, enemyFill, enemyBorder, 1.5);
           } else {
-            drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'rgba(0, 0, 0, 0.45)', 'transparent', 0);
+            drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'rgba(0, 0, 0, 0.35)', 'transparent', 0);
           }
         }
       }

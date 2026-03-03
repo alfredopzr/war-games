@@ -54,8 +54,12 @@ export function TerrainLegend(): ReactElement | null {
         <span>Objective (hold 2 turns)</span>
       </div>
       <div className="terrain-legend-item">
-        <span className="terrain-legend-swatch" data-terrain="deploy" />
-        <span>Your deploy zone</span>
+        <span className="terrain-legend-swatch" data-terrain="deploy-friendly" />
+        <span>Your deploy zone (top/bottom)</span>
+      </div>
+      <div className="terrain-legend-item">
+        <span className="terrain-legend-swatch" data-terrain="deploy-enemy" />
+        <span>Enemy deploy zone</span>
       </div>
     </div>
   );

@@ -58,7 +58,7 @@ React app rendering the game on an HTML Canvas. Uses Zustand for state managemen
 
 ### Build Phase (90 seconds)
 
-Each player starts with **500 gold** (plus income from previous rounds). Purchase and deploy units into your deployment zone (the 2 leftmost or rightmost columns of the map).
+Each player starts with **500 gold** (plus income from previous rounds). Purchase and deploy units into your deployment zone (the top 2 rows for Player 1, bottom 2 rows for Player 2).
 
 | Unit | Cost | HP | ATK | DEF | Move | Range | Vision |
 |------|------|----|-----|-----|------|-------|--------|

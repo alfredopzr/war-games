@@ -85,7 +85,7 @@ export function StartMenu(): ReactElement | null {
 
             <div className="help-section">
               <h3>Map Layout</h3>
-              <p>Player 1 (blue) deploys on the <strong>left</strong> side. Player 2 (red) deploys on the <strong>right</strong> side. The objective is in the center.</p>
+              <p>Player 1 (blue) deploys on the <strong>top</strong> 2 rows. Player 2 (red) deploys on the <strong>bottom</strong> 2 rows. The golden objective hex is in the center. Both deployment zones are highlighted during the build phase.</p>
             </div>
           </div>
         )}

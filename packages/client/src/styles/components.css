@@ -806,7 +806,8 @@
 .terrain-legend-swatch[data-terrain="mountain"] { background: #8b7355; }
 .terrain-legend-swatch[data-terrain="city"] { background: #6b6b8d; }
 .terrain-legend-swatch[data-terrain="objective"] { background: #ffd700; }
-.terrain-legend-swatch[data-terrain="deploy"] { background: rgba(68, 136, 204, 0.5); border: 1px solid #4488cc; }
+.terrain-legend-swatch[data-terrain="deploy-friendly"] { background: rgba(68, 136, 204, 0.5); border: 1px solid #4488cc; }
+.terrain-legend-swatch[data-terrain="deploy-enemy"] { background: rgba(204, 68, 68, 0.4); border: 1px solid #cc4444; }
 
 .terrain-legend-divider {
   height: 1px;
