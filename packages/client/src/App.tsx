@@ -75,6 +75,7 @@ export function App(): ReactElement {
   const showGameOver = useGameStore((s) => s.showGameOver);
   const selectUnit = useGameStore((s) => s.selectUnit);
   const setVisibleHexes = useGameStore((s) => s.setVisibleHexes);
+  const setHoveredHex = useGameStore((s) => s.setHoveredHex);
 
   // Recalculate visibility when player view changes
   useEffect(() => {
@@ -148,6 +149,13 @@ export function App(): ReactElement {
             drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'rgba(0, 0, 0, 0.45)', 'transparent', 0);
           }
         }
+      }
+
+      // Draw hovered hex highlight
+      const currentHovered = useGameStore.getState().hoveredHex;
+      if (currentHovered) {
+        const { x, y } = hexToPixel(currentHovered, HEX_SIZE);
+        drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'transparent', 'rgba(255, 255, 255, 0.35)', 2);
       }
 
       // Draw selected unit highlight
@@ -356,6 +364,32 @@ export function App(): ReactElement {
     [gameState, currentPlayerView],
   );
 
+  // Mousemove handler — updates hovered hex
+  const handleMouseMove = useCallback(
+    (e: MouseEvent): void => {
+      if (!gameState || !boundsRef.current) return;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const bounds = boundsRef.current;
+      const camera = createCamera(canvas.width, canvas.height, bounds.width, bounds.height);
+      const ox = camera.offsetX - bounds.minX;
+      const oy = camera.offsetY - bounds.minY;
+
+      const pixelX = e.clientX - ox;
+      const pixelY = e.clientY - oy;
+      const hex = pixelToHex(pixelX, pixelY, HEX_SIZE);
+      setHoveredHex(hex);
+    },
+    [gameState, setHoveredHex],
+  );
+
+  // Clear hover when mouse leaves canvas
+  const handleMouseLeave = useCallback((): void => {
+    setHoveredHex(null);
+  }, [setHoveredHex]);
+
   // Animation loop + resize
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -381,14 +415,18 @@ export function App(): ReactElement {
     window.addEventListener('resize', resize);
     canvas.addEventListener('click', handleClick);
     canvas.addEventListener('contextmenu', handleContextMenu);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseleave', handleMouseLeave);
 
     return () => {
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('click', handleClick);
       canvas.removeEventListener('contextmenu', handleContextMenu);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, [gameState, render, handleClick, handleContextMenu]);
+  }, [gameState, render, handleClick, handleContextMenu, handleMouseMove, handleMouseLeave]);
 
   return (
     <>

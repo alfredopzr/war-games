@@ -1,4 +1,4 @@
-import { useCallback, type ReactElement } from 'react';
+import { useCallback, useState, type ReactElement } from 'react';
 import {
   executeTurn, checkRoundEnd, scoreRound,
   CP_PER_ROUND, UNIT_STATS,
@@ -121,8 +121,10 @@ export function BattleHUD(): ReactElement | null {
   const setGameState = useGameStore((s) => s.setGameState);
   const clearPendingCommands = useGameStore((s) => s.clearPendingCommands);
   const selectUnit = useGameStore((s) => s.selectUnit);
+  const [aiThinking, setAiThinking] = useState(false);
 
   const handleEndTurn = useCallback((): void => {
+    if (aiThinking) return;
     if (!gameState) return;
 
     // Snapshot unit HPs before execution for damage flash detection
@@ -177,17 +179,22 @@ export function BattleHUD(): ReactElement | null {
     if (vsAI && currentPlayerView === 'player1') {
       // VS AI: after P1 ends their turn, auto-execute AI (P2) turn after brief delay
       setGameState({ ...gameState });
+      setAiThinking(true);
       setTimeout(() => {
         const currentGame = useGameStore.getState().gameState;
-        if (!currentGame || currentGame.phase !== 'battle') return;
+        if (!currentGame || currentGame.phase !== 'battle') {
+          setAiThinking(false);
+          return;
+        }
         executeAiTurn(currentGame);
+        setAiThinking(false);
       }, 500);
     } else {
       // Hot-seat: show turn transition overlay for the next player
       setGameState({ ...gameState });
       useGameStore.setState({ showTransition: true });
     }
-  }, [gameState, pendingCommands, vsAI, currentPlayerView, clearPendingCommands, selectUnit, setGameState]);
+  }, [gameState, pendingCommands, vsAI, currentPlayerView, clearPendingCommands, selectUnit, setGameState, aiThinking]);
 
   if (!gameState) return null;
 
@@ -262,8 +269,13 @@ export function BattleHUD(): ReactElement | null {
           Round {round.roundNumber}/{gameState.maxRounds}
         </span>
         {showEndTurn && (
-          <button className="end-turn-btn" onClick={handleEndTurn} type="button">
-            End Turn
+          <button
+            className="end-turn-btn"
+            onClick={handleEndTurn}
+            type="button"
+            disabled={aiThinking}
+          >
+            {aiThinking ? 'AI thinking…' : 'End Turn'}
           </button>
         )}
       </div>
