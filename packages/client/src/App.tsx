@@ -16,6 +16,8 @@ import { UnitInfoPanel } from './components/UnitInfoPanel';
 import { UnitShop } from './components/UnitShop';
 import { DirectiveSelector } from './components/DirectiveSelector';
 import { BattleHUD } from './components/BattleHUD';
+import { BuildTimer } from './components/BuildTimer';
+import { ResourceBar } from './components/ResourceBar';
 import { CommandMenu } from './components/CommandMenu';
 import { TurnTransition } from './components/TurnTransition';
 import { RoundResult } from './components/RoundResult';
@@ -407,6 +409,8 @@ export function App(): ReactElement {
     <>
       <canvas ref={canvasRef} className="game-canvas" />
       <BattleHUD />
+      <BuildTimer />
+      <ResourceBar />
       <UnitShop />
       <DirectiveSelector />
       <UnitInfoPanel />

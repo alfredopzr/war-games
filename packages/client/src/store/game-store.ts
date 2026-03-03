@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { UNIT_STATS } from '@hexwar/engine';
+import { UNIT_STATS, startBattlePhase } from '@hexwar/engine';
 import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, Command, PlayerId } from '@hexwar/engine';
 
 type CommandMode = 'none' | 'move' | 'attack';
@@ -32,6 +32,10 @@ interface GameStore {
   // Animation state
   damagedUnits: Map<string, number>; // unitId -> timestamp of last damage
 
+  // Build timer
+  buildTimeRemaining: number;
+  buildTimerInterval: ReturnType<typeof setInterval> | null;
+
   // Turn transition / round result / game over overlays
   showTransition: boolean;
   showRoundResult: boolean;
@@ -53,6 +57,10 @@ interface GameStore {
   switchPlayerView: () => void;
   markUnitDamaged: (unitId: string) => void;
   dismissTransition: () => void;
+  setBuildTimeRemaining: (time: number) => void;
+  startBuildTimer: () => void;
+  stopBuildTimer: () => void;
+  confirmBuild: () => void;
   showRoundResultScreen: (winner: PlayerId | null, reason: string) => void;
   continueToNextRound: () => void;
   resetGame: () => void;
@@ -69,6 +77,8 @@ export const useGameStore = create<GameStore>((set) => ({
   lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
   pendingCommands: [],
   damagedUnits: new Map<string, number>(),
+  buildTimeRemaining: 90,
+  buildTimerInterval: null,
   showTransition: false,
   showRoundResult: false,
   roundResult: null,
@@ -139,13 +149,96 @@ export const useGameStore = create<GameStore>((set) => ({
       return { damagedUnits: updated };
     }),
 
-  dismissTransition: (): void =>
-    set((prev) => ({
+  dismissTransition: (): void => {
+    const prev = useGameStore.getState();
+    const nextPlayer = prev.currentPlayerView === 'player1' ? 'player2' : 'player1';
+
+    set({
       showTransition: false,
-      currentPlayerView: prev.currentPlayerView === 'player1' ? 'player2' : 'player1',
+      currentPlayerView: nextPlayer,
       selectedUnit: null,
       commandMode: 'none',
-    })),
+    });
+
+    // If still in build phase, start timer for next player
+    const current = useGameStore.getState();
+    if (current.gameState?.phase === 'build') {
+      useGameStore.getState().startBuildTimer();
+    }
+  },
+
+  setBuildTimeRemaining: (time: number): void => set({ buildTimeRemaining: time }),
+
+  startBuildTimer: (): void => {
+    const prev = useGameStore.getState();
+    // Clear any existing interval
+    if (prev.buildTimerInterval) {
+      clearInterval(prev.buildTimerInterval);
+    }
+
+    const interval = setInterval(() => {
+      const current = useGameStore.getState();
+      const next = current.buildTimeRemaining - 1;
+      if (next <= 0) {
+        clearInterval(current.buildTimerInterval!);
+        useGameStore.setState({ buildTimeRemaining: 0, buildTimerInterval: null });
+        // Auto-confirm build when timer expires
+        useGameStore.getState().confirmBuild();
+      } else {
+        useGameStore.setState({ buildTimeRemaining: next });
+      }
+    }, 1000);
+
+    set({ buildTimeRemaining: 90, buildTimerInterval: interval });
+  },
+
+  stopBuildTimer: (): void => {
+    const prev = useGameStore.getState();
+    if (prev.buildTimerInterval) {
+      clearInterval(prev.buildTimerInterval);
+    }
+    set({ buildTimerInterval: null });
+  },
+
+  confirmBuild: (): void => {
+    const store = useGameStore.getState();
+    if (!store.gameState || store.gameState.phase !== 'build') return;
+
+    // Stop the timer
+    if (store.buildTimerInterval) {
+      clearInterval(store.buildTimerInterval);
+    }
+
+    // Auto-assign 'advance' directive to units without one
+    const playerUnits = store.gameState.players[store.currentPlayerView].units;
+    for (const unit of playerUnits) {
+      if (!unit.directive) {
+        unit.directive = 'advance';
+      }
+    }
+
+    // In hot-seat mode: P1 builds first, then show transition for P2
+    if (store.currentPlayerView === 'player1') {
+      useGameStore.setState({
+        buildTimerInterval: null,
+        buildTimeRemaining: 90,
+        showTransition: true,
+        gameState: { ...store.gameState },
+        selectedUnit: null,
+        placementMode: null,
+      });
+    } else {
+      // P2 done building — start battle phase
+      startBattlePhase(store.gameState);
+      useGameStore.setState({
+        buildTimerInterval: null,
+        buildTimeRemaining: 90,
+        gameState: { ...store.gameState },
+        selectedUnit: null,
+        placementMode: null,
+      });
+    }
+  },
 
   showRoundResultScreen: (winner: PlayerId | null, reason: string): void =>
     set({
@@ -176,7 +269,11 @@ export const useGameStore = create<GameStore>((set) => ({
       };
     }),
 
-  resetGame: (): void =>
+  resetGame: (): void => {
+    const prev = useGameStore.getState();
+    if (prev.buildTimerInterval) {
+      clearInterval(prev.buildTimerInterval);
+    }
     set({
       gameState: null,
       selectedUnit: null,
@@ -188,9 +285,12 @@ export const useGameStore = create<GameStore>((set) => ({
       lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
       pendingCommands: [],
       damagedUnits: new Map<string, number>(),
+      buildTimeRemaining: 90,
+      buildTimerInterval: null,
       showTransition: false,
       showRoundResult: false,
       roundResult: null,
       showGameOver: false,
-    }),
+    });
+  },
 }));

@@ -392,6 +392,72 @@
   color: #aaa;
 }
 
+/* Build Timer */
+
+.build-timer {
+  position: fixed;
+  top: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  font-family: monospace;
+  z-index: 10;
+  padding: 8px 24px;
+  background: rgba(20, 20, 40, 0.9);
+  border: 1px solid #4a4a6a;
+  border-radius: 0 0 8px 8px;
+}
+
+.build-timer .timer-value {
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.build-timer .timer-normal { color: #e0e0e0; }
+.build-timer .timer-warning { color: #ffcc00; }
+.build-timer .timer-critical { color: #ff4444; animation: pulse 0.5s infinite alternate; }
+
+@keyframes pulse {
+  from { opacity: 1; }
+  to { opacity: 0.5; }
+}
+
+.ready-btn {
+  display: block;
+  margin: 8px auto 0;
+  padding: 6px 24px;
+  background: #3a8a4a;
+  border: 1px solid #5aaa6a;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.ready-btn:hover { background: #4a9a5a; }
+
+/* Resource Bar */
+
+.resource-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: monospace;
+  font-size: 13px;
+  color: #e0e0e0;
+}
+
+.resource-bar .resource-amount {
+  color: #ffd700;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.resource-bar .round-info {
+  color: #aaa;
+}
+
 /* Directive Selector */
 
 .directive-selector {
