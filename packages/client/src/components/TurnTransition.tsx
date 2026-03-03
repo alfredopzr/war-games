@@ -1,0 +1,30 @@
+import type { ReactElement } from 'react';
+import type { PlayerId } from '@hexwar/engine';
+import { useGameStore } from '../store/game-store';
+
+function playerLabel(player: PlayerId): string {
+  return player === 'player1' ? 'Player 1' : 'Player 2';
+}
+
+function playerTextClass(player: PlayerId): string {
+  return player === 'player1' ? 'player1-text' : 'player2-text';
+}
+
+export function TurnTransition(): ReactElement | null {
+  const showTransition = useGameStore((s) => s.showTransition);
+  const currentPlayerView = useGameStore((s) => s.currentPlayerView);
+  const dismissTransition = useGameStore((s) => s.dismissTransition);
+
+  if (!showTransition) return null;
+
+  const nextPlayer = currentPlayerView === 'player1' ? 'player2' : 'player1';
+
+  return (
+    <div className="turn-transition" onClick={dismissTransition} role="button" tabIndex={0}>
+      <h1 className={playerTextClass(nextPlayer)}>
+        {playerLabel(nextPlayer)}&apos;s Turn
+      </h1>
+      <p>Click anywhere to continue</p>
+    </div>
+  );
+}

@@ -1,9 +1,9 @@
 import { useCallback, type ReactElement } from 'react';
 import {
-  executeTurn, checkRoundEnd, scoreRound, calculateVisibility,
+  executeTurn, checkRoundEnd, scoreRound,
   CP_PER_ROUND,
 } from '@hexwar/engine';
-import type { GameState, PlayerId, ObjectiveState } from '@hexwar/engine';
+import type { PlayerId, ObjectiveState } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
 function phaseClass(phase: string): string {
@@ -33,17 +33,12 @@ function objectiveText(objective: ObjectiveState): string {
   return `${label} holds (${objective.turnsHeld}/2)`;
 }
 
-function getPlayerUnits(state: GameState, player: PlayerId): GameState['players']['player1']['units'] {
-  return state.players[player].units;
-}
-
 export function BattleHUD(): ReactElement | null {
   const gameState = useGameStore((s) => s.gameState);
   const currentPlayerView = useGameStore((s) => s.currentPlayerView);
   const pendingCommands = useGameStore((s) => s.pendingCommands);
   const setGameState = useGameStore((s) => s.setGameState);
   const clearPendingCommands = useGameStore((s) => s.clearPendingCommands);
-  const setVisibleHexes = useGameStore((s) => s.setVisibleHexes);
   const selectUnit = useGameStore((s) => s.selectUnit);
 
   const handleEndTurn = useCallback((): void => {
@@ -74,9 +69,18 @@ export function BattleHUD(): ReactElement | null {
     useGameStore.setState({ damagedUnits: updated });
 
     // Check if round ended
-    const roundResult = checkRoundEnd(gameState);
-    if (roundResult.roundOver) {
-      scoreRound(gameState, roundResult.winner);
+    const result = checkRoundEnd(gameState);
+    if (result.roundOver) {
+      scoreRound(gameState, result.winner);
+
+      // Clear pending commands and deselect
+      clearPendingCommands();
+      selectUnit(null);
+
+      // Force re-render then show round result
+      setGameState({ ...gameState });
+      store.showRoundResultScreen(result.winner, result.reason ?? 'unknown');
+      return;
     }
 
     // Clear pending commands
@@ -85,15 +89,12 @@ export function BattleHUD(): ReactElement | null {
     // Deselect unit
     selectUnit(null);
 
-    // Recalculate visibility for the new current player
-    const newCurrentPlayer = gameState.round.currentPlayer;
-    const friendly = getPlayerUnits(gameState, newCurrentPlayer);
-    const vis = calculateVisibility(friendly, gameState.map.terrain);
-    setVisibleHexes(vis);
-
     // Force re-render by setting game state
     setGameState({ ...gameState });
-  }, [gameState, pendingCommands, clearPendingCommands, selectUnit, setVisibleHexes, setGameState]);
+
+    // Show turn transition overlay for the next player
+    useGameStore.setState({ showTransition: true });
+  }, [gameState, pendingCommands, clearPendingCommands, selectUnit, setGameState]);
 
   if (!gameState) return null;
 

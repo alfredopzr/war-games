@@ -213,3 +213,115 @@
   background: #3a3a5a;
   color: #fff;
 }
+
+/* Turn Transition Overlay */
+
+.turn-transition {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 20, 0.97);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  cursor: pointer;
+}
+
+.turn-transition h1 {
+  font-family: monospace;
+  font-size: 48px;
+  margin-bottom: 24px;
+}
+
+.player1-text { color: #4488cc; }
+.player2-text { color: #cc4444; }
+
+.turn-transition p {
+  font-family: monospace;
+  font-size: 16px;
+  color: #888;
+}
+
+/* Round Result Overlay */
+
+.round-result {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 20, 0.97);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.round-result h1 {
+  font-family: monospace;
+  font-size: 36px;
+  margin-bottom: 16px;
+  color: #fff;
+}
+
+.round-result .result-details {
+  font-family: monospace;
+  font-size: 14px;
+  color: #aaa;
+  text-align: center;
+  margin-bottom: 24px;
+  line-height: 1.8;
+}
+
+.round-result .continue-btn {
+  padding: 12px 32px;
+  background: #4a6a8a;
+  border: 1px solid #6a8aaa;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.round-result .continue-btn:hover { background: #5a7a9a; }
+
+/* Game Over Overlay */
+
+.game-over {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 20, 0.97);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.game-over h1 {
+  font-family: monospace;
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.game-over .score-display {
+  font-family: monospace;
+  font-size: 20px;
+  color: #aaa;
+  margin-bottom: 32px;
+}
+
+.play-again-btn {
+  padding: 12px 32px;
+  background: #3a8a4a;
+  border: 1px solid #5aaa6a;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.play-again-btn:hover { background: #4a9a5a; }

@@ -3,6 +3,11 @@ import type { GameState, Unit, CubeCoord, UnitType, Command, PlayerId } from '@h
 
 type CommandMode = 'none' | 'move' | 'attack';
 
+interface RoundResultData {
+  winner: PlayerId | null;
+  reason: string;
+}
+
 interface GameStore {
   // Core state
   gameState: GameState | null;
@@ -23,6 +28,12 @@ interface GameStore {
   // Animation state
   damagedUnits: Map<string, number>; // unitId -> timestamp of last damage
 
+  // Turn transition / round result / game over overlays
+  showTransition: boolean;
+  showRoundResult: boolean;
+  roundResult: RoundResultData | null;
+  showGameOver: boolean;
+
   // Actions
   setGameState: (state: GameState) => void;
   selectUnit: (unit: Unit | null) => void;
@@ -33,6 +44,10 @@ interface GameStore {
   clearPendingCommands: () => void;
   switchPlayerView: () => void;
   markUnitDamaged: (unitId: string) => void;
+  dismissTransition: () => void;
+  showRoundResultScreen: (winner: PlayerId | null, reason: string) => void;
+  continueToNextRound: () => void;
+  resetGame: () => void;
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -45,6 +60,10 @@ export const useGameStore = create<GameStore>((set) => ({
   lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
   pendingCommands: [],
   damagedUnits: new Map<string, number>(),
+  showTransition: false,
+  showRoundResult: false,
+  roundResult: null,
+  showGameOver: false,
 
   setGameState: (state: GameState): void => set({ gameState: state }),
 
@@ -73,5 +92,59 @@ export const useGameStore = create<GameStore>((set) => ({
       const updated = new Map(prev.damagedUnits);
       updated.set(unitId, Date.now());
       return { damagedUnits: updated };
+    }),
+
+  dismissTransition: (): void =>
+    set((prev) => ({
+      showTransition: false,
+      currentPlayerView: prev.currentPlayerView === 'player1' ? 'player2' : 'player1',
+      selectedUnit: null,
+      commandMode: 'none',
+    })),
+
+  showRoundResultScreen: (winner: PlayerId | null, reason: string): void =>
+    set({
+      showRoundResult: true,
+      roundResult: { winner, reason },
+    }),
+
+  continueToNextRound: (): void =>
+    set((prev) => {
+      if (!prev.gameState) return {};
+
+      // If game is over, show game over screen
+      if (prev.gameState.phase === 'game-over') {
+        return {
+          showRoundResult: false,
+          roundResult: null,
+          showGameOver: true,
+        };
+      }
+
+      // Otherwise transition to next round — show transition for player 1
+      return {
+        showRoundResult: false,
+        roundResult: null,
+        showTransition: true,
+        // Reset view to player2 so dismissTransition flips to player1
+        currentPlayerView: 'player2',
+      };
+    }),
+
+  resetGame: (): void =>
+    set({
+      gameState: null,
+      selectedUnit: null,
+      hoveredHex: null,
+      currentPlayerView: 'player1',
+      commandMode: 'none',
+      visibleHexes: new Set<string>(),
+      lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
+      pendingCommands: [],
+      damagedUnits: new Map<string, number>(),
+      showTransition: false,
+      showRoundResult: false,
+      roundResult: null,
+      showGameOver: false,
     }),
 }));

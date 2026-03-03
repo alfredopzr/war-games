@@ -15,6 +15,9 @@ import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
 import { BattleHUD } from './components/BattleHUD';
 import { CommandMenu } from './components/CommandMenu';
+import { TurnTransition } from './components/TurnTransition';
+import { RoundResult } from './components/RoundResult';
+import { GameOverScreen } from './components/GameOverScreen';
 
 const DAMAGE_FLASH_DURATION = 500; // ms
 
@@ -81,20 +84,23 @@ export function App(): ReactElement {
   const currentPlayerView = useGameStore((s) => s.currentPlayerView);
   const visibleHexes = useGameStore((s) => s.visibleHexes);
   const lastKnownEnemies = useGameStore((s) => s.lastKnownEnemies);
+  const showTransition = useGameStore((s) => s.showTransition);
+  const showRoundResult = useGameStore((s) => s.showRoundResult);
+  const showGameOver = useGameStore((s) => s.showGameOver);
   const setGameState = useGameStore((s) => s.setGameState);
   const selectUnit = useGameStore((s) => s.selectUnit);
   const setVisibleHexes = useGameStore((s) => s.setVisibleHexes);
-  const switchPlayerView = useGameStore((s) => s.switchPlayerView);
 
-  // Initialize game state on mount
+  // Initialize game state on mount (and on reset)
   useEffect(() => {
+    if (gameState) return;
     const state = initGameState();
     setGameState(state);
 
     const friendly = getPlayerUnits(state, 'player1');
     const vis = calculateVisibility(friendly, state.map.terrain);
     setVisibleHexes(vis);
-  }, [setGameState, setVisibleHexes]);
+  }, [gameState, setGameState, setVisibleHexes]);
 
   // Recalculate visibility when player view changes
   useEffect(() => {
@@ -316,13 +322,9 @@ export function App(): ReactElement {
       <BattleHUD />
       <UnitInfoPanel />
       <CommandMenu />
-      <button
-        className="view-switch-btn"
-        onClick={switchPlayerView}
-        type="button"
-      >
-        View: {currentPlayerView === 'player1' ? 'P1' : 'P2'}
-      </button>
+      {showTransition && <TurnTransition />}
+      {showRoundResult && <RoundResult />}
+      {showGameOver && <GameOverScreen />}
     </>
   );
 }
