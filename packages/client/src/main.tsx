@@ -1,2 +1,10 @@
-// @hexwar/client — application entry point
-// Will be populated when the renderer and UI components are built.
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { App } from './App';
+import './styles/global.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
