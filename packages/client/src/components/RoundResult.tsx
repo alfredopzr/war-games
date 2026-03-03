@@ -34,6 +34,8 @@ export function RoundResult(): ReactElement | null {
     ? `${playerLabel(roundResult.winner)} wins the round!`
     : 'Round ended in a draw!';
 
+  const { p1Income, p2Income } = roundResult;
+
   return (
     <div className="round-result">
       <h1>{winnerText}</h1>
@@ -43,12 +45,33 @@ export function RoundResult(): ReactElement | null {
         <div>Player 2 surviving units: {p2Units}</div>
         <div>Score: P1 {p1Wins} — P2 {p2Wins}</div>
       </div>
+      {!isGameOver && p1Income && p2Income && (
+        <div className="result-details income-breakdown">
+          <h3>Next Round Resources</h3>
+          <div className="income-columns">
+            <div className="income-column">
+              <div className="income-header">Player 1</div>
+              <div>Income: +{p1Income.income}g</div>
+              <div>Carryover: +{p1Income.carryover}g</div>
+              <div>Maintenance: -{p1Income.maintenance}g</div>
+              <div className="income-total">Total: {p1Income.total}g</div>
+            </div>
+            <div className="income-column">
+              <div className="income-header">Player 2</div>
+              <div>Income: +{p2Income.income}g</div>
+              <div>Carryover: +{p2Income.carryover}g</div>
+              <div>Maintenance: -{p2Income.maintenance}g</div>
+              <div className="income-total">Total: {p2Income.total}g</div>
+            </div>
+          </div>
+        </div>
+      )}
       <button
         className="continue-btn"
         onClick={continueToNextRound}
         type="button"
       >
-        {isGameOver ? 'Game Over' : `Continue to Round ${roundNumber + 1}`}
+        {isGameOver ? 'Game Over' : `Continue to Round ${roundNumber}`}
       </button>
     </div>
   );

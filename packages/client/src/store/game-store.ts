@@ -4,9 +4,18 @@ import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, Command, Play
 
 type CommandMode = 'none' | 'move' | 'attack';
 
+interface IncomeBreakdown {
+  income: number;
+  carryover: number;
+  maintenance: number;
+  total: number;
+}
+
 interface RoundResultData {
   winner: PlayerId | null;
   reason: string;
+  p1Income: IncomeBreakdown | null;
+  p2Income: IncomeBreakdown | null;
 }
 
 interface GameStore {
@@ -36,6 +45,9 @@ interface GameStore {
   buildTimeRemaining: number;
   buildTimerInterval: ReturnType<typeof setInterval> | null;
 
+  // Surviving units from previous round (cannot be removed during build)
+  survivingUnitIds: Set<string>;
+
   // Turn transition / round result / game over overlays
   showTransition: boolean;
   showRoundResult: boolean;
@@ -61,7 +73,7 @@ interface GameStore {
   startBuildTimer: () => void;
   stopBuildTimer: () => void;
   confirmBuild: () => void;
-  showRoundResultScreen: (winner: PlayerId | null, reason: string) => void;
+  showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown) => void;
   continueToNextRound: () => void;
   resetGame: () => void;
 }
@@ -79,6 +91,7 @@ export const useGameStore = create<GameStore>((set) => ({
   damagedUnits: new Map<string, number>(),
   buildTimeRemaining: 90,
   buildTimerInterval: null,
+  survivingUnitIds: new Set<string>(),
   showTransition: false,
   showRoundResult: false,
   roundResult: null,
@@ -117,6 +130,8 @@ export const useGameStore = create<GameStore>((set) => ({
   removePlacedUnit: (unitId: string): void =>
     set((prev) => {
       if (!prev.gameState || prev.gameState.phase !== 'build') return {};
+      // Cannot remove units that survived from the previous round
+      if (prev.survivingUnitIds.has(unitId)) return {};
       const player = prev.gameState.players[prev.currentPlayerView];
       const unitIndex = player.units.findIndex((u) => u.id === unitId);
       if (unitIndex === -1) return {};
@@ -230,20 +245,23 @@ export const useGameStore = create<GameStore>((set) => ({
     } else {
       // P2 done building — start battle phase
       startBattlePhase(store.gameState);
+      // Show transition to hand control to P1 for the first battle turn
       useGameStore.setState({
         buildTimerInterval: null,
         buildTimeRemaining: 90,
         gameState: { ...store.gameState },
         selectedUnit: null,
         placementMode: null,
+        showTransition: true,
+        survivingUnitIds: new Set<string>(),
       });
     }
   },
 
-  showRoundResultScreen: (winner: PlayerId | null, reason: string): void =>
+  showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown): void =>
     set({
       showRoundResult: true,
-      roundResult: { winner, reason },
+      roundResult: { winner, reason, p1Income: p1Income ?? null, p2Income: p2Income ?? null },
     }),
 
   continueToNextRound: (): void =>
@@ -259,13 +277,30 @@ export const useGameStore = create<GameStore>((set) => ({
         };
       }
 
-      // Otherwise transition to next round — show transition for player 1
+      // Otherwise transition to next round's build phase
+      // Track surviving unit IDs so they cannot be removed during build
+      const surviving = new Set<string>();
+      for (const player of Object.values(prev.gameState.players)) {
+        for (const unit of player.units) {
+          surviving.add(unit.id);
+        }
+      }
+
+      // Reset all stale UI state from the previous round
       return {
         showRoundResult: false,
         roundResult: null,
         showTransition: true,
         // Reset view to player2 so dismissTransition flips to player1
         currentPlayerView: 'player2',
+        // Clear stale battle state
+        selectedUnit: null,
+        commandMode: 'none',
+        placementMode: null,
+        pendingCommands: [],
+        damagedUnits: new Map<string, number>(),
+        lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
+        survivingUnitIds: surviving,
       };
     }),
 
@@ -287,6 +322,7 @@ export const useGameStore = create<GameStore>((set) => ({
       damagedUnits: new Map<string, number>(),
       buildTimeRemaining: 90,
       buildTimerInterval: null,
+      survivingUnitIds: new Set<string>(),
       showTransition: false,
       showRoundResult: false,
       roundResult: null,

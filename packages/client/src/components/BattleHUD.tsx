@@ -1,9 +1,11 @@
 import { useCallback, type ReactElement } from 'react';
 import {
   executeTurn, checkRoundEnd, scoreRound,
-  CP_PER_ROUND,
+  CP_PER_ROUND, UNIT_STATS,
+  calculateIncome, applyCarryover, applyMaintenance,
+  hexToKey,
 } from '@hexwar/engine';
-import type { PlayerId, ObjectiveState } from '@hexwar/engine';
+import type { PlayerId, ObjectiveState, GameState } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
 function phaseClass(phase: string): string {
@@ -31,6 +33,44 @@ function objectiveText(objective: ObjectiveState): string {
   if (!objective.occupiedBy) return 'Neutral';
   const label = playerLabel(objective.occupiedBy);
   return `${label} holds (${objective.turnsHeld}/2)`;
+}
+
+interface IncomeBreakdown {
+  income: number;
+  carryover: number;
+  maintenance: number;
+  total: number;
+}
+
+function computeIncomeBreakdown(
+  state: GameState,
+  playerId: PlayerId,
+  roundWinner: PlayerId | null,
+): IncomeBreakdown {
+  const player = state.players[playerId];
+  const citiesHeld = player.units.reduce((count, unit) => {
+    const terrain = state.map.terrain.get(hexToKey(unit.position));
+    return terrain === 'city' ? count + 1 : count;
+  }, 0);
+
+  const income = calculateIncome({
+    citiesHeld,
+    unitsKilled: state.round.unitsKilledThisRound[playerId],
+    wonRound: roundWinner === playerId,
+    lostRound: roundWinner !== null && roundWinner !== playerId,
+  });
+
+  const carryover = applyCarryover(player.resources);
+  const maintenance = applyMaintenance(
+    player.units.map((u) => UNIT_STATS[u.type].cost),
+  );
+
+  return {
+    income,
+    carryover,
+    maintenance,
+    total: Math.max(0, carryover - maintenance + income),
+  };
 }
 
 export function BattleHUD(): ReactElement | null {
@@ -71,6 +111,10 @@ export function BattleHUD(): ReactElement | null {
     // Check if round ended
     const result = checkRoundEnd(gameState);
     if (result.roundOver) {
+      // Compute income breakdown BEFORE scoreRound mutates resources
+      const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
+      const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
+
       scoreRound(gameState, result.winner);
 
       // Clear pending commands and deselect
@@ -79,7 +123,7 @@ export function BattleHUD(): ReactElement | null {
 
       // Force re-render then show round result
       setGameState({ ...gameState });
-      store.showRoundResultScreen(result.winner, result.reason ?? 'unknown');
+      store.showRoundResultScreen(result.winner, result.reason ?? 'unknown', p1Breakdown, p2Breakdown);
       return;
     }
 
