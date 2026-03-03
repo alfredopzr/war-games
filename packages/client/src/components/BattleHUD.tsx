@@ -1,6 +1,6 @@
 import { useCallback, type ReactElement } from 'react';
 import {
-  executeTurn, checkRoundEnd, scoreRound,
+  executeTurn, checkRoundEnd, scoreRound, startBattlePhase,
   CP_PER_ROUND,
 } from '@hexwar/engine';
 import type { PlayerId, ObjectiveState } from '@hexwar/engine';
@@ -103,9 +103,43 @@ export function BattleHUD(): ReactElement | null {
   const turnTotal = round.maxTurnsPerSide;
   const currentTurn = round.turnsPlayed[round.currentPlayer] + 1;
 
+  const isBuildPhase = phase === 'build';
   const isBattlePhase = phase === 'battle';
   const isCurrentPlayersTurn = round.currentPlayer === currentPlayerView;
   const showEndTurn = isBattlePhase && isCurrentPlayersTurn;
+
+  const handleStartBattle = useCallback((): void => {
+    if (!gameState || gameState.phase !== 'build') return;
+    startBattlePhase(gameState);
+    setGameState({ ...gameState });
+  }, [gameState, setGameState]);
+
+  if (isBuildPhase) {
+    return (
+      <div className="battle-hud">
+        <div className="turn-info">
+          <span className={phaseClass(phase)}>{phaseLabel(phase)}</span>
+          <span className="current-player-label">
+            <span className="player-indicator" style={{ color: playerColor(currentPlayerView) }}>
+              {playerLabel(currentPlayerView)}
+            </span>
+          </span>
+        </div>
+
+        <div className="turn-info">
+          <span className="round-info">
+            Round {round.roundNumber}/{gameState.maxRounds}
+          </span>
+        </div>
+
+        <div className="turn-info">
+          <button className="end-turn-btn" onClick={handleStartBattle} type="button">
+            Start Battle
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="battle-hud">

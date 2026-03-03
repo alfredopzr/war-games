@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { GameState, Unit, CubeCoord, UnitType, Command, PlayerId } from '@hexwar/engine';
+import { UNIT_STATS } from '@hexwar/engine';
+import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, Command, PlayerId } from '@hexwar/engine';
 
 type CommandMode = 'none' | 'move' | 'attack';
 
@@ -17,6 +18,9 @@ interface GameStore {
   hoveredHex: CubeCoord | null;
   currentPlayerView: PlayerId;
   commandMode: CommandMode;
+
+  // Build phase — placement mode
+  placementMode: UnitType | null;
 
   // Fog of war
   visibleHexes: Set<string>;
@@ -40,6 +44,10 @@ interface GameStore {
   setHoveredHex: (hex: CubeCoord | null) => void;
   setVisibleHexes: (hexes: Set<string>) => void;
   setCommandMode: (mode: CommandMode) => void;
+  enterPlacementMode: (type: UnitType) => void;
+  exitPlacementMode: () => void;
+  setUnitDirective: (unitId: string, directive: DirectiveType) => void;
+  removePlacedUnit: (unitId: string) => void;
   addPendingCommand: (command: Command) => void;
   clearPendingCommands: () => void;
   switchPlayerView: () => void;
@@ -56,6 +64,7 @@ export const useGameStore = create<GameStore>((set) => ({
   hoveredHex: null,
   currentPlayerView: 'player1',
   commandMode: 'none',
+  placementMode: null,
   visibleHexes: new Set<string>(),
   lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
   pendingCommands: [],
@@ -74,6 +83,42 @@ export const useGameStore = create<GameStore>((set) => ({
   setVisibleHexes: (hexes: Set<string>): void => set({ visibleHexes: hexes }),
 
   setCommandMode: (mode: CommandMode): void => set({ commandMode: mode }),
+
+  enterPlacementMode: (type: UnitType): void =>
+    set({ placementMode: type, selectedUnit: null }),
+
+  exitPlacementMode: (): void =>
+    set({ placementMode: null }),
+
+  setUnitDirective: (unitId: string, directive: DirectiveType): void =>
+    set((prev) => {
+      if (!prev.gameState) return {};
+      const player = prev.gameState.players[prev.currentPlayerView];
+      const unit = player.units.find((u) => u.id === unitId);
+      if (!unit) return {};
+      unit.directive = directive;
+      // Update selectedUnit reference if it matches
+      const updatedSelected = prev.selectedUnit?.id === unitId
+        ? { ...prev.selectedUnit, directive }
+        : prev.selectedUnit;
+      return { gameState: { ...prev.gameState }, selectedUnit: updatedSelected };
+    }),
+
+  removePlacedUnit: (unitId: string): void =>
+    set((prev) => {
+      if (!prev.gameState || prev.gameState.phase !== 'build') return {};
+      const player = prev.gameState.players[prev.currentPlayerView];
+      const unitIndex = player.units.findIndex((u) => u.id === unitId);
+      if (unitIndex === -1) return {};
+      const unit = player.units[unitIndex]!;
+      const stats = UNIT_STATS[unit.type];
+      player.resources += stats.cost;
+      player.units.splice(unitIndex, 1);
+      return {
+        gameState: { ...prev.gameState },
+        selectedUnit: prev.selectedUnit?.id === unitId ? null : prev.selectedUnit,
+      };
+    }),
 
   addPendingCommand: (command: Command): void =>
     set((prev) => ({ pendingCommands: [...prev.pendingCommands, command] })),
@@ -138,6 +183,7 @@ export const useGameStore = create<GameStore>((set) => ({
       hoveredHex: null,
       currentPlayerView: 'player1',
       commandMode: 'none',
+      placementMode: null,
       visibleHexes: new Set<string>(),
       lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
       pendingCommands: [],

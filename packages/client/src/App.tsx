@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, type ReactElement } from 'react';
 import {
-  createGame, placeUnit, startBattlePhase,
+  createGame, placeUnit,
   getAllHexes, hexToKey, calculateVisibility,
   canAttack, cubeDistance, UNIT_STATS,
 } from '@hexwar/engine';
@@ -13,6 +13,8 @@ import { drawFog, drawGhostMarker } from './renderer/fog-render';
 import { createCamera } from './renderer/camera';
 import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
+import { UnitShop } from './components/UnitShop';
+import { DirectiveSelector } from './components/DirectiveSelector';
 import { BattleHUD } from './components/BattleHUD';
 import { CommandMenu } from './components/CommandMenu';
 import { TurnTransition } from './components/TurnTransition';
@@ -22,22 +24,7 @@ import { GameOverScreen } from './components/GameOverScreen';
 const DAMAGE_FLASH_DURATION = 500; // ms
 
 function initGameState(): GameState {
-  const state = createGame(42);
-
-  const p1 = state.map.player1Deployment;
-  placeUnit(state, 'player1', 'infantry', p1[0]!, 'advance');
-  placeUnit(state, 'player1', 'tank', p1[2]!, 'advance');
-  placeUnit(state, 'player1', 'artillery', p1[4]!, 'support');
-  placeUnit(state, 'player1', 'recon', p1[6]!, 'scout');
-
-  const p2 = state.map.player2Deployment;
-  placeUnit(state, 'player2', 'infantry', p2[1]!, 'advance');
-  placeUnit(state, 'player2', 'tank', p2[3]!, 'advance');
-  placeUnit(state, 'player2', 'artillery', p2[5]!, 'support');
-  placeUnit(state, 'player2', 'recon', p2[7]!, 'scout');
-
-  startBattlePhase(state);
-  return state;
+  return createGame(42);
 }
 
 function computeGridBounds(
@@ -141,6 +128,19 @@ export function App(): ReactElement {
       const ox = camera.offsetX - bounds.minX;
       const oy = camera.offsetY - bounds.minY;
 
+      const isBuildPhase = state.phase === 'build';
+
+      // Build deployment zone lookup for build phase
+      const deploymentKeys = new Set<string>();
+      if (isBuildPhase) {
+        const zone = currentPlayerView === 'player1'
+          ? state.map.player1Deployment
+          : state.map.player2Deployment;
+        for (const h of zone) {
+          deploymentKeys.add(hexToKey(h));
+        }
+      }
+
       // Draw terrain hexes
       for (const hex of allHexes) {
         const { x, y } = hexToPixel(hex, HEX_SIZE);
@@ -148,6 +148,19 @@ export function App(): ReactElement {
         const fill = TERRAIN_COLORS[terrain] ?? '#4a7c59';
         const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#3d6b4c';
         drawHex(ctx, x + ox, y + oy, HEX_SIZE, fill, stroke, 1.5);
+
+        // During build phase: dim non-deployment hexes, tint deployment hexes
+        if (isBuildPhase) {
+          const key = hexToKey(hex);
+          if (deploymentKeys.has(key)) {
+            const tint = currentPlayerView === 'player1'
+              ? 'rgba(68, 136, 204, 0.25)'
+              : 'rgba(204, 68, 68, 0.25)';
+            drawHex(ctx, x + ox, y + oy, HEX_SIZE, tint, 'transparent', 0);
+          } else {
+            drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'rgba(0, 0, 0, 0.45)', 'transparent', 0);
+          }
+        }
       }
 
       // Draw selected unit highlight
@@ -170,44 +183,53 @@ export function App(): ReactElement {
       const now = Date.now();
       const currentDamagedUnits = useGameStore.getState().damagedUnits;
 
-      // Draw friendly units (always visible)
-      const friendly = getPlayerUnits(state, currentPlayerView);
-      for (const unit of friendly) {
-        const { x, y } = hexToPixel(unit.position, HEX_SIZE);
-        const damageTime = currentDamagedUnits.get(unit.id);
-        const isDamaged = damageTime !== undefined && now - damageTime < DAMAGE_FLASH_DURATION;
-        drawUnit(ctx, unit, x + ox, y + oy, isDamaged);
-      }
-
-      // Draw enemy units only if in visible hexes
-      const enemyPlayer = getEnemyPlayer(currentPlayerView);
-      const enemies = getPlayerUnits(state, enemyPlayer);
-      for (const unit of enemies) {
-        const key = hexToKey(unit.position);
-        if (visibleHexes.has(key)) {
+      // During build phase, show all own units (no fog)
+      if (isBuildPhase) {
+        const friendly = getPlayerUnits(state, currentPlayerView);
+        for (const unit of friendly) {
+          const { x, y } = hexToPixel(unit.position, HEX_SIZE);
+          drawUnit(ctx, unit, x + ox, y + oy, false);
+        }
+      } else {
+        // Draw friendly units (always visible)
+        const friendly = getPlayerUnits(state, currentPlayerView);
+        for (const unit of friendly) {
           const { x, y } = hexToPixel(unit.position, HEX_SIZE);
           const damageTime = currentDamagedUnits.get(unit.id);
           const isDamaged = damageTime !== undefined && now - damageTime < DAMAGE_FLASH_DURATION;
           drawUnit(ctx, unit, x + ox, y + oy, isDamaged);
         }
-      }
 
-      // Draw ghost markers for last-known enemy positions
-      for (const [, ghost] of lastKnownEnemies) {
-        const ghostKey = hexToKey(ghost.position);
-        if (!visibleHexes.has(ghostKey)) {
-          const { x, y } = hexToPixel(ghost.position, HEX_SIZE);
-          drawGhostMarker(ctx, ghost.type, x + ox, y + oy);
+        // Draw enemy units only if in visible hexes
+        const enemyPlayer = getEnemyPlayer(currentPlayerView);
+        const enemies = getPlayerUnits(state, enemyPlayer);
+        for (const unit of enemies) {
+          const key = hexToKey(unit.position);
+          if (visibleHexes.has(key)) {
+            const { x, y } = hexToPixel(unit.position, HEX_SIZE);
+            const damageTime = currentDamagedUnits.get(unit.id);
+            const isDamaged = damageTime !== undefined && now - damageTime < DAMAGE_FLASH_DURATION;
+            drawUnit(ctx, unit, x + ox, y + oy, isDamaged);
+          }
         }
-      }
 
-      // Draw fog overlay on non-visible hexes
-      drawFog(ctx, allHexes, visibleHexes, ox, oy, HEX_SIZE);
+        // Draw ghost markers for last-known enemy positions
+        for (const [, ghost] of lastKnownEnemies) {
+          const ghostKey = hexToKey(ghost.position);
+          if (!visibleHexes.has(ghostKey)) {
+            const { x, y } = hexToPixel(ghost.position, HEX_SIZE);
+            drawGhostMarker(ctx, ghost.type, x + ox, y + oy);
+          }
+        }
+
+        // Draw fog overlay on non-visible hexes
+        drawFog(ctx, allHexes, visibleHexes, ox, oy, HEX_SIZE);
+      }
     },
     [selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies],
   );
 
-  // Canvas click handler — handles unit selection AND command mode actions
+  // Canvas click handler — handles unit selection, command mode, AND build-phase placement
   const handleClick = useCallback(
     (e: MouseEvent): void => {
       const canvas = canvasRef.current;
@@ -223,6 +245,43 @@ export function App(): ReactElement {
       const hex = pixelToHex(pixelX, pixelY, HEX_SIZE);
 
       const store = useGameStore.getState();
+
+      // Build phase: placement mode
+      if (gameState.phase === 'build' && store.placementMode) {
+        const hexKey = hexToKey(hex);
+        const zone = currentPlayerView === 'player1'
+          ? gameState.map.player1Deployment
+          : gameState.map.player2Deployment;
+        const inZone = zone.some((h) => hexToKey(h) === hexKey);
+        if (!inZone) return;
+
+        const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
+        const isOccupied = allUnits.some((u) => hexToKey(u.position) === hexKey);
+        if (isOccupied) return;
+
+        const cost = UNIT_STATS[store.placementMode].cost;
+        if (gameState.players[currentPlayerView].resources < cost) return;
+
+        try {
+          placeUnit(gameState, currentPlayerView, store.placementMode, hex);
+          store.setGameState({ ...gameState });
+        } catch {
+          // placement failed — ignore
+        }
+        return;
+      }
+
+      // Build phase: select own unit (for directive assignment)
+      if (gameState.phase === 'build') {
+        const unit = findUnitAtHex(gameState, hex);
+        if (unit && unit.owner === currentPlayerView) {
+          selectUnit(unit);
+        } else {
+          selectUnit(null);
+        }
+        return;
+      }
+
       const mode = store.commandMode;
       const selected = store.selectedUnit;
 
@@ -284,6 +343,32 @@ export function App(): ReactElement {
     [gameState, currentPlayerView, visibleHexes, selectUnit],
   );
 
+  // Right-click handler — remove placed unit during build phase
+  const handleContextMenu = useCallback(
+    (e: MouseEvent): void => {
+      if (!gameState || gameState.phase !== 'build' || !boundsRef.current) return;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const bounds = boundsRef.current;
+      const camera = createCamera(canvas.width, canvas.height, bounds.width, bounds.height);
+      const ox = camera.offsetX - bounds.minX;
+      const oy = camera.offsetY - bounds.minY;
+
+      const pixelX = e.clientX - ox;
+      const pixelY = e.clientY - oy;
+      const hex = pixelToHex(pixelX, pixelY, HEX_SIZE);
+
+      const unit = findUnitAtHex(gameState, hex);
+      if (unit && unit.owner === currentPlayerView) {
+        e.preventDefault();
+        useGameStore.getState().removePlacedUnit(unit.id);
+      }
+    },
+    [gameState, currentPlayerView],
+  );
+
   // Animation loop + resize
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -308,18 +393,22 @@ export function App(): ReactElement {
 
     window.addEventListener('resize', resize);
     canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [gameState, render, handleClick]);
+  }, [gameState, render, handleClick, handleContextMenu]);
 
   return (
     <>
       <canvas ref={canvasRef} className="game-canvas" />
       <BattleHUD />
+      <UnitShop />
+      <DirectiveSelector />
       <UnitInfoPanel />
       <CommandMenu />
       {showTransition && <TurnTransition />}

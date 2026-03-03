@@ -325,3 +325,113 @@
 }
 
 .play-again-btn:hover { background: #4a9a5a; }
+
+/* Unit Shop */
+
+.unit-shop {
+  position: fixed;
+  top: 68px;
+  left: 0;
+  width: 240px;
+  background: rgba(20, 20, 40, 0.95);
+  border-right: 1px solid #4a4a6a;
+  padding: 16px;
+  color: #e0e0e0;
+  font-family: monospace;
+  z-index: 10;
+  max-height: calc(100vh - 68px);
+  overflow-y: auto;
+}
+
+.unit-shop h3 {
+  font-size: 14px;
+  margin: 0 0 4px;
+  color: #fff;
+}
+
+.unit-shop .resources {
+  font-size: 18px;
+  color: #ffd700;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #4a4a6a;
+}
+
+.unit-card {
+  background: #2a2a4a;
+  border: 1px solid #4a4a6a;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.unit-card:hover:not(.disabled) { border-color: #8a8aaa; }
+.unit-card.active { border-color: #ffd700; background: #3a3a5a; }
+.unit-card.disabled { opacity: 0.4; cursor: not-allowed; }
+
+.unit-card .unit-name {
+  font-weight: bold;
+  font-size: 14px;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.unit-card .unit-cost {
+  font-size: 12px;
+  color: #ffd700;
+  margin-bottom: 6px;
+}
+
+.unit-card .unit-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  font-size: 11px;
+  color: #aaa;
+}
+
+/* Directive Selector */
+
+.directive-selector {
+  position: fixed;
+  top: 68px;
+  right: 0;
+  width: 220px;
+  background: rgba(20, 20, 40, 0.95);
+  border-left: 1px solid #4a4a6a;
+  padding: 16px;
+  color: #e0e0e0;
+  font-family: monospace;
+  z-index: 10;
+}
+
+.directive-selector h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+  color: #fff;
+}
+
+.directive-selector .directive-option {
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.directive-selector .directive-option:hover { border-color: #6a6a8a; }
+.directive-selector .directive-option.active { border-color: #ffd700; background: #3a3a5a; }
+
+.directive-selector .directive-option .directive-name {
+  font-weight: bold;
+  color: #ccc;
+  margin-bottom: 2px;
+}
+
+.directive-selector .directive-option .directive-desc {
+  color: #888;
+  font-size: 11px;
+}
