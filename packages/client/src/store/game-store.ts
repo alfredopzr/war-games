@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { UNIT_STATS, startBattlePhase } from '@hexwar/engine';
+import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
 import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, Command, PlayerId } from '@hexwar/engine';
 
 type CommandMode = 'none' | 'move' | 'attack';
@@ -21,6 +21,9 @@ interface RoundResultData {
 interface GameStore {
   // Core state
   gameState: GameState | null;
+
+  // VS AI mode
+  vsAI: boolean;
 
   // UI state
   selectedUnit: Unit | null;
@@ -55,6 +58,7 @@ interface GameStore {
   showGameOver: boolean;
 
   // Actions
+  setVsAI: (enabled: boolean) => void;
   setGameState: (state: GameState) => void;
   selectUnit: (unit: Unit | null) => void;
   setHoveredHex: (hex: CubeCoord | null) => void;
@@ -80,6 +84,7 @@ interface GameStore {
 
 export const useGameStore = create<GameStore>((set) => ({
   gameState: null,
+  vsAI: false,
   selectedUnit: null,
   hoveredHex: null,
   currentPlayerView: 'player1',
@@ -96,6 +101,8 @@ export const useGameStore = create<GameStore>((set) => ({
   showRoundResult: false,
   roundResult: null,
   showGameOver: false,
+
+  setVsAI: (enabled: boolean): void => set({ vsAI: enabled }),
 
   setGameState: (state: GameState): void => set({ gameState: state }),
 
@@ -232,8 +239,30 @@ export const useGameStore = create<GameStore>((set) => ({
       }
     }
 
-    // In hot-seat mode: P1 builds first, then show transition for P2
-    if (store.currentPlayerView === 'player1') {
+    if (store.vsAI && store.currentPlayerView === 'player1') {
+      // VS AI: P1 confirms build, AI immediately builds for P2, then go straight to battle
+      const aiPlacements = aiBuildPhase(store.gameState, 'player2');
+      for (const p of aiPlacements) {
+        try {
+          placeUnit(store.gameState, 'player2', p.unitType, p.position, p.directive);
+        } catch {
+          // skip if placement fails (hex occupied or can't afford)
+        }
+      }
+      startBattlePhase(store.gameState);
+      // Go straight to battle as player1 — no P2 transition needed
+      useGameStore.setState({
+        buildTimerInterval: null,
+        buildTimeRemaining: 90,
+        gameState: { ...store.gameState },
+        selectedUnit: null,
+        placementMode: null,
+        showTransition: false,
+        currentPlayerView: 'player1',
+        survivingUnitIds: new Set<string>(),
+      });
+    } else if (store.currentPlayerView === 'player1') {
+      // Hot-seat: P1 builds first, then show transition for P2
       useGameStore.setState({
         buildTimerInterval: null,
         buildTimeRemaining: 90,

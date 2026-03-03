@@ -3,7 +3,7 @@ import {
   executeTurn, checkRoundEnd, scoreRound,
   CP_PER_ROUND, UNIT_STATS,
   calculateIncome, applyCarryover, applyMaintenance,
-  hexToKey,
+  hexToKey, aiBattlePhase,
 } from '@hexwar/engine';
 import type { PlayerId, ObjectiveState, GameState } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
@@ -73,10 +73,51 @@ function computeIncomeBreakdown(
   };
 }
 
+function executeAiTurn(gameState: GameState): void {
+  // Snapshot unit HPs before AI execution for damage flash detection
+  const allUnitsBefore = new Map<string, number>();
+  for (const player of Object.values(gameState.players)) {
+    for (const unit of player.units) {
+      allUnitsBefore.set(unit.id, unit.hp);
+    }
+  }
+
+  const aiCommands = aiBattlePhase(gameState, 'player2');
+  executeTurn(gameState, aiCommands);
+
+  // Flash damaged units
+  const store = useGameStore.getState();
+  const updated = new Map(store.damagedUnits);
+  for (const player of Object.values(gameState.players)) {
+    for (const unit of player.units) {
+      const prevHp = allUnitsBefore.get(unit.id);
+      if (prevHp !== undefined && unit.hp < prevHp) {
+        updated.set(unit.id, Date.now());
+      }
+    }
+  }
+  useGameStore.setState({ damagedUnits: updated });
+
+  // Check if round ended after AI turn
+  const result = checkRoundEnd(gameState);
+  if (result.roundOver) {
+    const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
+    const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
+    scoreRound(gameState, result.winner);
+    store.setGameState({ ...gameState });
+    store.showRoundResultScreen(result.winner, result.reason ?? 'unknown', p1Breakdown, p2Breakdown);
+    return;
+  }
+
+  // Round not over — it's player1's turn again
+  store.setGameState({ ...gameState });
+}
+
 export function BattleHUD(): ReactElement | null {
   const gameState = useGameStore((s) => s.gameState);
   const currentPlayerView = useGameStore((s) => s.currentPlayerView);
   const pendingCommands = useGameStore((s) => s.pendingCommands);
+  const vsAI = useGameStore((s) => s.vsAI);
   const setGameState = useGameStore((s) => s.setGameState);
   const clearPendingCommands = useGameStore((s) => s.clearPendingCommands);
   const selectUnit = useGameStore((s) => s.selectUnit);
@@ -133,12 +174,20 @@ export function BattleHUD(): ReactElement | null {
     // Deselect unit
     selectUnit(null);
 
-    // Force re-render by setting game state
-    setGameState({ ...gameState });
-
-    // Show turn transition overlay for the next player
-    useGameStore.setState({ showTransition: true });
-  }, [gameState, pendingCommands, clearPendingCommands, selectUnit, setGameState]);
+    if (vsAI && currentPlayerView === 'player1') {
+      // VS AI: after P1 ends their turn, auto-execute AI (P2) turn after brief delay
+      setGameState({ ...gameState });
+      setTimeout(() => {
+        const currentGame = useGameStore.getState().gameState;
+        if (!currentGame || currentGame.phase !== 'battle') return;
+        executeAiTurn(currentGame);
+      }, 500);
+    } else {
+      // Hot-seat: show turn transition overlay for the next player
+      setGameState({ ...gameState });
+      useGameStore.setState({ showTransition: true });
+    }
+  }, [gameState, pendingCommands, vsAI, currentPlayerView, clearPendingCommands, selectUnit, setGameState]);
 
   if (!gameState) return null;
 

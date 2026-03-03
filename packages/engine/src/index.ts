@@ -55,3 +55,7 @@ export {
   createGame, placeUnit, startBattlePhase, executeTurn,
   checkRoundEnd, scoreRound, getWinner,
 } from './game-state';
+
+// AI
+export { aiBuildPhase, aiBattlePhase } from './ai';
+export type { AiBuildAction } from './ai';

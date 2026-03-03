@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, type ReactElement } from 'react';
 import {
-  createGame, placeUnit,
+  placeUnit,
   getAllHexes, hexToKey, calculateVisibility,
   canAttack, cubeDistance, UNIT_STATS,
 } from '@hexwar/engine';
@@ -22,12 +22,9 @@ import { CommandMenu } from './components/CommandMenu';
 import { TurnTransition } from './components/TurnTransition';
 import { RoundResult } from './components/RoundResult';
 import { GameOverScreen } from './components/GameOverScreen';
+import { StartMenu } from './components/StartMenu';
 
 const DAMAGE_FLASH_DURATION = 500; // ms
-
-function initGameState(): GameState {
-  return createGame(42);
-}
 
 function computeGridBounds(
   hexes: CubeCoord[],
@@ -76,20 +73,8 @@ export function App(): ReactElement {
   const showTransition = useGameStore((s) => s.showTransition);
   const showRoundResult = useGameStore((s) => s.showRoundResult);
   const showGameOver = useGameStore((s) => s.showGameOver);
-  const setGameState = useGameStore((s) => s.setGameState);
   const selectUnit = useGameStore((s) => s.selectUnit);
   const setVisibleHexes = useGameStore((s) => s.setVisibleHexes);
-
-  // Initialize game state on mount (and on reset)
-  useEffect(() => {
-    if (gameState) return;
-    const state = initGameState();
-    setGameState(state);
-
-    const friendly = getPlayerUnits(state, 'player1');
-    const vis = calculateVisibility(friendly, state.map.terrain);
-    setVisibleHexes(vis);
-  }, [gameState, setGameState, setVisibleHexes]);
 
   // Recalculate visibility when player view changes
   useEffect(() => {
@@ -407,14 +392,19 @@ export function App(): ReactElement {
 
   return (
     <>
+      <StartMenu />
       <canvas ref={canvasRef} className="game-canvas" />
-      <BattleHUD />
-      <BuildTimer />
-      <ResourceBar />
-      <UnitShop />
-      <DirectiveSelector />
-      <UnitInfoPanel />
-      <CommandMenu />
+      {gameState && (
+        <>
+          <BattleHUD />
+          <BuildTimer />
+          <ResourceBar />
+          <UnitShop />
+          <DirectiveSelector />
+          <UnitInfoPanel />
+          <CommandMenu />
+        </>
+      )}
       {showTransition && <TurnTransition />}
       {showRoundResult && <RoundResult />}
       {showGameOver && <GameOverScreen />}
