@@ -28,7 +28,7 @@ function playerLabel(player: PlayerId): string {
 }
 
 function playerColor(player: PlayerId): string {
-  return player === 'player1' ? '#4488cc' : '#cc4444';
+  return player === 'player1' ? '#6a7a5a' : '#8a5a4a';
 }
 
 function objectiveText(objective: ObjectiveState, state: GameState): string {

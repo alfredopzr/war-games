@@ -919,7 +919,6 @@ def process_unit(unit: dict, log: dict, preview_only: bool = False,
                     blender_path, "--background", "--python", str(merge_script),
                     "--",
                     "--output", str(animated_dest),
-                    "--skin", str(final_dest),
                     *clip_args,
                 ]
                 print(f"  [S7 MERGE] Running Blender merge...")
@@ -937,6 +936,37 @@ def process_unit(unit: dict, log: dict, preview_only: bool = False,
                 log[filename] = entry
                 save_log(log)
                 print(f"  [S7 DONE] {filename}")
+
+            # ── Stage 8: Apply skin (texture transfer) ──
+            if entry.get("stage8_skin") == "success" and animated_dest.exists():
+                print(f"  [S8 SKIP] Skin already applied")
+            else:
+                skin_script = PIPELINE_DIR / "5_apply_skin.py"
+                # Apply skin to a temp file, then replace the animated output
+                skinned_tmp = animated_dest.with_suffix(".skinned.glb")
+                cmd = [
+                    sys.executable, str(skin_script),
+                    "--source", str(final_dest),
+                    "--target", str(animated_dest),
+                    "--output", str(skinned_tmp),
+                ]
+                print(f"  [S8 SKIN] Applying textures...")
+                result = subprocess.run(cmd, capture_output=True, timeout=60)
+
+                if result.returncode != 0:
+                    stderr = result.stderr.decode("utf-8", errors="replace")[-500:]
+                    print(f"  [S8 FAIL] Skin transfer failed:\n{stderr}")
+                    entry["stage8_skin"] = "failed"
+                    entry["status"] = "failed"
+                    log[filename] = entry
+                    return "failed"
+
+                # Replace animated output with skinned version
+                skinned_tmp.replace(animated_dest)
+                entry["stage8_skin"] = "success"
+                log[filename] = entry
+                save_log(log)
+                print(f"  [S8 DONE] {filename}")
 
     entry["status"] = "success"
     entry["unit_type"] = unit["unit_type"]
@@ -996,7 +1026,8 @@ def print_status(all_units: list[dict], log: dict):
                            if entry.get(f"stage6_anim_{c}") == "success")
             i6 = f"{anim_done}/5"
             i7 = STAGE_ICONS.get(entry.get("stage7_merge", ""), "?")
-            extra = f"  S5[{i5}] S6[{i6}] S7[{i7}]"
+            i8 = STAGE_ICONS.get(entry.get("stage8_skin", ""), "?")
+            extra = f"  S5[{i5}] S6[{i6}] S7[{i7}] S8[{i8}]"
 
         print(f"    {tag} {fn:<30s}  S1[{i1}] S2[{i2}] S3[{i3}] S4[{i4}]{extra}")
 

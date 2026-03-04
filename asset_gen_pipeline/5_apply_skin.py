@@ -187,7 +187,7 @@ def main():
         tgt_json["buffers"][0]["byteLength"] = len(tgt_bin)
 
     write_glb(args.output, tgt_json, tgt_bin)
-    print(f"[SKIN] Applied {len(src_materials)} materials, {len(new_images)} images → {args.output}")
+    print(f"[SKIN] Applied {len(src_materials)} materials, {len(new_images)} images -> {args.output}")
 
 
 if __name__ == "__main__":

@@ -8,8 +8,8 @@ import { uiLayer } from './layers';
 const MINIMAP_WIDTH = 150;
 const MINIMAP_HEIGHT = 100;
 const MINIMAP_PADDING = 10;
-const MINIMAP_BG = 0x0a0e14;
-const MINIMAP_BORDER = 0x00d4ff;
+const MINIMAP_BG = 0x1a1a16;
+const MINIMAP_BORDER = 0x3a3830;
 const MINIMAP_BG_ALPHA = 0.85;
 
 let minimapContainer: Container | null = null;
@@ -119,8 +119,8 @@ export function renderMinimap(
 
   // Draw unit dots
   const unitDots = new Graphics();
-  const p1Color = 0x4488cc;
-  const p2Color = 0xcc4444;
+  const p1Color = 0x6a7a5a;
+  const p2Color = 0x8a5a4a;
 
   for (const unit of state.players.player1.units) {
     const { x, y } = hexToPixel(unit.position, hexSize);

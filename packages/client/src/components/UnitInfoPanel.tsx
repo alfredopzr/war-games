@@ -56,9 +56,9 @@ function StatRow({ label, value }: { label: string; value: string }): ReactEleme
 }
 
 function hpColor(pct: number): string {
-  if (pct > 0.6) return '#44cc66';
-  if (pct > 0.3) return '#ccaa22';
-  return '#ff4444';
+  if (pct > 0.6) return '#6a8a48';
+  if (pct > 0.3) return '#a08a40';
+  return '#9a4a3a';
 }
 
 function HpBar({ current, max }: { current: number; max: number }): ReactElement {

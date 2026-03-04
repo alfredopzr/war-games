@@ -21,11 +21,11 @@ export function drawHpBar(
   const ratio = currentHp / maxHp;
   let fillColor: number;
   if (ratio > 0.6) {
-    fillColor = 0x44ff44;
+    fillColor = 0x6a8a48;
   } else if (ratio > 0.3) {
-    fillColor = 0xffcc00;
+    fillColor = 0xa08a40;
   } else {
-    fillColor = 0xff4444;
+    fillColor = 0x9a4a3a;
   }
 
   const fillWidth = barWidth * ratio;

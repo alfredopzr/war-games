@@ -38,14 +38,14 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
     const pts = hexPoints(x, y, HEX_SIZE);
 
     if (friendlyKeys.has(hexKey)) {
-      const tint = currentPlayerView === 'player1' ? 0x1e5ab4 : 0xb41e1e;
-      const stroke = currentPlayerView === 'player1' ? 0x50a0ff : 0xff5050;
+      const tint = currentPlayerView === 'player1' ? 0x4a5a3a : 0x6a3a2a;
+      const stroke = currentPlayerView === 'player1' ? 0x8a9a7a : 0xaa7a6a;
       g.poly(pts, true);
       g.fill({ color: tint, alpha: 0.45 });
       g.stroke({ color: stroke, width: 2.5 });
     } else if (enemyKeys.has(hexKey)) {
-      const tint = currentPlayerView === 'player1' ? 0x8c1e1e : 0x1e46a0;
-      const stroke = currentPlayerView === 'player1' ? 0xc83c3c : 0x3c78dc;
+      const tint = currentPlayerView === 'player1' ? 0x5a2a1a : 0x2a3a1a;
+      const stroke = currentPlayerView === 'player1' ? 0x8a5a4a : 0x6a7a5a;
       g.poly(pts, true);
       g.fill({ color: tint, alpha: 0.35 });
       g.stroke({ color: stroke, width: 1.5 });

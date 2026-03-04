@@ -39,7 +39,7 @@ export function spawnDamageNumber(x: number, y: number, damage: number): void {
     fontFamily: 'monospace',
     fontSize: 16,
     fontWeight: 'bold',
-    fill: 0xff4444,
+    fill: 0x9a4a3a,
   });
   const text = new Text({ text: `-${damage}`, style });
   text.anchor.set(0.5, 0.5);

@@ -777,3 +777,260 @@ Replace random-scatter terrain with noise-based coherent biomes. Add elevation a
 | 17 | `App.tsx` — pass elevation to renderFog + renderSelectionHighlights | DONE |
 | 18 | Client type-check — clean compile | DONE |
 | 19 | Visual verification (pnpm dev) | NOT DONE |
+
+### Sprint 3: 3D Animated Units (Three.js Hybrid)
+
+#### Why Three.js, Not pixi3d
+
+pixi3d only supports PixiJS v5–v7. Dead end for our v8 codebase. PixiJS v8+ has official Three.js integration — shared WebGL context, alternating render passes. The 2D hex board stays in PixiJS. Only the unit models live in Three.js.
+
+#### Architecture: Shared Canvas, Two Renderers
+
+```
+Same <canvas> element
+├── Three.js WebGLRenderer    ← 3D unit models, synced camera
+│   └── THREE.Scene
+│       ├── unit meshes (GLTF .glb)
+│       ├── directional light
+│       └── ambient light
+│
+└── PixiJS WebGLRenderer      ← 2D hex board (terrain, fog, UI, effects)
+    └── app.stage (existing 7-layer scene graph)
+```
+
+Render order per frame:
+1. `threeRenderer.resetState()` → `threeRenderer.render(scene, camera)`
+2. `pixiRenderer.resetState()` → `pixiRenderer.render({ container: stage })`
+
+Three.js renders first (3D units behind terrain overlays). PixiJS renders on top with `clearBeforeRender: false` so 3D content shows through.
+
+#### Initialization Change
+
+Current `pixi-app.ts` creates a standalone `Application`. New approach:
+
+1. Three.js creates `WebGLRenderer` with `stencil: true`, appends canvas to DOM
+2. PixiJS `WebGLRenderer` inits with `context: threeRenderer.getContext()` — shared GL context
+3. Both renderers share the same canvas, same GPU surface
+4. PixiJS `Application` replaced with manual `WebGLRenderer` + ticker (Application assumes it owns the canvas)
+
+```typescript
+// renderer/three-app.ts (NEW)
+const threeRenderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(...);  // ortho matches 2D board
+
+// renderer/pixi-app.ts (MODIFIED)
+const pixiRenderer = new PIXI.WebGLRenderer();
+await pixiRenderer.init({
+  context: threeRenderer.getContext(),
+  width, height,
+  clearBeforeRender: false,
+});
+```
+
+#### Camera Sync
+
+Three.js uses `OrthographicCamera` (not perspective) to match the flat isometric board. Every frame, sync Three.js camera to PixiJS stage transform:
+
+```
+threeCamera.left   = -stageWidth / 2
+threeCamera.right  = stageWidth / 2
+threeCamera.top    = stageHeight / 2
+threeCamera.bottom = -stageHeight / 2
+threeCamera.position.set(stageCenterX, stageCenterY, 1000)
+threeCamera.zoom   = pixiStage.scale.x
+```
+
+Pan = translate camera position. Zoom = camera zoom property. The ortho projection ensures 3D models don't have perspective distortion — they sit flat on the hex board like physical miniatures.
+
+#### 3D Model Pipeline
+
+**Generation**: AI model generators (Meshy.ai, Tripo3D, Rodin Gen-1) → `.glb` files
+- Prompt with unit descriptions from Factions section of this doc
+- Target ~300-800 tris, vertex colored, flat shaded
+- Generate 4 base models: infantry, tank, scout, artillery
+- Faction variants via vertex color swaps (same mesh, different colors)
+
+**Animation**: Mixamo auto-rigging
+- Upload base mesh → auto-rig → download with animations
+- 5 animations per unit: idle, move, attack, hit, death
+- Mixamo exports `.fbx` → convert to `.glb` with animations embedded
+- If Mixamo can't auto-rig (low-poly too simple), manual keyframes in Blender: idle bob, move lean, attack lunge, hit recoil, death topple
+
+**Asset output**: 4 `.glb` files, each containing mesh + 5 animation clips:
+```
+assets/models/infantry.glb   (idle, move, attack, hit, death)
+assets/models/tank.glb        (idle, move, attack, hit, death)
+assets/models/scout.glb       (idle, move, attack, hit, death)
+assets/models/artillery.glb   (idle, move, attack, hit, death)
+```
+
+Faction color swap at runtime — no separate model files per faction.
+
+#### Boardgame Figurine Aesthetic
+
+Units are small 3D figurines sitting on hex tiles. Not photorealistic. Think: painted tabletop minis on a war room table.
+
+- **Scale**: unit models ~60-70% of hex radius tall. Small enough to see the hex underneath.
+- **Idle**: subtle bobbing — Y position oscillates ±2px at ~0.5Hz. Breathing animation if rigged.
+- **Move**: unit plays move clip (forward lean / engine rev) while tweening between hex positions over ~0.3s. Crossfades back to idle on arrival.
+- **Attack**: unit plays attack clip (swing/lunge/recoil), attack tracer fires simultaneously (existing PixiJS effect stays).
+- **Hit**: unit plays hit clip (flinch/recoil). Damage number still floats up in PixiJS.
+- **Death**: unit plays death clip (topple/collapse), then fades out over 1s. Death marker still appears in PixiJS.
+
+#### Rotation & Orientation
+
+The camera is orthographic, looking down at the isometric board. Models rotate around their local Y-axis (vertical — the axis sticking "up" out of the board) to face different directions.
+
+**6 hex facings**
+
+Flat-top hex grid has 6 neighbor directions. Each maps to a rotation angle for the model:
+
+```
+Hex direction (dq, dr)     Screen vector (dx, dy)        Model Y-rotation
+─────────────────────────────────────────────────────────────────────────
+East       (+1,  0)        (+1.5s,  +0.48s)               ~-18°
+NE         (+1, -1)        (+1.5s,  -0.48s)               ~+18°
+NW         ( 0, -1)        ( 0,     -0.96s)               ~+90°
+West       (-1,  0)        (-1.5s,  -0.48s)               ~+198°
+SW         (-1, +1)        (-1.5s,  +0.48s)               ~-198°
+SE         ( 0, +1)        ( 0,     +0.96s)               ~-90°
+```
+
+(Screen Y accounts for ISO_Y_SCALE = 0.55 and yFlip. Values shown are relative, `s` = hexSize.)
+
+**Don't precompute fixed angles** — compute from actual screen-space delta instead:
+
+```typescript
+function facingAngle(from: CubeCoord, to: CubeCoord): number {
+  const a = hexToPixel(from, HEX_SIZE);
+  const b = hexToPixel(to, HEX_SIZE);
+  return Math.atan2(a.x - b.x, a.y - b.y);  // Y-axis rotation in Three.js
+}
+```
+
+This naturally handles Y-compression and map flip — `hexToPixel` already bakes both in. The `atan2(dx, dy)` convention matches Three.js Y-rotation where 0 = facing camera (screen-down), positive = counterclockwise.
+
+**When to rotate**:
+
+| Event | Facing target |
+|-------|---------------|
+| Spawn / idle (build phase) | Face toward enemy side of map (screen-up for player1 view) |
+| Move | Face toward destination hex. Rotate before tween starts. |
+| Attack | Face toward defender hex. Rotate before attack clip plays. |
+| Hit | Keep current facing (don't spin toward attacker — looks weird) |
+| Death | Keep current facing |
+| Turn start (no action) | Keep last facing from previous turn |
+
+**Rotation speed**: Snap rotation, no lerp. Figurines on a board game don't smoothly spin — they get picked up and placed facing the right way. Instant rotation feels more tactile.
+
+**Default facing on spawn**: Face the center of the map. Computed as `facingAngle(spawnHex, centerObjectiveHex)`.
+
+#### Faction Color Swap
+
+Same `.glb` mesh, different vertex colors at runtime:
+
+```typescript
+model.traverse((child) => {
+  if (child.isMesh) {
+    child.material = child.material.clone();
+    // Swap primary color region
+    child.material.color.setHex(FACTION_COLORS[owner].primary);
+  }
+});
+```
+
+Engineers: yellow `#F2C94C` primary, steel grey `#828282` secondary
+Caravaners: copper `#D4845A` primary, turquoise `#4ECDC4` secondary
+
+#### Unit Positioning
+
+3D models positioned using the same `hexToPixel()` function. Three.js world coordinates = PixiJS world coordinates (same canvas, same units). Each unit mesh:
+
+```typescript
+mesh.position.set(hexPixel.x, hexPixel.y, 0);
+```
+
+Elevation handled the same way — `hexToPixel` already offsets Y by `elevation * ELEVATION_PX`.
+
+#### Renderer Changes
+
+| File | Change |
+|------|--------|
+| `renderer/three-app.ts` | NEW — Three.js WebGLRenderer, Scene, OrthographicCamera, lights, GLTFLoader |
+| `renderer/pixi-app.ts` | MODIFY — init with shared GL context from Three.js instead of own canvas |
+| `renderer/unit-renderer.ts` | REWRITE — swap PixiJS Graphics circles for Three.js GLTF meshes. Position, animate, faction color. Keep depth sorting. |
+| `renderer/layers.ts` | MODIFY — remove unitLayer from PixiJS scene graph (units now in Three.js scene) |
+| `renderer/effects-renderer.ts` | KEEP — damage numbers, tracers, death markers stay in PixiJS effectsLayer |
+| `renderer/camera-controller.ts` | MODIFY — sync Three.js camera on every pan/zoom/resize |
+| `App.tsx` | MODIFY — render loop calls Three.js render then PixiJS render per frame |
+| `renderer/replay-sequencer.ts` | MODIFY — trigger Three.js unit animations (attack, hit, death) during replay |
+
+#### Animation System
+
+```typescript
+// renderer/unit-animator.ts (NEW)
+type AnimClip = 'idle' | 'move' | 'attack' | 'hit' | 'death';
+
+interface UnitModel {
+  mesh: THREE.Group;
+  mixer: THREE.AnimationMixer;
+  clips: Record<AnimClip, THREE.AnimationClip>;
+  currentAction: THREE.AnimationAction | null;
+  facing: number;  // Y-rotation in radians
+}
+
+function playAnimation(unit: UnitModel, clip: AnimClip): void {
+  // crossfade from current to new clip
+}
+
+function setFacing(unit: UnitModel, from: CubeCoord, to: CubeCoord): void {
+  unit.facing = facingAngle(from, to);
+  unit.mesh.rotation.y = unit.facing;  // snap, no lerp
+}
+
+function updateAnimations(delta: number): void {
+  // call mixer.update(delta) for every active unit
+}
+```
+
+Animation triggers:
+- Replay `'move'` event → `setFacing(from, to)` → play `move` clip → tween mesh position → crossfade to `idle` on arrival
+- Replay `'attack'` event → `setFacing(attackerPos, defenderPos)` → attacker plays `attack` clip, defender plays `hit` clip
+- Replay `'kill'` event → unit plays `death` clip (keeps current facing), then mesh removed
+- Default → all units play `idle` clip, facing preserved from last action
+
+#### Dependencies
+
+```
+three (npm)          — 3D renderer
+@types/three (npm)   — TypeScript types
+three/addons         — GLTFLoader for .glb import
+```
+
+No pixi3d. No Babylon. Just Three.js directly.
+
+#### Implementation Steps
+
+| # | Step | Details |
+|---|------|---------|
+| 1 | Install Three.js | `pnpm add three @types/three` in client package |
+| 2 | Create `three-app.ts` | WebGLRenderer, Scene, OrthographicCamera, AmbientLight + DirectionalLight |
+| 3 | Modify `pixi-app.ts` | Shared GL context init, remove standalone Application canvas creation |
+| 4 | Create `unit-animator.ts` | GLTFLoader, AnimationMixer management, clip playback, crossfade |
+| 5 | Rewrite `unit-renderer.ts` | Replace PixiJS Graphics circles with Three.js GLTF meshes. Position via hexToPixel. Faction color swap. |
+| 6 | Sync camera | `camera-controller.ts` mirrors PixiJS stage transform to Three.js OrthographicCamera every frame |
+| 7 | Render loop | App.tsx: `threeRenderer.resetState()` → render 3D → `pixiRenderer.resetState()` → render 2D |
+| 8 | Replay integration | `replay-sequencer.ts` triggers attack/hit/death animations on Three.js models |
+| 9 | Generate models | AI model gen → Mixamo rig → export .glb with 4 clips each |
+| 10 | Fallback | Until .glb files exist, keep current PixiJS circle+letter units as fallback. Three.js models load async — if missing, skip. |
+
+#### What Does NOT Change
+
+- Engine (`packages/engine/`) — untouched
+- Terrain, fog, deploy, selection, objective renderers — stay in PixiJS
+- Effects (damage numbers, tracers, death markers) — stay in PixiJS effectsLayer
+- Minimap — stays in PixiJS
+- React UI components — stay as DOM overlays
+- Store (Zustand) — no changes
+- Hex math (`hexToPixel`, `pixelToHex`) — no changes

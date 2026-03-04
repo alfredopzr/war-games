@@ -32,7 +32,7 @@ export function renderSelectionHighlights(
 
   // Move/attack range hex outlines
   if (highlightedHexes.size > 0 && highlightMode !== 'none') {
-    const color = highlightMode === 'move' ? 0x00d4ff : 0xff4444;
+    const color = highlightMode === 'move' ? 0xe8e4d8 : 0x9a4a3a;
     const fillAlpha = highlightMode === 'move' ? 0.08 : 0.1;
 
     for (const hex of allHexes) {
@@ -61,7 +61,7 @@ export function renderSelectionHighlights(
     const key = hexToKey(selectedUnit.position);
     const elev = elevationMap.get(key) ?? 0;
     const { x, y } = hexToPixel(selectedUnit.position, HEX_SIZE, elev);
-    drawHexOutline(selectionGraphics, x, y, HEX_SIZE, 0x00d4ff, 2.5, 0.9);
+    drawHexOutline(selectionGraphics, x, y, HEX_SIZE, 0xe8e4d8, 2.5, 0.9);
   }
 
   uiLayer.addChild(selectionGraphics);

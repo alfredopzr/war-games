@@ -44,14 +44,14 @@ const directiveStyle = new TextStyle({
   fontFamily: 'monospace',
   fontSize: 12,
   fontWeight: 'bold',
-  fill: 0xdcdcf0,
+  fill: 0xc8c4b8,
 });
 
 const checkStyle = new TextStyle({
   fontFamily: 'monospace',
   fontSize: 11,
   fontWeight: 'bold',
-  fill: 0x44ff44,
+  fill: 0x6a8a48,
 });
 
 const ghostLabelStyle = new TextStyle({
@@ -98,7 +98,7 @@ function drawUnit(
   // Damage flash: red glow behind unit
   if (isDamaged) {
     g.circle(cx, cy, radius + 4);
-    g.fill({ color: 0xff3c3c, alpha: 0.5 });
+    g.fill({ color: 0x9a4a3a, alpha: 0.5 });
   }
 
   // Unit circle
