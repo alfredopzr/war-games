@@ -823,6 +823,29 @@ describe('scoreRound', () => {
     // The loser's income should reflect the catch-up bonus
     expect(state.players.player2.resources).toBeGreaterThan(0);
   });
+
+  it('spreads surviving units evenly across deployment zone after round end', () => {
+    const state = createGame(42);
+
+    // Place 3 units for player1 in the first 3 deployment hexes
+    const zone = state.map.player1Deployment;
+    placeUnit(state, 'player1', 'infantry', zone[0]!);
+    placeUnit(state, 'player1', 'infantry', zone[1]!);
+    placeUnit(state, 'player1', 'infantry', zone[2]!);
+
+    startBattlePhase(state);
+    scoreRound(state, 'player1');
+
+    const positions = state.players.player1.units.map((u) => hexToKey(u.position));
+    const unique = new Set(positions);
+    // All units should be in unique positions
+    expect(unique.size).toBe(3);
+
+    // Units should not all be in the first 3 hexes of the zone (spread, not clustered)
+    const firstThreeKeys = new Set([hexToKey(zone[0]!), hexToKey(zone[1]!), hexToKey(zone[2]!)]);
+    const allInFirstThree = positions.every((p) => firstThreeKeys.has(p));
+    expect(allInFirstThree).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1031,6 +1054,7 @@ describe('city ownership', () => {
       expect(owner).toBeNull();
     }
   });
+
 });
 
 // ---------------------------------------------------------------------------
