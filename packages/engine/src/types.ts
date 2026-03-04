@@ -64,7 +64,16 @@ export interface UnitStats {
   readonly visionRange: number;
 }
 
-export type DirectiveType = 'advance' | 'hold' | 'flank-left' | 'flank-right' | 'scout' | 'support';
+export type DirectiveType = 'advance' | 'hold' | 'flank-left' | 'flank-right' | 'scout' | 'support' | 'hunt' | 'capture';
+
+export type DirectiveTargetType = 'central-objective' | 'city' | 'enemy-unit' | 'friendly-unit' | 'hex';
+
+export interface DirectiveTarget {
+  readonly type: DirectiveTargetType;
+  readonly cityId?: string;
+  readonly unitId?: string;
+  readonly hex?: CubeCoord;
+}
 
 export type PlayerId = 'player1' | 'player2';
 
@@ -75,6 +84,7 @@ export interface Unit {
   hp: number;
   position: CubeCoord;
   directive: DirectiveType;
+  directiveTarget: DirectiveTarget;
   hasActed: boolean;
 }
 
@@ -88,7 +98,7 @@ export type UnitAction =
   | { type: 'hold' };
 
 export type Command =
-  | { type: 'redirect'; unitId: string; newDirective: DirectiveType }
+  | { type: 'redirect'; unitId: string; newDirective: DirectiveType; target?: DirectiveTarget }
   | { type: 'direct-move'; unitId: string; targetHex: CubeCoord }
   | { type: 'direct-attack'; unitId: string; targetUnitId: string }
   | { type: 'retreat'; unitId: string };
@@ -186,6 +196,12 @@ export interface DirectiveContext {
   terrain: Map<string, TerrainType>;
   centralObjective: CubeCoord;
   gridSize: GridSize;
+  cities: Map<string, PlayerId | null>;
+}
+
+export interface ResolvedTarget {
+  readonly hex: CubeCoord;
+  readonly isValid: boolean;
 }
 
 // =============================================================================
@@ -235,6 +251,7 @@ export interface ClientPlaceUnit {
   readonly unitType: UnitType;
   readonly position: CubeCoord;
   readonly directive: DirectiveType;
+  readonly target?: DirectiveTarget;
 }
 
 export interface ClientRemoveUnit {
@@ -246,6 +263,7 @@ export interface ClientSetDirective {
   readonly type: 'set-directive';
   readonly unitId: string;
   readonly directive: DirectiveType;
+  readonly target?: DirectiveTarget;
 }
 
 export interface ClientConfirmBuild {

@@ -6,10 +6,10 @@
 export type {
   CubeCoord, AxialCoord, GridSize,
   TerrainType, TerrainDefinition, HexTile,
-  UnitType, UnitStats, Unit, DirectiveType, PlayerId,
+  UnitType, UnitStats, Unit, DirectiveType, DirectiveTarget, DirectiveTargetType, PlayerId,
   UnitAction, Command, CommandPool,
   GamePhase, ObjectiveState, PlayerState, RoundState, GameState, GameMap,
-  IncomeParams, MapValidation, RoundEndResult, DirectiveContext,
+  IncomeParams, MapValidation, RoundEndResult, DirectiveContext, ResolvedTarget,
   // Network protocol
   BattleEvent,
   ClientCreateRoom, ClientJoinRoom, ClientLeaveRoom, ClientReconnect,
