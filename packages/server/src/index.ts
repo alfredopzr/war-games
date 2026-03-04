@@ -34,6 +34,7 @@ import { log } from './logger';
 import { logViewerRouter } from './log-viewer';
 
 import type { PlayerId, DirectiveTarget } from '@hexwar/engine';
+import { getRoomPhase } from './types';
 
 const app = express();
 const httpServer = createServer(app);
@@ -104,7 +105,7 @@ io.on('connection', (socket) => {
     const { room, playerId } = found;
     socket.leave(room.id);
 
-    const forfeit = room.phase === 'playing';
+    const forfeit = getRoomPhase(room) === 'playing';
     log('info', 'game', `Player left room ${room.id} (forfeit: ${forfeit})`);
 
     if (forfeit) {
@@ -115,7 +116,7 @@ io.on('connection', (socket) => {
         reason: 'leave',
       });
       clearAllTimers(room);
-      room.phase = 'finished';
+      room.forfeited = true;
     }
 
     leaveRoom(room.id, playerId);
@@ -247,7 +248,7 @@ io.on('connection', (socket) => {
     const { room, playerId } = found;
     log('info', 'game', `Player disconnected from room ${room.id}`);
 
-    if (room.phase === 'playing') {
+    if (getRoomPhase(room) === 'playing') {
       handleDisconnect(room.id, playerId);
       const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
       const deadline = Date.now() + 30000;
@@ -259,17 +260,18 @@ io.on('connection', (socket) => {
       const disconnected = room.disconnectedPlayers.get(playerId);
       if (disconnected) {
         disconnected.forfeitTimer = setTimeout(() => {
-          if (room.phase !== 'playing') return;
+          if (getRoomPhase(room) !== 'playing') return;
           socket.to(room.id).emit('forfeit', {
             type: 'forfeit',
             winner: enemyId,
             reason: 'disconnect',
           });
           clearAllTimers(room);
-          room.phase = 'finished';
+          room.forfeited = true;
+          deleteRoom(room.id);
         }, 30000);
       }
-    } else if (room.phase === 'waiting') {
+    } else if (getRoomPhase(room) === 'waiting') {
       leaveRoom(room.id, playerId);
     }
   });

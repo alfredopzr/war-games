@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
 import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, DirectiveTarget, Command, PlayerId } from '@hexwar/engine';
+import type { TurnEvent } from '../renderer/replay-sequencer';
 
 export type GameMode = 'hotseat' | 'vsAI' | 'online';
 export type LobbyState = 'menu' | 'creating' | 'waiting' | 'joining' | null;
@@ -84,6 +85,10 @@ interface GameStore {
   // Toast messages
   toastMessage: string | null;
 
+  // Turn replay
+  turnReplayEvents: TurnEvent[];
+  isReplayPlaying: boolean;
+
   // Turn transition / round result / game over overlays
   showTransition: boolean;
   showRoundResult: boolean;
@@ -124,6 +129,8 @@ interface GameStore {
   addBattleLogEntries: (entries: BattleLogEntry[]) => void;
   clearBattleLog: () => void;
   showToast: (msg: string) => void;
+  setTurnReplayEvents: (events: TurnEvent[]) => void;
+  setReplayPlaying: (playing: boolean) => void;
   showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown) => void;
   continueToNextRound: () => void;
   resetGame: () => void;
@@ -153,6 +160,8 @@ export const useGameStore = create<GameStore>((set) => ({
   buildTimeRemaining: 120,
   buildTimerInterval: null,
   survivingUnitIds: new Set<string>(),
+  turnReplayEvents: [],
+  isReplayPlaying: false,
   targetSelectionMode: false,
   targetSelectionDirective: null,
   toastMessage: null,
@@ -425,6 +434,10 @@ export const useGameStore = create<GameStore>((set) => ({
     }, 1500);
   },
 
+  setTurnReplayEvents: (events: TurnEvent[]): void => set({ turnReplayEvents: events }),
+
+  setReplayPlaying: (playing: boolean): void => set({ isReplayPlaying: playing }),
+
   showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown): void =>
     set({
       showRoundResult: true,
@@ -500,6 +513,8 @@ export const useGameStore = create<GameStore>((set) => ({
       buildTimeRemaining: 120,
       buildTimerInterval: null,
       survivingUnitIds: new Set<string>(),
+      turnReplayEvents: [],
+      isReplayPlaying: false,
       toastMessage: null,
       targetSelectionMode: false,
       targetSelectionDirective: null,

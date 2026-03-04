@@ -27,6 +27,7 @@ import {
   checkRoundEnd,
   scoreRound,
   UNIT_STATS,
+  mulberry32,
   hexToKey,
   canAttack,
   cubeDistance,
@@ -166,9 +167,9 @@ function generateBattleEvents(
 
 export function startGame(room: Room, io: Server): void {
   const seed = Math.floor(Math.random() * 2147483647);
+  room.gameSeed = seed;
   const state = createGame(seed);
   room.gameState = state;
-  room.phase = 'playing';
   log('info', 'game', `Game started in room ${room.id}`);
 
   for (const [playerId, player] of room.players) {
@@ -202,6 +203,9 @@ export function handlePlaceUnit(
   if (room.gameState.phase !== 'build') {
     throw new Error('Can only place units during build phase');
   }
+  if (room.buildConfirmed.has(playerId)) {
+    throw new Error('Build already confirmed');
+  }
 
   placeUnit(room.gameState, playerId, unitType, position, directive, target);
 
@@ -222,6 +226,9 @@ export function handleRemoveUnit(
 ): void {
   if (!room.gameState) {
     throw new Error('Game has not started');
+  }
+  if (room.buildConfirmed.has(playerId)) {
+    throw new Error('Build already confirmed');
   }
 
   const playerState = room.gameState.players[playerId];
@@ -258,6 +265,9 @@ export function handleSetDirective(
 ): void {
   if (!room.gameState) {
     throw new Error('Game has not started');
+  }
+  if (room.buildConfirmed.has(playerId)) {
+    throw new Error('Build already confirmed');
   }
 
   const playerState = room.gameState.players[playerId];
@@ -314,6 +324,7 @@ function transitionToBattle(room: Room, io: Server): void {
 
   clearBuildTimer(room);
   startBattlePhase(room.gameState);
+  log('info', 'game', `Battle phase started in room ${room.id}`);
   room.buildConfirmed.clear();
   log('info', 'game', `Battle phase started in room ${room.id}`);
 
@@ -418,17 +429,30 @@ export function handleSubmitCommands(
   // Validate commands against current state — filter out stale/invalid ones
   const validCommands = filterValidCommands(room.gameState, commands, playerId);
 
+  // Seeded RNG for deterministic combat resolution
+  const turnSeed = (room.gameSeed! * 31 + room.gameState.round.turnNumber) | 0;
+  const rng = mulberry32(turnSeed);
+  const combatRng = (): number => 0.85 + rng() * 0.3;
+
   // Snapshot state for event generation
   const prevUnits = snapshotUnits(room.gameState);
   const prevCities = snapshotCities(room.gameState);
 
-  executeTurn(room.gameState, validCommands);
+  executeTurn(room.gameState, validCommands, combatRng);
 
   const events = generateBattleEvents(prevUnits, prevCities, room.gameState, playerId);
 
   for (const event of events) {
     log('info', 'game', event.message);
   }
+
+  room.turnLog.push({
+    turnNumber: room.gameState.round.turnNumber - 1,
+    player: playerId,
+    commandsSubmitted: commands.length,
+    rngSeed: turnSeed,
+    events,
+  });
 
   const roundEnd = checkRoundEnd(room.gameState);
 
@@ -447,12 +471,11 @@ export function handleSubmitCommands(
     // Round ended
     scoreRound(room.gameState, roundEnd.winner);
 
-    if ((room.gameState.phase as string) === 'game-over') {
-      log('info', 'game', `Game over in room ${room.id}, winner: ${room.gameState.winner}`);
+    if (room.gameState.phase === 'game-over') {
+      log('info', 'game', `Game over in room ${room.id}, winner: ${room.gameState.winner}, turns: ${room.turnLog.length}`);
       emitFilteredStatePerPlayer(io, room, 'game-over', () => ({
         winner: room.gameState!.winner,
       }));
-      room.phase = 'finished';
     } else {
       // Next round — back to build phase
       log('info', 'game', `Round ended in room ${room.id}, winner: ${roundEnd.winner}`);

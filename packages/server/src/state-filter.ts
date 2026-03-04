@@ -61,7 +61,7 @@ export function filterStateForPlayer(
       [playerId]: clonePlayerState(state.players[playerId]),
       [enemyId]: {
         id: enemyId,
-        resources: state.players[enemyId].resources,
+        resources: state.phase === 'build' ? 0 : state.players[enemyId].resources,
         units: filteredEnemyUnits,
         roundsWon: state.players[enemyId].roundsWon,
       },
@@ -161,6 +161,7 @@ function cloneRoundState(round: RoundState): RoundState {
 function cloneMap(map: GameMap): GameMap {
   return {
     terrain: new Map(map.terrain),
+    elevation: new Map(map.elevation),
     centralObjective: map.centralObjective,
     player1Deployment: [...map.player1Deployment],
     player2Deployment: [...map.player2Deployment],

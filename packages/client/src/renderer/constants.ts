@@ -2,6 +2,12 @@ export const HEX_SIZE = 32; // pixels from center to corner (flat-top)
 export const GRID_WIDTH = 16;
 export const GRID_HEIGHT = 12;
 
+/** Y-axis compression factor for isometric (2.5D) look. */
+export const ISO_Y_SCALE = 0.55;
+
+/** Pixels of vertical offset per elevation level. */
+export const ELEVATION_PX = 12;
+
 export const TERRAIN_COLORS: Record<string, string> = {
   plains: '#5a9a50',
   forest: '#2d6030',
@@ -16,12 +22,22 @@ export const TERRAIN_BORDER_COLORS: Record<string, string> = {
   city: '#887860',
 };
 
-export const GRID_LINE_COLOR = '#2a2a3e';
+export const GRID_LINE_COLOR = '#2a2a24';
 export const FOG_COLOR = 'rgba(0, 0, 0, 0.6)';
 
+export const ASH_EMBER_TERRAIN: Record<string, number> = {
+  plains: 0x6A6A58,
+  forest: 0x3A4030,
+  mountain: 0x505058,
+  city: 0x7A6048,
+};
+
+export const OBJECTIVE_COLOR = 0xA08A40;
+export const FOG_NEVER_SEEN = 0x16160E;
+
 export const PLAYER_COLORS = {
-  player1: { fill: '#4488cc', stroke: '#2266aa', light: '#66aaee' },
-  player2: { fill: '#cc4444', stroke: '#aa2222', light: '#ee6666' },
+  player1: { fill: '#6a7a5a', stroke: '#4a5a3a', light: '#8a9a7a' },
+  player2: { fill: '#8a5a4a', stroke: '#6a3a2a', light: '#aa7a6a' },
 } as const;
 
 export const UNIT_LABELS: Record<string, string> = {

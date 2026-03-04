@@ -44,6 +44,7 @@ export interface TerrainDefinition {
 export interface HexTile {
   readonly coord: CubeCoord;
   readonly terrain: TerrainType;
+  readonly elevation: number;
 }
 
 // -----------------------------------------------------------------------------
@@ -139,6 +140,7 @@ export interface RoundState {
 
 export interface GameMap {
   readonly terrain: Map<string, TerrainType>;
+  readonly elevation: Map<string, number>;
   readonly centralObjective: CubeCoord;
   readonly player1Deployment: CubeCoord[];
   readonly player2Deployment: CubeCoord[];

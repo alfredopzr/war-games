@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PlayerId } from '@hexwar/engine';
 import { UNIT_STATS } from '@hexwar/engine';
 import type { Room, ConnectedPlayer } from './types';
+import { getRoomPhase } from './types';
 import {
   startGame,
   handlePlaceUnit,
@@ -61,9 +62,11 @@ function createTestRoom(): Room {
     id: 'ROOM01',
     players,
     gameState: null,
-    phase: 'waiting',
+    gameSeed: null,
+    forfeited: false,
     buildConfirmed: new Set<PlayerId>(),
     disconnectedPlayers: new Map(),
+    turnLog: [],
     timers: {
       build: null,
       turn: null,
@@ -88,7 +91,7 @@ describe('startGame', () => {
     startGame(room, io as unknown as Parameters<typeof startGame>[1]);
 
     expect(room.gameState).not.toBeNull();
-    expect(room.phase).toBe('playing');
+    expect(getRoomPhase(room)).toBe('playing');
     expect(room.gameState!.phase).toBe('build');
   });
 

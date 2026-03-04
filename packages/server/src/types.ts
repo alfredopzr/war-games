@@ -2,7 +2,7 @@
 // HexWar Server — Internal Types
 // =============================================================================
 
-import type { PlayerId, GameState } from '@hexwar/engine';
+import type { PlayerId, GameState, BattleEvent } from '@hexwar/engine';
 
 export interface ConnectedPlayer {
   socketId: string;
@@ -16,15 +16,34 @@ export interface DisconnectedPlayer {
   forfeitTimer: ReturnType<typeof setTimeout> | null;
 }
 
+export interface TurnRecord {
+  turnNumber: number;
+  player: PlayerId;
+  commandsSubmitted: number;
+  rngSeed: number;
+  events: BattleEvent[];
+}
+
 export interface Room {
   id: string;
   players: Map<PlayerId, ConnectedPlayer>;
   gameState: GameState | null;
-  phase: 'waiting' | 'playing' | 'finished';
+  gameSeed: number | null;
+  forfeited: boolean;
   buildConfirmed: Set<PlayerId>;
   disconnectedPlayers: Map<PlayerId, DisconnectedPlayer>;
+  turnLog: TurnRecord[];
   timers: {
     build: ReturnType<typeof setTimeout> | null;
     turn: ReturnType<typeof setTimeout> | null;
   };
+}
+
+export type RoomPhase = 'waiting' | 'playing' | 'finished';
+
+export function getRoomPhase(room: Room): RoomPhase {
+  if (!room.gameState) return 'waiting';
+  if (room.forfeited) return 'finished';
+  if (room.gameState.phase === 'game-over') return 'finished';
+  return 'playing';
 }

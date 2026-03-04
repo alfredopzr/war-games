@@ -14,9 +14,11 @@ function createEmptyRoom(id: string): Room {
     id,
     players: new Map<PlayerId, ConnectedPlayer>(),
     gameState: null,
-    phase: 'waiting',
+    gameSeed: null,
+    forfeited: false,
     buildConfirmed: new Set<PlayerId>(),
     disconnectedPlayers: new Map(),
+    turnLog: [],
     timers: {
       build: null,
       turn: null,
