@@ -173,6 +173,7 @@ export function renderUnits(
   const damagedUnits = store.damagedUnits;
   const isBuildPhase = state.phase === 'build';
   const now = Date.now();
+  const elevationMap = state.map.elevation;
 
   // Collect commanded unit IDs from pending commands
   const commandedUnitIds = new Set<string>();
@@ -185,7 +186,8 @@ export function renderUnits(
 
   const friendly = state.players[currentPlayerView].units;
   for (const unit of friendly) {
-    const { x, y } = hexToPixel(unit.position, HEX_SIZE);
+    const elev = elevationMap.get(hexToKey(unit.position)) ?? 0;
+    const { x, y } = hexToPixel(unit.position, HEX_SIZE, elev);
     drawables.push({ unit, screenX: x, screenY: y, isGhost: false });
   }
 
@@ -195,7 +197,8 @@ export function renderUnits(
     for (const unit of enemies) {
       const key = hexToKey(unit.position);
       if (visibleHexes.has(key)) {
-        const { x, y } = hexToPixel(unit.position, HEX_SIZE);
+        const elev = elevationMap.get(key) ?? 0;
+        const { x, y } = hexToPixel(unit.position, HEX_SIZE, elev);
         drawables.push({ unit, screenX: x, screenY: y, isGhost: false });
       }
     }
@@ -204,7 +207,8 @@ export function renderUnits(
     for (const [, ghost] of lastKnownEnemies) {
       const ghostKey = hexToKey(ghost.position);
       if (!visibleHexes.has(ghostKey)) {
-        const { x, y } = hexToPixel(ghost.position, HEX_SIZE);
+        const elev = elevationMap.get(ghostKey) ?? 0;
+        const { x, y } = hexToPixel(ghost.position, HEX_SIZE, elev);
         drawables.push({ type: ghost.type, position: ghost.position, screenX: x, screenY: y, isGhost: true });
       }
     }

@@ -2,19 +2,8 @@ import { Graphics } from 'pixi.js';
 import type { GameState, PlayerId } from '@hexwar/engine';
 import { getAllHexes, hexToKey } from '@hexwar/engine';
 import { deployZoneLayer } from './layers';
-import { hexToPixel } from './hex-render';
+import { hexToPixel, hexPoints } from './hex-render';
 import { HEX_SIZE } from './constants';
-
-/** Build a flat-top hexagon point array centered at (cx, cy). */
-function hexPoints(cx: number, cy: number, size: number): number[] {
-  const points: number[] = [];
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 180) * (60 * i);
-    points.push(cx + size * Math.cos(angle));
-    points.push(cy + size * Math.sin(angle));
-  }
-  return points;
-}
 
 /** Render deployment zone overlays during build phase. */
 export function renderDeployZones(state: GameState, currentPlayerView: PlayerId): void {
@@ -44,6 +33,7 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
 
   for (const hex of allHexes) {
     const hexKey = hexToKey(hex);
+    // Deploy zones always have elevation 0
     const { x, y } = hexToPixel(hex, HEX_SIZE);
     const pts = hexPoints(x, y, HEX_SIZE);
 

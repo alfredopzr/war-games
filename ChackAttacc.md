@@ -195,28 +195,33 @@ Only **two functions** need rewriting. Everything else (`drawHex`, `drawHexTile`
 | `renderer/hex-render.ts` | `pixelToHex()` | Inverse of new formula |
 | `App.tsx` render loop | Unit draw order | Sort units by depth before drawing |
 
-### Current (flat 2D) hexToPixel
+### Flat-top hexToPixel (correct base formula)
 
 ```
-x = hexSize * 1.5 * q
+x = hexSize * 3/2 * q
 y = hexSize * (√3/2 * q + √3 * r)
 ```
 
-### Correct isometric hexToPixel
+### Isometric projection (Y-compression on top of flat-top)
 
 ```
-x = hexSize * (√3 * q + √3/2 * r)
-y = hexSize * 1.5 * r
+x = hexSize * 3/2 * q
+y = (hexSize * (√3/2 * q + √3 * r)) * ISO_Y_SCALE - elevation * ELEVATION_PX
 ```
+
+Where `ISO_Y_SCALE = 0.75` (compresses Y by 25%, ~30° viewing angle). `ELEVATION_PX = 8` (pixels per elevation level).
+
+Hex vertex shapes also compress: `sin(angle)` component scaled by `ISO_Y_SCALE`. Result: hexes wider than tall = isometric look.
 
 ### pixelToHex inverse
 
-Solve the linear system:
+Reverse the Y-compression before flat-top inverse:
 ```
-q = (x * √3/3 - y / 3) / hexSize
-r = (y * 2/3) / hexSize
+flatPy = py / ISO_Y_SCALE
+q = (2/3 * px) / hexSize
+r = (-1/3 * px + √3/3 * flatPy) / hexSize
 ```
-Then round to nearest cube coordinate (existing rounding logic stays).
+Then round to nearest cube coordinate (existing rounding logic stays). Elevation ignored for click detection (hits ground plane).
 
 ### Draw order fix
 
@@ -670,3 +675,105 @@ Each agent works in its own git worktree branch. Merge order follows dependency 
 ## Open Questions
 
 None — all resolved. See Resolved Decisions above.
+
+---
+
+## Implementation Ledger
+
+Status tracking. Append-only — never overwrite entries, only add new ones.
+
+### 2026-03-04 — Sprint 1: PixiJS Migration (Chack-Atacc branch)
+
+Commits `31ec1d9` through `89b9d00` on `Chack-Atacc` branch.
+
+| Feature | Status | Commit | Notes |
+|---------|--------|--------|-------|
+| PixiJS v8 install + Application init | DONE | `31ec1d9` | pixi-app.ts, async init, mount to DOM |
+| 7-layer scene graph | DONE | `31ec1d9` | layers.ts: terrain → deploy → fog → unit → effects → objective → ui |
+| Camera pan/zoom/edge scroll | DONE | `31ec1d9` | camera-controller.ts: WASD, drag, scroll wheel, clamp to bounds |
+| Isometric hex math | BROKEN | `31ec1d9` | Used pointy-top formula, shapes still flat-top. Grid renders as rotated diamond. |
+| Canvas 2D → PixiJS render loop | DONE | `31ec1d9` | App.tsx rewritten: PixiJS init, renderScene(), ticker for effects |
+| Old Canvas 2D files deleted | DONE | `31ec1d9` | camera.ts, unit-render.ts, fog-render.ts, objective-render.ts, asset-loader.ts |
+| Asset directory structure | DONE | `11d5e05` | assets/units/, tiles/, icons/, effects/, prompts/ |
+| AI generation prompts | DONE | `11d5e05` | 8 unit prompts, 10 tile prompts, 4 icon prompts, 2 effect prompts |
+| Actual sprite PNGs | NOT DONE | — | Only AI prompt text files exist. No real sprites. |
+| Terrain renderer (Ash & Ember) | DONE | `c6f6bb4` | terrain-renderer.ts: PIXI.Graphics hex polygons with palette colors |
+| Fog renderer (desaturated fade) | DONE | `c6f6bb4` | fog-renderer.ts: never-seen dark, previously-seen dimmed |
+| Deploy zone renderer | DONE | `c6f6bb4` | deploy-renderer.ts: faction-colored tinted overlays |
+| Objective glow | DONE | `c6f6bb4` | Golden hex fill + border on objectiveLayer |
+| Blueprint UI restyle | DONE | `e1bc762` | Dark navy, cyan accents, monospace, thin borders |
+| Selection highlights (blueprint glow) | DONE | `e1bc762` | selection-renderer.ts: cyan wireframe move, red attack, white hover |
+| Minimap | DONE | `e1bc762` | minimap.ts: terrain dots, unit dots, camera viewport rect, fog dimming |
+| Enhanced UnitInfoPanel | DONE | `e1bc762` | Visual HP bar (green→yellow→red) |
+| Unit renderer (circles + letters) | DONE | `b13ccb0` | unit-renderer.ts: faction circles, HP bars, directive indicators, depth sort |
+| HP bars on units | DONE | `b13ccb0` | hp-bar.ts: green/yellow/red proportional bar |
+| Damage numbers | DONE | `b13ccb0` | effects-renderer.ts: red floating text, rises + fades |
+| Attack tracers | DONE | `b13ccb0` | effects-renderer.ts: yellow line flash ~0.4s |
+| Death markers | DONE | `b13ccb0` | effects-renderer.ts: red X, fades over ~3s |
+| Turn replay system | DONE | `89b9d00` | replay-sequencer.ts: TurnEvent diffing, setTimeout playback |
+| Skip replay button | DONE | `89b9d00` | BattleHUD: Space key or button, jumps to final state |
+| Replay blocks input | DONE | `89b9d00` | isReplayPlaying guard in click handler |
+| Unit sprites (faction art) | NOT DONE | — | Still colored circles with letter labels |
+| Directive arrows (PixiJS) | NOT DONE | — | No dashed line + arrowhead toward target |
+| Terrain tile sprites | NOT DONE | — | Using flat color fills, no Kenney or custom tile PNGs |
+| Elevation rendering | NOT DONE | — | No elevation in engine or renderer |
+| Particle effects | NOT DONE | — | No @pixi/particle-emitter integration |
+| Minimap click-to-jump | NOT DONE | — | Minimap is display-only |
+| Viewport culling | NOT DONE | — | No container.cullable optimization |
+| Alternating first-mover | NOT DONE | — | Engine still hardcodes player1 first |
+
+### 2026-03-04 — Sprint 2: Isometric Fix + Generative Levels
+
+#### Iso Fix
+
+Fix the broken hex rendering. Root cause: hexToPixel uses pointy-top formula but all hexPoints functions draw flat-top vertices.
+
+**Approach**: Restore flat-top hexToPixel, then apply Y-compression (`ISO_Y_SCALE = 0.75`) for isometric look. Compress hex vertex shapes to match. Extract shared `hexPoints` function — remove 4 duplicates across renderers.
+
+**Files**:
+- `renderer/constants.ts` — add ISO_Y_SCALE, ELEVATION_PX, side-face colors
+- `renderer/hex-render.ts` — fix hexToPixel (flat-top + Y-compress + elevation), fix pixelToHex/screenToHex (reverse Y-compress), export shared hexPoints
+- `renderer/terrain-renderer.ts` — use shared hexPoints, draw side faces for elevation
+- `renderer/fog-renderer.ts` — use shared hexPoints, pass elevation
+- `renderer/deploy-renderer.ts` — use shared hexPoints
+- `renderer/selection-renderer.ts` — use shared hexPoints
+- `renderer/unit-renderer.ts` — pass elevation for unit positions
+- `App.tsx` — pass elevation map to renderers
+
+#### Generative Levels
+
+Replace random-scatter terrain with noise-based coherent biomes. Add elevation as new data layer.
+
+**Engine files**:
+- `types.ts` — add `elevation: Map<string, number>` to GameMap, add `elevation: number` to HexTile
+- `noise.ts` (NEW) — seeded 2D value noise, ~60 lines, zero deps
+- `map-gen.ts` — rewrite terrain gen with noise thresholds (plains < -0.2, forest -0.2–0.3, mountain ≥ 0.3), elevation from second noise layer (0-3), enforce symmetry, deploy zones forced flat
+- `serialization.ts` — serialize/deserialize elevation map
+- `map-gen.test.ts` — update existing + add elevation tests
+- `index.ts` — export noise
+
+**Engine files NOT touched**: terrain.ts, combat.ts, pathfinding.ts, vision.ts, hex.ts, game-state.ts, directives.ts, ai.ts, economy.ts, units.ts, commands.ts. Elevation is render-only for now.
+
+#### Implementation Status
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | `types.ts` — elevation in GameMap + HexTile | DONE |
+| 2 | `noise.ts` — seeded 2D value noise generator | DONE |
+| 3 | `map-gen.ts` — noise-based terrain + elevation + symmetry + city fallback | DONE |
+| 4 | `serialization.ts` — elevation serialize/deserialize | DONE |
+| 5 | `index.ts` — export noise + rng | DONE |
+| 6 | `map-gen.test.ts` — 27 tests (terrain + elevation + validation) | DONE |
+| 7 | Engine tests — 251/251 pass, server tests — 70/70 pass | DONE |
+| 8 | `constants.ts` — ISO_Y_SCALE=0.75, ELEVATION_PX=12 | DONE |
+| 9 | `hex-render.ts` — flat-top hexToPixel + Y-compress + elevation, pixelToHex reverse, shared hexPoints | DONE |
+| 10 | `terrain-renderer.ts` — shared hexPoints, depth sort, side faces for elevated hexes | DONE |
+| 11 | `fog-renderer.ts` — shared hexPoints, elevationMap param | DONE |
+| 12 | `deploy-renderer.ts` — shared hexPoints (deploy zones always elev 0) | DONE |
+| 13 | `selection-renderer.ts` — shared hexPoints, elevationMap param | DONE |
+| 14 | `unit-renderer.ts` — elevation for unit/ghost positions | DONE |
+| 15 | `replay-sequencer.ts` — elevationMap param for effect positions | DONE |
+| 16 | `BattleHUD.tsx` — pass elevation to startReplay | DONE |
+| 17 | `App.tsx` — pass elevation to renderFog + renderSelectionHighlights | DONE |
+| 18 | Client type-check — clean compile | DONE |
+| 19 | Visual verification (pnpm dev) | NOT DONE |

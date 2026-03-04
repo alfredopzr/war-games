@@ -1,8 +1,6 @@
 import type { Application, Container } from 'pixi.js';
 
 const PAN_SPEED = 8;
-const EDGE_SCROLL_MARGIN = 30;
-const EDGE_SCROLL_SPEED = 6;
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.5;
 const ZOOM_STEP = 0.1;
@@ -38,11 +36,14 @@ export function setMapBounds(bounds: MapBounds): void {
   state.mapBounds = bounds;
 }
 
+const INITIAL_ZOOM = 1.5;
+
 export function centerCameraOnMap(stage: Container, app: Application, bounds: MapBounds): void {
+  stage.scale.set(INITIAL_ZOOM);
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerY = (bounds.minY + bounds.maxY) / 2;
-  stage.position.x = app.screen.width / 2 - centerX * stage.scale.x;
-  stage.position.y = app.screen.height / 2 - centerY * stage.scale.y;
+  stage.position.x = app.screen.width / 2 - centerX * INITIAL_ZOOM;
+  stage.position.y = app.screen.height / 2 - centerY * INITIAL_ZOOM;
 }
 
 function clampCamera(stage: Container, screenWidth: number, screenHeight: number): void {
@@ -135,7 +136,7 @@ export function setupCameraControls(app: Application, stage: Container): () => v
     }
   };
 
-  // Per-frame update for keyboard pan and edge scrolling
+  // Per-frame update for keyboard pan
   const tickerCallback = (): void => {
     let dx = 0;
     let dy = 0;
@@ -146,18 +147,10 @@ export function setupCameraControls(app: Application, stage: Container): () => v
     if (state.keysDown.has('a') || state.keysDown.has('ArrowLeft')) dx += PAN_SPEED;
     if (state.keysDown.has('d') || state.keysDown.has('ArrowRight')) dx -= PAN_SPEED;
 
-    // Edge scrolling
-    const sw = app.screen.width;
-    const sh = app.screen.height;
-    if (state.mouseX < EDGE_SCROLL_MARGIN) dx += EDGE_SCROLL_SPEED;
-    if (state.mouseX > sw - EDGE_SCROLL_MARGIN) dx -= EDGE_SCROLL_SPEED;
-    if (state.mouseY < EDGE_SCROLL_MARGIN) dy += EDGE_SCROLL_SPEED;
-    if (state.mouseY > sh - EDGE_SCROLL_MARGIN) dy -= EDGE_SCROLL_SPEED;
-
     if (dx !== 0 || dy !== 0) {
       stage.position.x += dx;
       stage.position.y += dy;
-      clampCamera(stage, sw, sh);
+      clampCamera(stage, app.screen.width, app.screen.height);
     }
   };
 

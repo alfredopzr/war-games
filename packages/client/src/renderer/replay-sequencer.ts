@@ -1,4 +1,5 @@
 import type { CubeCoord, PlayerId } from '@hexwar/engine';
+import { hexToKey } from '@hexwar/engine';
 import { hexToPixel } from './hex-render';
 import { HEX_SIZE } from './constants';
 import {
@@ -92,10 +93,12 @@ export function isReplayActive(): boolean {
   return replayActive;
 }
 
-export function startReplay(events: TurnEvent[], onComplete: () => void): void {
+export function startReplay(events: TurnEvent[], elevationMap: Map<string, number>, onComplete: () => void): void {
   replayActive = true;
   replayOnComplete = onComplete;
   replayTimers = [];
+
+  const elev = (coord: CubeCoord): number => elevationMap.get(hexToKey(coord)) ?? 0;
 
   let delay = 0;
 
@@ -105,9 +108,8 @@ export function startReplay(events: TurnEvent[], onComplete: () => void): void {
     switch (event.type) {
       case 'move': {
         const timer = setTimeout(() => {
-          // Flash: spawn a tracer from old position to new position to show movement
-          const from = hexToPixel(event.from, HEX_SIZE);
-          const to = hexToPixel(event.to, HEX_SIZE);
+          const from = hexToPixel(event.from, HEX_SIZE, elev(event.from));
+          const to = hexToPixel(event.to, HEX_SIZE, elev(event.to));
           spawnAttackTracer(from.x, from.y, to.x, to.y);
         }, currentDelay);
         replayTimers.push(timer);
@@ -116,8 +118,8 @@ export function startReplay(events: TurnEvent[], onComplete: () => void): void {
       }
       case 'attack': {
         const timer = setTimeout(() => {
-          const attPos = hexToPixel(event.attackerPos, HEX_SIZE);
-          const defPos = hexToPixel(event.defenderPos, HEX_SIZE);
+          const attPos = hexToPixel(event.attackerPos, HEX_SIZE, elev(event.attackerPos));
+          const defPos = hexToPixel(event.defenderPos, HEX_SIZE, elev(event.defenderPos));
           spawnAttackTracer(attPos.x, attPos.y, defPos.x, defPos.y);
           spawnDamageNumber(defPos.x, defPos.y, event.damage);
         }, currentDelay);
@@ -127,7 +129,7 @@ export function startReplay(events: TurnEvent[], onComplete: () => void): void {
       }
       case 'kill': {
         const timer = setTimeout(() => {
-          const pos = hexToPixel(event.position, HEX_SIZE);
+          const pos = hexToPixel(event.position, HEX_SIZE, elev(event.position));
           spawnDeathMarker(pos.x, pos.y);
         }, currentDelay);
         replayTimers.push(timer);
@@ -135,9 +137,8 @@ export function startReplay(events: TurnEvent[], onComplete: () => void): void {
         break;
       }
       case 'capture': {
-        // Simple flash — reuse attack tracer on the city hex
         const timer = setTimeout(() => {
-          const pos = hexToPixel(event.cityHex, HEX_SIZE);
+          const pos = hexToPixel(event.cityHex, HEX_SIZE, elev(event.cityHex));
           spawnDamageNumber(pos.x, pos.y - 10, 0);
         }, currentDelay);
         replayTimers.push(timer);

@@ -349,7 +349,7 @@ export function BattleHUD(): ReactElement | null {
       store.setTurnReplayEvents(replayEvents);
       store.setReplayPlaying(true);
       setGameState({ ...gameState });
-      startReplay(replayEvents, () => {
+      startReplay(replayEvents, gameState.map.elevation, () => {
         useGameStore.getState().setReplayPlaying(false);
         useGameStore.getState().setTurnReplayEvents([]);
         finishPostTurn();

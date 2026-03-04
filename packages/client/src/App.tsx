@@ -7,7 +7,7 @@ import {
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
 import { Application } from 'pixi.js';
 import { HEX_SIZE } from './renderer/constants';
-import { hexToPixel, screenToHex } from './renderer/hex-render';
+import { hexToPixel, screenToHex, setMapFlip } from './renderer/hex-render';
 import { renderTerrain } from './renderer/terrain-renderer';
 import { renderFog } from './renderer/fog-renderer';
 import { renderDeployZones } from './renderer/deploy-renderer';
@@ -96,6 +96,7 @@ function renderScene(state: GameState): void {
     store.highlightedHexes,
     store.highlightMode,
     allHexes,
+    state.map.elevation,
   );
 
   // Units (rendered on unitLayer with HP bars, directive indicators, damage flash)
@@ -103,7 +104,7 @@ function renderScene(state: GameState): void {
 
   // Fog overlay on non-visible hexes (battle phase only)
   if (!isBuildPhase) {
-    renderFog(allHexes, visibleHexes);
+    renderFog(allHexes, visibleHexes, state.map.elevation);
   }
 }
 
@@ -112,6 +113,7 @@ export function App(): ReactElement {
   const appRef = useRef<Application | null>(null);
   const cleanupCameraRef = useRef<(() => void) | null>(null);
   const cameraCenteredRef = useRef(false);
+  const lastPlayerViewRef = useRef<PlayerId | null>(null);
 
   const gameState = useGameStore((s) => s.gameState);
   const selectedUnit = useGameStore((s) => s.selectedUnit);
@@ -187,14 +189,18 @@ export function App(): ReactElement {
     const app = appRef.current;
     if (!app || !gameState) return;
 
+    // Set map flip before computing bounds (affects hexToPixel output)
+    setMapFlip(currentPlayerView === 'player1');
+
     const allHexes = getAllHexes(gameState.map.gridSize);
     const bounds = computeGridBounds(allHexes, HEX_SIZE);
     setMapBounds({ minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY });
 
-    // Center camera on first render
-    if (!cameraCenteredRef.current) {
+    // Center camera on first render or when player view changes
+    if (!cameraCenteredRef.current || lastPlayerViewRef.current !== currentPlayerView) {
       centerCameraOnMap(app.stage, app, bounds);
       cameraCenteredRef.current = true;
+      lastPlayerViewRef.current = currentPlayerView;
     }
 
     renderScene(gameState);

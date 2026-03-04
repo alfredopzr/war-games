@@ -2,6 +2,12 @@ export const HEX_SIZE = 32; // pixels from center to corner (flat-top)
 export const GRID_WIDTH = 16;
 export const GRID_HEIGHT = 12;
 
+/** Y-axis compression factor for isometric (2.5D) look. */
+export const ISO_Y_SCALE = 0.55;
+
+/** Pixels of vertical offset per elevation level. */
+export const ELEVATION_PX = 12;
+
 export const TERRAIN_COLORS: Record<string, string> = {
   plains: '#5a9a50',
   forest: '#2d6030',
