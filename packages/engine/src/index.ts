@@ -10,6 +10,16 @@ export type {
   UnitAction, Command, CommandPool,
   GamePhase, ObjectiveState, PlayerState, RoundState, GameState, GameMap,
   IncomeParams, MapValidation, RoundEndResult, DirectiveContext,
+  // Network protocol
+  BattleEvent,
+  ClientCreateRoom, ClientJoinRoom, ClientLeaveRoom, ClientReconnect,
+  ClientPlaceUnit, ClientRemoveUnit, ClientSetDirective,
+  ClientConfirmBuild, ClientSubmitCommands, ClientMessage,
+  ServerRoomCreated, ServerRoomJoined, ServerOpponentJoined, ServerOpponentLeft,
+  ServerRoomError, ServerGameStart, ServerStateUpdate, ServerBuildConfirmed,
+  ServerBattleStart, ServerTurnResult, ServerRoundEnd, ServerGameOver,
+  ServerTimerSync, ServerOpponentDisconnected, ServerOpponentReconnected,
+  ServerForfeit, ServerMessage,
 } from './types';
 
 // Hex grid
@@ -59,3 +69,7 @@ export {
 // AI
 export { aiBuildPhase, aiBattlePhase } from './ai';
 export type { AiBuildAction } from './ai';
+
+// Serialization
+export { serializeGameState, deserializeGameState } from './serialization';
+export type { SerializableGameState } from './serialization';

@@ -197,15 +197,28 @@ export function BattleHUD(): ReactElement | null {
   const gameState = useGameStore((s) => s.gameState);
   const currentPlayerView = useGameStore((s) => s.currentPlayerView);
   const pendingCommands = useGameStore((s) => s.pendingCommands);
-  const vsAI = useGameStore((s) => s.vsAI);
+  const gameMode = useGameStore((s) => s.gameMode);
   const setGameState = useGameStore((s) => s.setGameState);
   const clearPendingCommands = useGameStore((s) => s.clearPendingCommands);
   const selectUnit = useGameStore((s) => s.selectUnit);
+  const waitingForServer = useGameStore((s) => s.waitingForServer);
+  const myPlayerId = useGameStore((s) => s.myPlayerId);
   const [aiThinking, setAiThinking] = useState(false);
 
   const handleEndTurn = useCallback((): void => {
     if (aiThinking) return;
     if (!gameState) return;
+
+    // Online mode: send commands to server
+    if (useGameStore.getState().gameMode === 'online') {
+      import('../network/network-manager').then(({ networkManager }) => {
+        networkManager.submitCommands(pendingCommands);
+      });
+      useGameStore.getState().setWaitingForServer(true);
+      clearPendingCommands();
+      selectUnit(null);
+      return;
+    }
 
     // Snapshot state before turn for diff
     const unitsBefore = snapshotUnits(gameState);
@@ -273,7 +286,7 @@ export function BattleHUD(): ReactElement | null {
     // Deselect unit
     selectUnit(null);
 
-    if (vsAI && currentPlayerView === 'player1') {
+    if (gameMode === 'vsAI' && currentPlayerView === 'player1') {
       // VS AI: after P1 ends their turn, auto-execute AI (P2) turn after brief delay
       setGameState({ ...gameState });
       setAiThinking(true);
@@ -291,7 +304,7 @@ export function BattleHUD(): ReactElement | null {
       setGameState({ ...gameState });
       useGameStore.setState({ showTransition: true });
     }
-  }, [gameState, pendingCommands, vsAI, currentPlayerView, clearPendingCommands, selectUnit, setGameState, aiThinking]);
+  }, [gameState, pendingCommands, gameMode, currentPlayerView, clearPendingCommands, selectUnit, setGameState, aiThinking]);
 
   if (!gameState) return null;
 
@@ -303,7 +316,8 @@ export function BattleHUD(): ReactElement | null {
   const isBuildPhase = phase === 'build';
   const isBattlePhase = phase === 'battle';
   const isCurrentPlayersTurn = round.currentPlayer === currentPlayerView;
-  const showEndTurn = isBattlePhase && isCurrentPlayersTurn;
+  const showEndTurn = isBattlePhase && isCurrentPlayersTurn
+    && (gameMode !== 'online' || myPlayerId === round.currentPlayer);
 
   if (isBuildPhase) {
     return (
@@ -371,9 +385,9 @@ export function BattleHUD(): ReactElement | null {
             className="end-turn-btn"
             onClick={handleEndTurn}
             type="button"
-            disabled={aiThinking}
+            disabled={aiThinking || waitingForServer}
           >
-            {aiThinking ? 'AI thinking…' : 'End Turn'}
+            {waitingForServer ? 'Waiting...' : aiThinking ? 'AI thinking…' : 'End Turn'}
           </button>
         )}
       </div>

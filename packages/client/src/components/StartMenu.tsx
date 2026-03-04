@@ -1,18 +1,132 @@
 import { useState, type ReactElement } from 'react';
 import { createGame } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
+import { networkManager } from '../network/network-manager';
+
+function Lobby(): ReactElement {
+  const lobbyState = useGameStore((s) => s.lobbyState);
+  const roomId = useGameStore((s) => s.roomId);
+  const setLobbyState = useGameStore((s) => s.setLobbyState);
+  const setGameMode = useGameStore((s) => s.setGameMode);
+  const [joinCode, setJoinCode] = useState('');
+
+  const handleCreate = (): void => {
+    setLobbyState('creating');
+    setGameMode('online');
+    networkManager.connect();
+    networkManager.createRoom();
+  };
+
+  const handleJoin = (): void => {
+    if (joinCode.length !== 6) return;
+    setGameMode('online');
+    networkManager.connect();
+    networkManager.joinRoom(joinCode);
+  };
+
+  const handleCancel = (): void => {
+    networkManager.leaveRoom();
+    useGameStore.getState().resetGame();
+  };
+
+  const handleBack = (): void => {
+    setLobbyState(null);
+  };
+
+  if (lobbyState === 'creating') {
+    return (
+      <div className="lobby-overlay">
+        <div className="lobby">
+          <h2 className="lobby-title">Creating Room</h2>
+          <p className="lobby-status">Creating room...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (lobbyState === 'waiting') {
+    return (
+      <div className="lobby-overlay">
+        <div className="lobby">
+          <h2 className="lobby-title">Waiting for Opponent</h2>
+          <p className="lobby-status">Share this code with your opponent:</p>
+          <div className="lobby-room-code">{roomId ?? '------'}</div>
+          <p className="lobby-status">Waiting for opponent...</p>
+          <div className="lobby-actions">
+            <button className="start-menu-button" onClick={handleCancel} type="button">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (lobbyState === 'joining') {
+    return (
+      <div className="lobby-overlay">
+        <div className="lobby">
+          <h2 className="lobby-title">Join Room</h2>
+          <input
+            className="lobby-input"
+            type="text"
+            maxLength={6}
+            placeholder="ABCDEF"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+          />
+          <div className="lobby-actions">
+            <button
+              className="start-menu-button"
+              onClick={handleJoin}
+              disabled={joinCode.length !== 6}
+              type="button"
+            >
+              Join
+            </button>
+            <button className="start-menu-button" onClick={handleBack} type="button">
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // lobbyState === 'menu'
+  return (
+    <div className="lobby-overlay">
+      <div className="lobby">
+        <h2 className="lobby-title">Online Play</h2>
+        <div className="lobby-actions">
+          <button className="start-menu-button" onClick={handleCreate} type="button">
+            Create Room
+          </button>
+          <button className="start-menu-button" onClick={() => setLobbyState('joining')} type="button">
+            Join Room
+          </button>
+          <button className="start-menu-button" onClick={handleBack} type="button">
+            Back
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function StartMenu(): ReactElement | null {
   const gameState = useGameStore((s) => s.gameState);
-  const vsAI = useGameStore((s) => s.vsAI);
-  const setVsAI = useGameStore((s) => s.setVsAI);
+  const setGameMode = useGameStore((s) => s.setGameMode);
   const setGameState = useGameStore((s) => s.setGameState);
   const startBuildTimer = useGameStore((s) => s.startBuildTimer);
+  const lobbyState = useGameStore((s) => s.lobbyState);
   const [showHelp, setShowHelp] = useState(false);
 
   if (gameState) return null;
+  if (lobbyState) return <Lobby />;
 
-  const startGame = (): void => {
+  const startGame = (mode: 'hotseat' | 'vsAI'): void => {
+    setGameMode(mode);
     const state = createGame(42);
     setGameState(state);
     startBuildTimer();
@@ -154,16 +268,14 @@ export function StartMenu(): ReactElement | null {
         )}
 
         <div className="start-menu-actions">
-          <label className="start-menu-toggle">
-            <input
-              type="checkbox"
-              checked={vsAI}
-              onChange={(e) => setVsAI(e.target.checked)}
-            />
-            Play vs AI
-          </label>
-          <button className="start-menu-button" onClick={startGame} type="button">
-            Start Game
+          <button className="start-menu-button" onClick={() => startGame('hotseat')} type="button">
+            Hot-Seat
+          </button>
+          <button className="start-menu-button" onClick={() => startGame('vsAI')} type="button">
+            vs AI
+          </button>
+          <button className="start-menu-button" onClick={() => useGameStore.getState().setLobbyState('menu')} type="button">
+            Online
           </button>
         </div>
       </div>

@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
 import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, Command, PlayerId } from '@hexwar/engine';
 
+export type GameMode = 'hotseat' | 'vsAI' | 'online';
+export type LobbyState = 'menu' | 'creating' | 'waiting' | 'joining' | null;
+
 export interface BattleLogEntry {
   turn: number;
   player: PlayerId;
@@ -30,8 +33,16 @@ interface GameStore {
   // Core state
   gameState: GameState | null;
 
-  // VS AI mode
-  vsAI: boolean;
+  // Game mode
+  gameMode: GameMode;
+
+  // Online multiplayer state
+  roomId: string | null;
+  myPlayerId: PlayerId | null;
+  opponentConnected: boolean;
+  opponentBuildConfirmed: boolean;
+  waitingForServer: boolean;
+  lobbyState: LobbyState;
 
   // UI state
   selectedUnit: Unit | null;
@@ -76,8 +87,15 @@ interface GameStore {
   showGameOver: boolean;
 
   // Actions
-  setVsAI: (enabled: boolean) => void;
+  setGameMode: (mode: GameMode) => void;
   setGameState: (state: GameState) => void;
+  setRoomId: (id: string | null) => void;
+  setMyPlayerId: (id: PlayerId | null) => void;
+  setCurrentPlayerView: (id: PlayerId) => void;
+  setOpponentConnected: (connected: boolean) => void;
+  setOpponentBuildConfirmed: (confirmed: boolean) => void;
+  setWaitingForServer: (waiting: boolean) => void;
+  setLobbyState: (state: LobbyState) => void;
   selectUnit: (unit: Unit | null) => void;
   setHoveredHex: (hex: CubeCoord | null) => void;
   setVisibleHexes: (hexes: Set<string>) => void;
@@ -107,7 +125,13 @@ interface GameStore {
 
 export const useGameStore = create<GameStore>((set) => ({
   gameState: null,
-  vsAI: false,
+  gameMode: 'hotseat',
+  roomId: null,
+  myPlayerId: null,
+  opponentConnected: false,
+  opponentBuildConfirmed: false,
+  waitingForServer: false,
+  lobbyState: null,
   selectedUnit: null,
   hoveredHex: null,
   currentPlayerView: 'player1',
@@ -129,9 +153,24 @@ export const useGameStore = create<GameStore>((set) => ({
   roundResult: null,
   showGameOver: false,
 
-  setVsAI: (enabled: boolean): void => set({ vsAI: enabled }),
+  setGameMode: (mode: GameMode): void => set({ gameMode: mode }),
 
   setGameState: (state: GameState): void => set({ gameState: state }),
+
+  setRoomId: (id: string | null): void => set({ roomId: id }),
+
+  setMyPlayerId: (id: PlayerId | null): void => set({ myPlayerId: id }),
+
+  setCurrentPlayerView: (id: PlayerId): void =>
+    set({ currentPlayerView: id, selectedUnit: null, commandMode: 'none' }),
+
+  setOpponentConnected: (connected: boolean): void => set({ opponentConnected: connected }),
+
+  setOpponentBuildConfirmed: (confirmed: boolean): void => set({ opponentBuildConfirmed: confirmed }),
+
+  setWaitingForServer: (waiting: boolean): void => set({ waitingForServer: waiting }),
+
+  setLobbyState: (state: LobbyState): void => set({ lobbyState: state }),
 
   selectUnit: (unit: Unit | null): void => set({
     selectedUnit: unit,
@@ -264,6 +303,22 @@ export const useGameStore = create<GameStore>((set) => ({
     const store = useGameStore.getState();
     if (!store.gameState || store.gameState.phase !== 'build') return;
 
+    // Online mode: delegate to server via NetworkManager
+    if (store.gameMode === 'online') {
+      if (store.buildTimerInterval) {
+        clearInterval(store.buildTimerInterval);
+      }
+      // Dynamic import to avoid circular dependency
+      import('../network/network-manager').then(({ networkManager }) => {
+        networkManager.confirmBuild();
+      });
+      useGameStore.setState({
+        buildTimerInterval: null,
+        placementMode: null,
+      });
+      return;
+    }
+
     // Stop the timer
     if (store.buildTimerInterval) {
       clearInterval(store.buildTimerInterval);
@@ -277,7 +332,7 @@ export const useGameStore = create<GameStore>((set) => ({
       }
     }
 
-    if (store.vsAI && store.currentPlayerView === 'player1') {
+    if (store.gameMode === 'vsAI' && store.currentPlayerView === 'player1') {
       // VS AI: P1 confirms build, AI immediately builds for P2, then go straight to battle
       const aiPlacements = aiBuildPhase(store.gameState, 'player2');
       for (const p of aiPlacements) {
@@ -390,6 +445,13 @@ export const useGameStore = create<GameStore>((set) => ({
     }
     set({
       gameState: null,
+      gameMode: 'hotseat',
+      roomId: null,
+      myPlayerId: null,
+      opponentConnected: false,
+      opponentBuildConfirmed: false,
+      waitingForServer: false,
+      lobbyState: null,
       selectedUnit: null,
       hoveredHex: null,
       currentPlayerView: 'player1',

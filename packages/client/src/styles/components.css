@@ -1206,3 +1206,147 @@
     opacity: 0;
   }
 }
+
+/* Lobby */
+
+.lobby-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 30, 0.95);
+  z-index: 100;
+  overflow-y: auto;
+  padding: 40px 20px;
+}
+
+.lobby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 400px;
+  width: 100%;
+  font-family: monospace;
+}
+
+.lobby-title {
+  font-size: 24px;
+  color: #e0e0e0;
+  margin: 0;
+  font-family: monospace;
+}
+
+.lobby-room-code {
+  font-family: monospace;
+  font-size: 48px;
+  font-weight: bold;
+  color: #ffd700;
+  letter-spacing: 8px;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #4a4a6a;
+  border-radius: 8px;
+}
+
+.lobby-input {
+  font-family: monospace;
+  font-size: 24px;
+  font-weight: bold;
+  letter-spacing: 6px;
+  text-align: center;
+  text-transform: uppercase;
+  width: 200px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #4a4a6a;
+  border-radius: 8px;
+  color: #e0e0e0;
+  outline: none;
+}
+
+.lobby-input:focus {
+  border-color: #6a8aaa;
+}
+
+.lobby-input::placeholder {
+  color: #555;
+  letter-spacing: 6px;
+}
+
+.lobby-status {
+  color: #888;
+  font-size: 14px;
+  font-family: monospace;
+}
+
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding-top: 8px;
+}
+
+/* Online Status */
+
+.online-status {
+  position: fixed;
+  top: 68px;
+  right: 260px;
+  background: rgba(20, 20, 40, 0.9);
+  border: 1px solid #4a4a6a;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #ccc;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.online-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.online-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.online-status-dot.connected {
+  background: #44cc66;
+  box-shadow: 0 0 4px #44cc66;
+}
+
+.online-status-dot.disconnected {
+  background: #cc4444;
+  box-shadow: 0 0 4px #cc4444;
+}
+
+.online-status-label {
+  color: #aaa;
+}
+
+.online-status-room {
+  color: #888;
+  font-size: 11px;
+}
+
+.online-status-code {
+  color: #ffd700;
+  font-weight: bold;
+  letter-spacing: 2px;
+}

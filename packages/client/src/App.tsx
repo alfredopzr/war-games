@@ -28,6 +28,7 @@ import { TerrainLegend } from './components/TerrainLegend';
 import { BattleHelp } from './components/BattleHelp';
 import { BattleLog } from './components/BattleLog';
 import { Toast } from './components/Toast';
+import { OnlineStatus } from './components/OnlineStatus';
 
 const DAMAGE_FLASH_DURATION = 500; // ms
 
@@ -216,15 +217,20 @@ export function App(): ReactElement {
   const setVisibleHexes = useGameStore((s) => s.setVisibleHexes);
   const setHoveredHex = useGameStore((s) => s.setHoveredHex);
 
+  const myPlayerId = useGameStore((s) => s.myPlayerId);
+  const gameMode = useGameStore((s) => s.gameMode);
+
   // Recalculate visibility when player view changes
   useEffect(() => {
     if (!gameState) return;
-    const friendly = getPlayerUnits(gameState, currentPlayerView);
+    // In online mode, always use our own player's perspective
+    const viewPlayer = (gameMode === 'online' && myPlayerId) ? myPlayerId : currentPlayerView;
+    const friendly = getPlayerUnits(gameState, viewPlayer);
     const vis = calculateVisibility(friendly, gameState.map.terrain);
     setVisibleHexes(vis);
 
     // Update last-known enemies: track enemies that leave visibility
-    const enemyPlayer = getEnemyPlayer(currentPlayerView);
+    const enemyPlayer = getEnemyPlayer(viewPlayer);
     const enemies = getPlayerUnits(gameState, enemyPlayer);
     const store = useGameStore.getState();
     const updated = new Map(store.lastKnownEnemies);
@@ -237,7 +243,7 @@ export function App(): ReactElement {
     }
 
     useGameStore.setState({ lastKnownEnemies: updated });
-  }, [gameState, currentPlayerView, setVisibleHexes]);
+  }, [gameState, currentPlayerView, gameMode, myPlayerId, setVisibleHexes]);
 
   const render = useCallback(
     (canvas: HTMLCanvasElement, state: GameState, time: number): void => {
@@ -483,6 +489,15 @@ export function App(): ReactElement {
         const cost = UNIT_STATS[store.placementMode].cost;
         if (gameState.players[currentPlayerView].resources < cost) return;
 
+        // Online mode: send placement to server
+        if (store.gameMode === 'online') {
+          const unitType = store.placementMode;
+          import('./network/network-manager').then(({ networkManager }) => {
+            networkManager.placeUnit(unitType, hex, 'advance');
+          });
+          return;
+        }
+
         try {
           placeUnit(gameState, currentPlayerView, store.placementMode, hex);
           store.setGameState({ ...gameState });
@@ -593,6 +608,15 @@ export function App(): ReactElement {
       const unit = findUnitAtHex(gameState, hex);
       if (unit && unit.owner === currentPlayerView) {
         e.preventDefault();
+
+        // Online mode: send removal to server
+        if (useGameStore.getState().gameMode === 'online') {
+          import('./network/network-manager').then(({ networkManager }) => {
+            networkManager.removeUnit(unit.id);
+          });
+          return;
+        }
+
         useGameStore.getState().removePlacedUnit(unit.id);
       }
     },
@@ -682,6 +706,7 @@ export function App(): ReactElement {
           <TerrainLegend />
           <BattleHelp />
           <BattleLog />
+          <OnlineStatus />
         </>
       )}
       <Toast />

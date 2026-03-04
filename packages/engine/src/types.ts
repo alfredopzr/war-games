@@ -187,3 +187,194 @@ export interface DirectiveContext {
   centralObjective: CubeCoord;
   gridSize: GridSize;
 }
+
+// =============================================================================
+// Network Protocol Types
+// =============================================================================
+// Client↔Server message types for WebSocket communication.
+// `state` fields use Record<string, unknown> as a transport-level placeholder;
+// actual serialization/deserialization uses SerializableGameState from
+// serialization.ts at the boundaries.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Battle Events
+// -----------------------------------------------------------------------------
+
+export interface BattleEvent {
+  readonly type: 'kill' | 'damage' | 'capture' | 'recapture';
+  readonly actingPlayer: PlayerId;
+  readonly message: string;
+}
+
+// -----------------------------------------------------------------------------
+// Client → Server Messages
+// -----------------------------------------------------------------------------
+
+export interface ClientCreateRoom {
+  readonly type: 'create-room';
+}
+
+export interface ClientJoinRoom {
+  readonly type: 'join-room';
+  readonly roomId: string;
+}
+
+export interface ClientLeaveRoom {
+  readonly type: 'leave-room';
+}
+
+export interface ClientReconnect {
+  readonly type: 'reconnect';
+  readonly roomId: string;
+  readonly reconnectToken: string;
+}
+
+export interface ClientPlaceUnit {
+  readonly type: 'place-unit';
+  readonly unitType: UnitType;
+  readonly position: CubeCoord;
+  readonly directive: DirectiveType;
+}
+
+export interface ClientRemoveUnit {
+  readonly type: 'remove-unit';
+  readonly unitId: string;
+}
+
+export interface ClientSetDirective {
+  readonly type: 'set-directive';
+  readonly unitId: string;
+  readonly directive: DirectiveType;
+}
+
+export interface ClientConfirmBuild {
+  readonly type: 'confirm-build';
+}
+
+export interface ClientSubmitCommands {
+  readonly type: 'submit-commands';
+  readonly commands: Command[];
+}
+
+export type ClientMessage =
+  | ClientCreateRoom
+  | ClientJoinRoom
+  | ClientLeaveRoom
+  | ClientReconnect
+  | ClientPlaceUnit
+  | ClientRemoveUnit
+  | ClientSetDirective
+  | ClientConfirmBuild
+  | ClientSubmitCommands;
+
+// -----------------------------------------------------------------------------
+// Server → Client Messages
+// -----------------------------------------------------------------------------
+
+export interface ServerRoomCreated {
+  readonly type: 'room-created';
+  readonly roomId: string;
+  readonly playerId: PlayerId;
+  readonly reconnectToken: string;
+}
+
+export interface ServerRoomJoined {
+  readonly type: 'room-joined';
+  readonly roomId: string;
+  readonly playerId: PlayerId;
+  readonly reconnectToken: string;
+}
+
+export interface ServerOpponentJoined {
+  readonly type: 'opponent-joined';
+}
+
+export interface ServerOpponentLeft {
+  readonly type: 'opponent-left';
+}
+
+export interface ServerRoomError {
+  readonly type: 'room-error';
+  readonly message: string;
+}
+
+export interface ServerGameStart {
+  readonly type: 'game-start';
+  readonly state: Record<string, unknown>;
+  readonly playerId: PlayerId;
+}
+
+export interface ServerStateUpdate {
+  readonly type: 'state-update';
+  readonly state: Record<string, unknown>;
+}
+
+export interface ServerBuildConfirmed {
+  readonly type: 'build-confirmed';
+  readonly playerId: PlayerId;
+}
+
+export interface ServerBattleStart {
+  readonly type: 'battle-start';
+  readonly state: Record<string, unknown>;
+}
+
+export interface ServerTurnResult {
+  readonly type: 'turn-result';
+  readonly state: Record<string, unknown>;
+  readonly events: BattleEvent[];
+}
+
+export interface ServerRoundEnd {
+  readonly type: 'round-end';
+  readonly winner: PlayerId | null;
+  readonly reason: string;
+  readonly state: Record<string, unknown>;
+  readonly incomeBreakdown: Record<string, unknown>;
+}
+
+export interface ServerGameOver {
+  readonly type: 'game-over';
+  readonly winner: PlayerId;
+  readonly state: Record<string, unknown>;
+}
+
+export interface ServerTimerSync {
+  readonly type: 'timer-sync';
+  readonly phase: 'build' | 'turn';
+  readonly remaining: number;
+}
+
+export interface ServerOpponentDisconnected {
+  readonly type: 'opponent-disconnected';
+  readonly reconnectDeadline: number;
+}
+
+export interface ServerOpponentReconnected {
+  readonly type: 'opponent-reconnected';
+}
+
+export interface ServerForfeit {
+  readonly type: 'forfeit';
+  readonly winner: PlayerId;
+  readonly reason: 'disconnect' | 'leave';
+}
+
+export type ServerMessage =
+  | ServerRoomCreated
+  | ServerRoomJoined
+  | ServerOpponentJoined
+  | ServerOpponentLeft
+  | ServerRoomError
+  | ServerGameStart
+  | ServerStateUpdate
+  | ServerBuildConfirmed
+  | ServerBattleStart
+  | ServerTurnResult
+  | ServerRoundEnd
+  | ServerGameOver
+  | ServerTimerSync
+  | ServerOpponentDisconnected
+  | ServerOpponentReconnected
+  | ServerForfeit;
