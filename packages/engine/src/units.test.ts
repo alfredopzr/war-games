@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { UnitType, CubeCoord } from './types';
+import type { UnitType, CubeCoord, DirectiveTarget } from './types';
 import { UNIT_STATS, createUnit, getTypeAdvantage, resetUnitIdCounter } from './units';
 
 describe('UNIT_STATS', () => {
@@ -91,6 +91,17 @@ describe('createUnit', () => {
   it('accepts a custom directive', () => {
     const unit = createUnit('infantry', 'player1', pos, 'hold');
     expect(unit.directive).toBe('hold');
+  });
+
+  it('creates unit with default directiveTarget of central-objective', () => {
+    const unit = createUnit('infantry', 'player1', pos);
+    expect(unit.directiveTarget).toEqual({ type: 'central-objective' });
+  });
+
+  it('creates unit with custom directiveTarget', () => {
+    const target: DirectiveTarget = { type: 'city', cityId: 'city-1' };
+    const unit = createUnit('infantry', 'player1', pos, 'advance', target);
+    expect(unit.directiveTarget).toEqual(target);
   });
 
   it('sets hasActed to false', () => {
