@@ -722,17 +722,48 @@ function resetUnitsToDeployment(state: GameState, playerId: PlayerId): void {
     ? state.map.player1Deployment
     : state.map.player2Deployment;
 
-  const allUnits = [...state.players.player1.units, ...state.players.player2.units];
-  const occupied = new Set(allUnits.map((u) => hexToKey(u.position)));
+  const units = state.players[playerId].units;
+  if (units.length === 0) return;
 
-  for (const unit of state.players[playerId].units) {
-    // Find an unoccupied deployment hex
-    for (const dzHex of deploymentZone) {
-      const key = hexToKey(dzHex);
-      if (!occupied.has(key)) {
-        unit.position = dzHex;
-        occupied.add(key);
+  // Hexes occupied by the other player's units are off-limits
+  const otherPlayer: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
+  const otherOccupied = new Set(
+    state.players[otherPlayer].units.map((u) => hexToKey(u.position)),
+  );
+
+  // Filter to available hexes, sort left-to-right then front-to-back
+  const available = deploymentZone.filter((h) => !otherOccupied.has(hexToKey(h)));
+  const sorted = [...available].sort((a, b) => {
+    if (a.q !== b.q) return a.q - b.q;
+    return a.r - b.r;
+  });
+
+  const count = units.length;
+  const zoneSize = sorted.length;
+  const claimed = new Set<string>();
+
+  for (let i = 0; i < count; i++) {
+    const targetIdx = Math.floor((i * zoneSize) / count);
+    let placed = false;
+    for (let offset = 0; offset < zoneSize; offset++) {
+      const idx = (targetIdx + offset) % zoneSize;
+      const hex = sorted[idx]!;
+      const key = hexToKey(hex);
+      if (!claimed.has(key)) {
+        units[i]!.position = hex;
+        claimed.add(key);
+        placed = true;
         break;
+      }
+    }
+    if (!placed) {
+      for (const hex of sorted) {
+        const key = hexToKey(hex);
+        if (!claimed.has(key)) {
+          units[i]!.position = hex;
+          claimed.add(key);
+          break;
+        }
       }
     }
   }
