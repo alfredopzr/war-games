@@ -147,7 +147,7 @@ describe('handlePlaceUnit', () => {
     expect(room.gameState!.players.player1.units[0]!.type).toBe('infantry');
   });
 
-  it('emits state-update only to the placing player', () => {
+  it('emits state-update to both players', () => {
     const room = createTestRoom();
     const io = createMockIo();
     startGame(room, io as unknown as Parameters<typeof startGame>[1]);
@@ -164,8 +164,7 @@ describe('handlePlaceUnit', () => {
     );
 
     const updates = io.emitted.filter((e) => e.event === 'state-update');
-    expect(updates).toHaveLength(1);
-    expect(updates[0]!.to).toBe('socket-p1');
+    expect(updates).toHaveLength(2);
   });
 });
 

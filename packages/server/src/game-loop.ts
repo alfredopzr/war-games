@@ -203,9 +203,8 @@ export function handlePlaceUnit(
 
   placeUnit(room.gameState, playerId, unitType, position, directive, target);
 
-  const player = room.players.get(playerId);
-  if (player) {
-    const filtered = filterStateForPlayer(room.gameState, playerId);
+  for (const [pid, player] of room.players) {
+    const filtered = filterStateForPlayer(room.gameState, pid);
     io.to(player.socketId).emit('state-update', {
       type: 'state-update',
       state: filtered,
@@ -238,9 +237,8 @@ export function handleRemoveUnit(
   playerState.units.splice(unitIndex, 1);
   playerState.resources += cost;
 
-  const player = room.players.get(playerId);
-  if (player) {
-    const filtered = filterStateForPlayer(room.gameState, playerId);
+  for (const [pid, player] of room.players) {
+    const filtered = filterStateForPlayer(room.gameState, pid);
     io.to(player.socketId).emit('state-update', {
       type: 'state-update',
       state: filtered,
@@ -274,9 +272,8 @@ export function handleSetDirective(
     unit.directiveTarget = target;
   }
 
-  const player = room.players.get(playerId);
-  if (player) {
-    const filtered = filterStateForPlayer(room.gameState, playerId);
+  for (const [pid, player] of room.players) {
+    const filtered = filterStateForPlayer(room.gameState, pid);
     io.to(player.socketId).emit('state-update', {
       type: 'state-update',
       state: filtered,
