@@ -5,16 +5,18 @@ import {
   canAttack, cubeDistance, UNIT_STATS,
 } from '@hexwar/engine';
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
-import { Application, Graphics } from 'pixi.js';
-import { HEX_SIZE, PLAYER_COLORS } from './renderer/constants';
+import { Application } from 'pixi.js';
+import { HEX_SIZE } from './renderer/constants';
 import { hexToPixel, screenToHex } from './renderer/hex-render';
 import { renderTerrain } from './renderer/terrain-renderer';
 import { renderFog } from './renderer/fog-renderer';
 import { renderDeployZones } from './renderer/deploy-renderer';
 import { renderSelectionHighlights } from './renderer/selection-renderer';
+import { renderUnits } from './renderer/unit-renderer';
+import { updateEffects } from './renderer/effects-renderer';
 import { renderMinimap } from './renderer/minimap';
 import { initPixiApp, destroyPixiApp } from './renderer/pixi-app';
-import { setupLayers, deployZoneLayer, unitLayer } from './renderer/layers';
+import { setupLayers, deployZoneLayer } from './renderer/layers';
 import { setupCameraControls, setMapBounds, centerCameraOnMap } from './renderer/camera-controller';
 import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
@@ -67,11 +69,6 @@ function getEnemyPlayer(player: PlayerId): PlayerId {
   return player === 'player1' ? 'player2' : 'player1';
 }
 
-/** Parse CSS hex color string to numeric value. */
-function parseColor(hex: string): number {
-  return parseInt(hex.replace('#', ''), 16);
-}
-
 /** Render the full scene into PixiJS layers. */
 function renderScene(state: GameState): void {
   const allHexes = getAllHexes(state.map.gridSize);
@@ -81,9 +78,6 @@ function renderScene(state: GameState): void {
   const lastKnownEnemies = store.lastKnownEnemies;
   const selectedUnit = store.selectedUnit;
   const isBuildPhase = state.phase === 'build';
-
-  // Clear unit layer (terrain/fog/deploy cleared by their own modules)
-  unitLayer.removeChildren();
 
   // Terrain + objective + city borders
   renderTerrain(state);
@@ -104,60 +98,11 @@ function renderScene(state: GameState): void {
     allHexes,
   );
 
-  // Units
-  const drawUnitCircle = (g: Graphics, unit: Unit, cx: number, cy: number): void => {
-    const color = parseColor(PLAYER_COLORS[unit.owner].fill);
-    const strokeColor = parseColor(PLAYER_COLORS[unit.owner].stroke);
-    const radius = HEX_SIZE * 0.5;
-    g.circle(cx, cy, radius);
-    g.fill({ color, alpha: 1 });
-    g.stroke({ color: strokeColor, width: 2 });
-  };
+  // Units (rendered on unitLayer with HP bars, directive indicators, damage flash)
+  renderUnits(state, currentPlayerView, visibleHexes, lastKnownEnemies);
 
-  if (isBuildPhase) {
-    const unitGraphics = new Graphics();
-    const friendly = getPlayerUnits(state, currentPlayerView);
-    for (const unit of friendly) {
-      const { x, y } = hexToPixel(unit.position, HEX_SIZE);
-      drawUnitCircle(unitGraphics, unit, x, y);
-    }
-    unitLayer.addChild(unitGraphics);
-  } else {
-    const unitGraphics = new Graphics();
-
-    // Friendly units (always visible)
-    const friendly = getPlayerUnits(state, currentPlayerView);
-    for (const unit of friendly) {
-      const { x, y } = hexToPixel(unit.position, HEX_SIZE);
-      drawUnitCircle(unitGraphics, unit, x, y);
-    }
-
-    // Enemy units only if in visible hexes
-    const enemyPlayer = getEnemyPlayer(currentPlayerView);
-    const enemies = getPlayerUnits(state, enemyPlayer);
-    for (const unit of enemies) {
-      const key = hexToKey(unit.position);
-      if (visibleHexes.has(key)) {
-        const { x, y } = hexToPixel(unit.position, HEX_SIZE);
-        drawUnitCircle(unitGraphics, unit, x, y);
-      }
-    }
-
-    unitLayer.addChild(unitGraphics);
-
-    // Ghost markers for last-known enemy positions
-    const ghostGraphics = new Graphics();
-    for (const [, ghost] of lastKnownEnemies) {
-      const ghostKey = hexToKey(ghost.position);
-      if (!visibleHexes.has(ghostKey)) {
-        const { x, y } = hexToPixel(ghost.position, HEX_SIZE);
-        ghostGraphics.circle(x, y, HEX_SIZE * 0.35);
-        ghostGraphics.fill({ color: 0x888888, alpha: 0.4 });
-      }
-    }
-    unitLayer.addChild(ghostGraphics);
-
-    // Fog overlay on non-visible hexes
+  // Fog overlay on non-visible hexes (battle phase only)
+  if (!isBuildPhase) {
     renderFog(allHexes, visibleHexes);
   }
 }
@@ -220,6 +165,7 @@ export function App(): ReactElement {
       }
       appRef.current = app;
       setupLayers(app);
+      app.ticker.add((ticker) => updateEffects(ticker.deltaTime));
       const cleanup = setupCameraControls(app, app.stage);
       cleanupCameraRef.current = cleanup;
     });
