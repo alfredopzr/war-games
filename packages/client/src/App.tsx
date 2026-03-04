@@ -209,6 +209,9 @@ export function App(): ReactElement {
       const app = appRef.current;
       if (!app || !gameState) return;
 
+      // Block input during turn replay
+      if (useGameStore.getState().isReplayPlaying) return;
+
       const hex = screenToHex(e.clientX, e.clientY, HEX_SIZE, app.stage);
       const store = useGameStore.getState();
 
@@ -326,6 +329,7 @@ export function App(): ReactElement {
   const handleContextMenu = useCallback(
     (e: MouseEvent): void => {
       if (!gameState || gameState.phase !== 'build') return;
+      if (useGameStore.getState().isReplayPlaying) return;
       const app = appRef.current;
       if (!app) return;
 

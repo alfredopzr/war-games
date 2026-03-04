@@ -8,6 +8,7 @@ import {
 import type { PlayerId, ObjectiveState, GameState, Unit } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 import type { BattleLogEntry } from '../store/game-store';
+import { diffTurnEvents, startReplay, skipReplay } from '../renderer/replay-sequencer';
 
 function phaseClass(phase: string): string {
   switch (phase) {
@@ -207,6 +208,7 @@ export function BattleHUD(): ReactElement | null {
   const startBuildTimer = useGameStore((s) => s.startBuildTimer);
   const confirmBuild = useGameStore((s) => s.confirmBuild);
   const buildTimerInterval = useGameStore((s) => s.buildTimerInterval);
+  const isReplayPlaying = useGameStore((s) => s.isReplayPlaying);
   const [aiThinking, setAiThinking] = useState(false);
 
   // Start build timer when build phase begins and no interval is running
@@ -216,8 +218,22 @@ export function BattleHUD(): ReactElement | null {
     }
   }, [gameState?.phase, buildTimerInterval, startBuildTimer]);
 
+  // Space key to skip replay
+  useEffect(() => {
+    if (!isReplayPlaying) return;
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        skipReplay();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isReplayPlaying]);
+
   const handleEndTurn = useCallback((): void => {
     if (aiThinking) return;
+    if (useGameStore.getState().isReplayPlaying) return;
     if (!gameState) return;
 
     // Online mode: send commands to server
@@ -244,6 +260,15 @@ export function BattleHUD(): ReactElement | null {
         allUnitsBefore.set(unit.id, unit.hp);
       }
     }
+
+    // Snapshot for replay diff (position + hp + owner)
+    const replayUnitsBefore = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
+    for (const player of Object.values(gameState.players)) {
+      for (const unit of player.units) {
+        replayUnitsBefore.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: unit.owner });
+      }
+    }
+    const replayCitiesBefore = new Map(gameState.cityOwnership);
 
     // Execute the turn with pending commands
     executeTurn(gameState, pendingCommands);
@@ -272,48 +297,65 @@ export function BattleHUD(): ReactElement | null {
     }
     useGameStore.setState({ damagedUnits: updated });
 
-    // Check if round ended
-    const result = checkRoundEnd(gameState);
-    if (result.roundOver) {
-      // Compute income breakdown BEFORE scoreRound mutates resources
-      const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
-      const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
+    // Generate replay events from before/after diff
+    const replayUnitsAfter = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
+    for (const player of Object.values(gameState.players)) {
+      for (const unit of player.units) {
+        replayUnitsAfter.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: unit.owner });
+      }
+    }
+    const replayEvents = diffTurnEvents(replayUnitsBefore, replayUnitsAfter, replayCitiesBefore, gameState.cityOwnership);
 
-      scoreRound(gameState, result.winner);
+    // Post-turn flow: check round end, then continue to next player
+    const finishPostTurn = (): void => {
+      const result = checkRoundEnd(gameState);
+      if (result.roundOver) {
+        const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
+        const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
 
-      // Clear pending commands and deselect
+        scoreRound(gameState, result.winner);
+
+        clearPendingCommands();
+        selectUnit(null);
+
+        setGameState({ ...gameState });
+        useGameStore.getState().showRoundResultScreen(result.winner, result.reason ?? 'unknown', p1Breakdown, p2Breakdown);
+        return;
+      }
+
       clearPendingCommands();
       selectUnit(null);
 
-      // Force re-render then show round result
-      setGameState({ ...gameState });
-      store.showRoundResultScreen(result.winner, result.reason ?? 'unknown', p1Breakdown, p2Breakdown);
-      return;
-    }
-
-    // Clear pending commands
-    clearPendingCommands();
-
-    // Deselect unit
-    selectUnit(null);
-
-    if (gameMode === 'vsAI' && currentPlayerView === 'player1') {
-      // VS AI: after P1 ends their turn, auto-execute AI (P2) turn after brief delay
-      setGameState({ ...gameState });
-      setAiThinking(true);
-      setTimeout(() => {
-        const currentGame = useGameStore.getState().gameState;
-        if (!currentGame || currentGame.phase !== 'battle') {
+      if (gameMode === 'vsAI' && currentPlayerView === 'player1') {
+        setGameState({ ...gameState });
+        setAiThinking(true);
+        setTimeout(() => {
+          const currentGame = useGameStore.getState().gameState;
+          if (!currentGame || currentGame.phase !== 'battle') {
+            setAiThinking(false);
+            return;
+          }
+          executeAiTurn(currentGame);
           setAiThinking(false);
-          return;
-        }
-        executeAiTurn(currentGame);
-        setAiThinking(false);
-      }, 500);
-    } else {
-      // Hot-seat: show turn transition overlay for the next player
+        }, 500);
+      } else {
+        setGameState({ ...gameState });
+        useGameStore.setState({ showTransition: true });
+      }
+    };
+
+    // If there are replay events, play the replay before continuing
+    if (replayEvents.length > 0) {
+      store.setTurnReplayEvents(replayEvents);
+      store.setReplayPlaying(true);
       setGameState({ ...gameState });
-      useGameStore.setState({ showTransition: true });
+      startReplay(replayEvents, () => {
+        useGameStore.getState().setReplayPlaying(false);
+        useGameStore.getState().setTurnReplayEvents([]);
+        finishPostTurn();
+      });
+    } else {
+      finishPostTurn();
     }
   }, [gameState, pendingCommands, gameMode, currentPlayerView, clearPendingCommands, selectUnit, setGameState, aiThinking]);
 
@@ -404,14 +446,23 @@ export function BattleHUD(): ReactElement | null {
         <span className="round-info">
           Round {round.roundNumber}/{gameState.maxRounds}
         </span>
-        {showEndTurn && (
+        {isReplayPlaying && (
+          <button
+            className="end-turn-btn"
+            onClick={skipReplay}
+            type="button"
+          >
+            Skip Replay
+          </button>
+        )}
+        {showEndTurn && !isReplayPlaying && (
           <button
             className="end-turn-btn"
             onClick={handleEndTurn}
             type="button"
             disabled={aiThinking || waitingForServer}
           >
-            {waitingForServer ? 'Waiting...' : aiThinking ? 'AI thinking…' : 'End Turn'}
+            {waitingForServer ? 'Waiting...' : aiThinking ? 'AI thinking...' : 'End Turn'}
           </button>
         )}
       </div>
