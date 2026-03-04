@@ -793,6 +793,65 @@
   color: #aaa;
 }
 
+.start-menu-help .help-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #888;
+}
+
+.help-unit-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.help-unit-header,
+.help-unit-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr repeat(6, 1fr);
+  gap: 4px;
+  padding: 3px 4px;
+}
+
+.help-unit-header {
+  color: #888;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 4px;
+}
+
+.help-unit-row {
+  color: #ccc;
+}
+
+.help-unit-row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.help-type-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+.help-directives {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+.help-economy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #ccc;
+}
+
 .start-menu-actions {
   display: flex;
   flex-direction: column;

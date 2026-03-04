@@ -2,7 +2,6 @@ import type { TerrainType } from '@hexwar/engine';
 
 import grassPlains from '../assets/kenney_hexagon-pack/PNG/Tiles/Terrain/Grass/grass_06.png';
 import grassForest from '../assets/kenney_hexagon-pack/PNG/Tiles/Terrain/Grass/grass_13.png';
-import marsMountain from '../assets/kenney_hexagon-pack/PNG/Tiles/Terrain/Mars/mars_15.png';
 import dirtMountain from '../assets/kenney_hexagon-pack/PNG/Tiles/Terrain/Dirt/dirt_18.png';
 import modernCity from '../assets/kenney_hexagon-pack/PNG/Tiles/Modern/modern_villa.png';
 import modernSkyscraper from '../assets/kenney_hexagon-pack/PNG/Tiles/Modern/modern_skyscraper.png';

@@ -39,7 +39,7 @@ The engine is a standalone, framework-agnostic TypeScript library. It handles al
 | `pathfinding.ts` | A* pathfinding with terrain-aware movement costs |
 | `vision.ts` | Fog of war with line-of-sight raycasting and forest concealment |
 | `directives.ts` | 6 autonomous unit behaviors (advance, hold, flank, scout, support) |
-| `commands.ts` | Command point system (3 CP per turn) |
+| `commands.ts` | Command point system (4 CP per turn) |
 | `economy.ts` | Income, carryover, maintenance, catch-up bonus |
 | `map-gen.ts` | Procedural symmetric map generation with seeded PRNG |
 | `game-state.ts` | Full game state machine (build -> battle -> scoring -> game-over) |
@@ -62,10 +62,10 @@ Each player starts with **500 gold** (plus income from previous rounds). Purchas
 
 | Unit | Cost | HP | ATK | DEF | Move | Range | Vision |
 |------|------|----|-----|-----|------|-------|--------|
-| Infantry | 100 | 3 | 2 | 2 | 2 | 1 | 2 |
-| Tank | 250 | 4 | 4 | 3 | 3 | 1 | 2 |
-| Artillery | 200 | 2 | 5 | 1 | 1 | 2-3 | 2 |
-| Recon | 100 | 2 | 1 | 1 | 4 | 1 | 5 |
+| Infantry | 100 | 3 | 2 | 2 | 3 | 1 | 3 |
+| Tank | 250 | 4 | 4 | 3 | 4 | 1 | 3 |
+| Artillery | 200 | 2 | 5 | 1 | 2 | 2-3 | 3 |
+| Recon | 100 | 2 | 1 | 1 | 5 | 1 | 6 |
 
 Assign each unit a **directive** that controls its autonomous behavior:
 
@@ -79,7 +79,7 @@ Assign each unit a **directive** that controls its autonomous behavior:
 
 Players alternate turns. Each turn:
 
-1. **Spend up to 3 Command Points** to override unit behavior:
+1. **Spend up to 4 Command Points** to override unit behavior:
    - **Direct Move** — Move a specific unit to a hex
    - **Direct Attack** — Attack a specific enemy
    - **Redirect** — Change a unit's directive
@@ -90,9 +90,11 @@ Players alternate turns. Each turn:
 
 A round ends when any of these occur:
 
-- **King of the Hill** — A player holds the central hex for 2 consecutive turns
+- **King of the Hill** — A player holds the central hex for 2 consecutive turns **and** controls at least 2 city hexes
 - **Elimination** — All of one player's units are destroyed
 - **Turn Limit** — After 8 turns per side, tiebreaker: objective control > proximity > total HP
+
+> **Tip:** Capturing city hexes is not just an economic bonus — you need to hold 2 cities before your objective hold counter starts ticking.
 
 ### Economy Between Rounds
 

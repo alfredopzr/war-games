@@ -25,8 +25,8 @@ export function BattleHelp(): ReactElement | null {
         <p>Your units move automatically based on their directives. Use <strong>Command Points (CP)</strong> to give direct orders:</p>
         <ul>
           <li>Click a unit to select it, then use the command bar at the bottom</li>
-          <li>You have <strong>3 CP per turn</strong> — Move, Attack, Redirect, or Retreat</li>
-          <li>The golden hex is the <strong>objective</strong> — hold it for 2 turns to win</li>
+          <li>You have <strong>4 CP per turn</strong> — Move, Attack, Redirect, or Retreat</li>
+          <li>The golden hex is the <strong>objective</strong> — hold it for 2 turns <em>and</em> control 2 cities to win the round</li>
           <li>Dark hexes are hidden by <strong>fog of war</strong></li>
         </ul>
         <p>Click <strong>End Turn</strong> when ready.</p>
