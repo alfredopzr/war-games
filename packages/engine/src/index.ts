@@ -55,10 +55,10 @@ export {
 export { generateMap, validateMap } from './map-gen';
 
 // Directives
-export { executeDirective } from './directives';
+export { executeDirective, resolveTarget } from './directives';
 
 // Commands
-export { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND } from './commands';
+export { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND, validateDirectiveTarget } from './commands';
 
 // Game state
 export {

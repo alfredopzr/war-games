@@ -1,4 +1,4 @@
-import type { Command, CommandPool } from './types';
+import type { Command, CommandPool, DirectiveType, DirectiveTarget } from './types';
 
 export const CP_PER_ROUND = 4;
 
@@ -35,4 +35,16 @@ export function spendCommand(pool: CommandPool, command: Command): CommandPool {
 
 export function canIssueCommand(pool: CommandPool, unitId: string): boolean {
   return pool.remaining > 0 && !pool.commandedUnitIds.has(unitId);
+}
+
+export function validateDirectiveTarget(
+  directive: DirectiveType,
+  target: DirectiveTarget,
+): void {
+  if (directive === 'hunt' && target.type !== 'enemy-unit') {
+    throw new Error('Hunt directive requires an enemy-unit target');
+  }
+  if (directive === 'capture' && target.type !== 'city') {
+    throw new Error('Capture directive requires a city target');
+  }
 }
