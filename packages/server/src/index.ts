@@ -33,12 +33,12 @@ const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
     methods: ['GET', 'POST'],
   },
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
