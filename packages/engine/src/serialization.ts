@@ -104,8 +104,28 @@ export function serializeGameState(state: GameState): SerializableGameState {
   return {
     phase: state.phase,
     players: {
-      player1: { ...state.players.player1, units: state.players.player1.units.map((u) => ({ ...u, position: { ...u.position } })) },
-      player2: { ...state.players.player2, units: state.players.player2.units.map((u) => ({ ...u, position: { ...u.position } })) },
+      player1: {
+        ...state.players.player1,
+        units: state.players.player1.units.map((u) => ({
+          ...u,
+          position: { ...u.position },
+          directiveTarget: {
+            ...u.directiveTarget,
+            hex: u.directiveTarget.hex ? { ...u.directiveTarget.hex } : undefined,
+          },
+        })),
+      },
+      player2: {
+        ...state.players.player2,
+        units: state.players.player2.units.map((u) => ({
+          ...u,
+          position: { ...u.position },
+          directiveTarget: {
+            ...u.directiveTarget,
+            hex: u.directiveTarget.hex ? { ...u.directiveTarget.hex } : undefined,
+          },
+        })),
+      },
     },
     round: serializeRoundState(state.round),
     map: serializeGameMap(state.map),
@@ -168,8 +188,28 @@ export function deserializeGameState(data: SerializableGameState): GameState {
   return {
     phase: data.phase,
     players: {
-      player1: { ...data.players.player1, units: data.players.player1.units.map((u) => ({ ...u, position: { ...u.position } })) },
-      player2: { ...data.players.player2, units: data.players.player2.units.map((u) => ({ ...u, position: { ...u.position } })) },
+      player1: {
+        ...data.players.player1,
+        units: data.players.player1.units.map((u) => ({
+          ...u,
+          position: { ...u.position },
+          directiveTarget: {
+            ...u.directiveTarget,
+            hex: u.directiveTarget.hex ? { ...u.directiveTarget.hex } : undefined,
+          },
+        })),
+      },
+      player2: {
+        ...data.players.player2,
+        units: data.players.player2.units.map((u) => ({
+          ...u,
+          position: { ...u.position },
+          directiveTarget: {
+            ...u.directiveTarget,
+            hex: u.directiveTarget.hex ? { ...u.directiveTarget.hex } : undefined,
+          },
+        })),
+      },
     },
     round: deserializeRoundState(data.round),
     map: deserializeGameMap(data.map),

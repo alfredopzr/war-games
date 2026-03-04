@@ -121,6 +121,20 @@ describe('serialization', () => {
       expect(result.players.player2.roundsWon).toBe(2);
     });
 
+    it('round-trips unit with directiveTarget', () => {
+      const state = createGame();
+      placeUnit(state, 'player1', 'infantry', state.map.player1Deployment[0]!, 'hunt', {
+        type: 'enemy-unit',
+        unitId: 'target-id',
+      });
+
+      const serialized = serializeGameState(state);
+      const deserialized = deserializeGameState(serialized);
+
+      const unit = deserialized.players.player1.units[0]!;
+      expect(unit.directiveTarget).toEqual({ type: 'enemy-unit', unitId: 'target-id' });
+    });
+
     it('survives JSON.stringify/parse round-trip (simulating Socket.io)', () => {
       const p1Zone = state.map.player1Deployment[0]!;
       state = placeUnit(state, 'player1', 'infantry', p1Zone);
