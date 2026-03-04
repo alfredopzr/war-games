@@ -8,7 +8,9 @@ html, body, #root {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #1a1a2e;
+  background: #000;
+  font-family: 'Courier New', 'Consolas', monospace;
+  color: #c8d6e0;
 }
 
 canvas {

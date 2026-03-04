@@ -3,21 +3,24 @@
   top: 20px;
   right: 20px;
   width: 220px;
-  background: rgba(20, 20, 40, 0.9);
-  border: 1px solid #4a4a6a;
-  border-radius: 8px;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
   padding: 16px;
-  color: #e0e0e0;
-  font-family: monospace;
+  color: #c8d6e0;
+  font-family: 'Courier New', 'Consolas', monospace;
   font-size: 13px;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
 }
 
 .unit-info-panel h3 {
   margin: 0 0 12px;
-  font-size: 16px;
-  color: #fff;
-  border-bottom: 1px solid #4a4a6a;
+  font-size: 14px;
+  color: #00d4ff;
+  border-bottom: 1px solid #1a3a4a;
   padding-bottom: 8px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
 }
 
 .unit-info-panel .stat-row {
@@ -27,13 +30,16 @@
 }
 
 .unit-info-panel .stat-label {
-  color: #888;
+  color: #6a8090;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 1px;
 }
 
 .unit-info-panel .directive-section {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #4a4a6a;
+  border-top: 1px solid #1a3a4a;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -41,12 +47,14 @@
 
 .unit-info-panel .directive-section-name {
   font-weight: bold;
-  color: #ccc;
-  font-size: 13px;
+  color: #00d4ff;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .unit-info-panel .directive-section-desc {
-  color: #888;
+  color: #6a8090;
   font-size: 11px;
 }
 
@@ -56,9 +64,41 @@
   right: 8px;
   background: none;
   border: none;
-  color: #888;
+  color: #6a8090;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
+  font-family: 'Courier New', 'Consolas', monospace;
+}
+
+.unit-info-panel .close-btn:hover {
+  color: #00d4ff;
+}
+
+.unit-info-panel .hp-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.unit-info-panel .hp-bar-track {
+  flex: 1;
+  height: 5px;
+  background: #1a3a4a;
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.unit-info-panel .hp-bar-fill {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 0.3s ease;
+}
+
+.unit-info-panel .hp-bar-text {
+  font-size: 12px;
+  color: #c8d6e0;
+  white-space: nowrap;
 }
 
 .loading-screen {
@@ -67,11 +107,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #1a1a2e;
-  color: #e0e0e0;
-  font-family: monospace;
+  background: #0a0e14;
+  color: #c8d6e0;
+  font-family: 'Courier New', 'Consolas', monospace;
   font-size: 18px;
   z-index: 9999;
+  letter-spacing: 2px;
+  text-transform: uppercase;
 }
 
 .game-canvas {
@@ -83,13 +125,19 @@
   top: 68px;
   left: 20px;
   padding: 8px 16px;
-  background: rgba(20, 20, 40, 0.9);
-  border: 1px solid #4a4a6a;
-  border-radius: 6px;
-  color: #e0e0e0;
-  font-family: monospace;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
+  color: #c8d6e0;
+  font-family: 'Courier New', 'Consolas', monospace;
   font-size: 13px;
   cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
+}
+
+.view-switch-btn:hover {
+  border-color: #00d4ff;
+  color: #00d4ff;
 }
 
 /* Battle HUD */
@@ -100,44 +148,51 @@
   left: 0;
   right: 0;
   height: 56px;
-  background: rgba(20, 20, 40, 0.95);
-  border-bottom: 1px solid #4a4a6a;
+  background: rgba(10, 14, 20, 0.95);
+  border-bottom: 1px solid #1a3a4a;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  color: #e0e0e0;
-  font-family: monospace;
+  color: #c8d6e0;
+  font-family: 'Courier New', 'Consolas', monospace;
   z-index: 10;
+  box-shadow: 0 1px 8px rgba(0, 212, 255, 0.08);
 }
 
 .battle-hud .phase-badge {
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: 2px;
   font-weight: bold;
-  font-size: 14px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border: 1px solid;
 }
 
 .battle-hud .phase-build {
-  background: #2a5a3a;
-  color: #6fc;
+  background: transparent;
+  color: #00d4ff;
+  border-color: #00d4ff;
 }
 
 .battle-hud .phase-battle {
-  background: #5a2a2a;
-  color: #f88;
+  background: transparent;
+  color: #ff4444;
+  border-color: #ff4444;
 }
 
 .battle-hud .phase-scoring {
-  background: #4a4a2a;
-  color: #ff8;
+  background: transparent;
+  color: #c88a20;
+  border-color: #c88a20;
 }
 
 .battle-hud .turn-info {
   display: flex;
   align-items: center;
   gap: 16px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .battle-hud .cp-dots {
@@ -146,15 +201,16 @@
 }
 
 .battle-hud .cp-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1px solid #888;
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+  border: 1px solid #1a3a4a;
 }
 
 .battle-hud .cp-dot.filled {
-  background: #ffd700;
-  border-color: #ffd700;
+  background: #00d4ff;
+  border-color: #00d4ff;
+  box-shadow: 0 0 4px rgba(0, 212, 255, 0.4);
 }
 
 .battle-hud .cp-dot.empty {
@@ -162,38 +218,45 @@
 }
 
 .battle-hud .objective-status {
-  font-size: 13px;
-  color: #aaa;
+  font-size: 11px;
+  color: #6a8090;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .battle-hud .city-ownership {
-  font-size: 12px;
-  color: #999;
+  font-size: 11px;
+  color: #6a8090;
 }
 
 .battle-hud .round-info {
-  font-size: 13px;
-  color: #aaa;
+  font-size: 11px;
+  color: #6a8090;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .end-turn-btn {
   padding: 8px 20px;
-  background: #4a6a8a;
-  border: 1px solid #6a8aaa;
-  border-radius: 4px;
-  color: #fff;
+  background: transparent;
+  border: 1px solid #00d4ff;
+  border-radius: 2px;
+  color: #00d4ff;
   cursor: pointer;
-  font-family: monospace;
-  font-size: 14px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 12px;
   font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .end-turn-btn:hover:not(:disabled) {
-  background: #5a7a9a;
+  background: rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
 }
 
 .end-turn-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -206,37 +269,40 @@
   transform: translateX(-50%);
   display: flex;
   gap: 8px;
-  background: rgba(20, 20, 40, 0.95);
-  border: 1px solid #4a4a6a;
-  border-radius: 8px;
+  background: rgba(10, 14, 20, 0.95);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
   padding: 12px;
   z-index: 10;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
 }
 
 .command-btn {
   padding: 8px 16px;
-  background: #2a2a4a;
-  border: 1px solid #4a4a6a;
-  border-radius: 4px;
-  color: #ccc;
+  background: transparent;
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
+  color: #c8d6e0;
   cursor: pointer;
-  font-family: monospace;
-  font-size: 13px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .command-btn:hover {
-  background: #3a3a5a;
-  border-color: #6a6a8a;
+  border-color: #00d4ff;
+  color: #00d4ff;
 }
 
 .command-btn.active {
-  background: #4a4a6a;
-  border-color: #8a8aaa;
-  color: #fff;
+  border-color: #00d4ff;
+  color: #00d4ff;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.3);
 }
 
 .command-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
@@ -250,32 +316,35 @@
   left: 50%;
   transform: translateX(-50%);
   margin-bottom: 4px;
-  background: rgba(20, 20, 40, 0.95);
-  border: 1px solid #4a4a6a;
-  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.95);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
   padding: 4px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 120px;
   z-index: 11;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
 }
 
 .directive-option {
   padding: 6px 12px;
   background: transparent;
   border: none;
-  border-radius: 3px;
-  color: #ccc;
+  border-radius: 2px;
+  color: #c8d6e0;
   cursor: pointer;
-  font-family: monospace;
-  font-size: 12px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
   text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .directive-option:hover {
-  background: #3a3a5a;
-  color: #fff;
+  background: rgba(0, 212, 255, 0.1);
+  color: #00d4ff;
 }
 
 /* Turn Transition Overlay */
@@ -283,7 +352,7 @@
 .turn-transition {
   position: fixed;
   inset: 0;
-  background: rgba(10, 10, 20, 0.97);
+  background: rgba(10, 14, 20, 0.97);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -293,9 +362,11 @@
 }
 
 .turn-transition h1 {
-  font-family: monospace;
-  font-size: 48px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 36px;
   margin-bottom: 24px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
 }
 
 .player1-text {
@@ -307,18 +378,22 @@
 }
 
 .turn-transition p {
-  font-family: monospace;
-  font-size: 16px;
-  color: #888;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 14px;
+  color: #6a8090;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .turn-transition .transition-hint {
-  font-size: 14px;
-  color: #999;
+  font-size: 12px;
+  color: #6a8090;
   max-width: 400px;
   text-align: center;
-  line-height: 1.5;
+  line-height: 1.6;
   margin-bottom: 24px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 /* Round Result Overlay */
@@ -326,7 +401,7 @@
 .round-result {
   position: fixed;
   inset: 0;
-  background: rgba(10, 10, 20, 0.97);
+  background: rgba(10, 14, 20, 0.97);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -335,16 +410,18 @@
 }
 
 .round-result h1 {
-  font-family: monospace;
-  font-size: 36px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 28px;
   margin-bottom: 16px;
-  color: #fff;
+  color: #00d4ff;
+  letter-spacing: 3px;
+  text-transform: uppercase;
 }
 
 .round-result .result-details {
-  font-family: monospace;
-  font-size: 14px;
-  color: #aaa;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 13px;
+  color: #6a8090;
   text-align: center;
   margin-bottom: 24px;
   line-height: 1.8;
@@ -352,24 +429,29 @@
 
 .round-result .continue-btn {
   padding: 12px 32px;
-  background: #4a6a8a;
-  border: 1px solid #6a8aaa;
-  border-radius: 6px;
-  color: #fff;
+  background: transparent;
+  border: 1px solid #00d4ff;
+  border-radius: 2px;
+  color: #00d4ff;
   cursor: pointer;
-  font-family: monospace;
-  font-size: 16px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 14px;
   font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .round-result .continue-btn:hover {
-  background: #5a7a9a;
+  background: rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
 }
 
 .round-result .income-breakdown h3 {
-  color: #ccc;
-  font-size: 14px;
+  color: #c8d6e0;
+  font-size: 13px;
   margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .round-result .income-columns {
@@ -383,16 +465,19 @@
 }
 
 .round-result .income-header {
-  color: #ccc;
+  color: #c8d6e0;
   font-weight: bold;
   margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 12px;
 }
 
 .round-result .income-total {
-  color: #ffdd44;
+  color: #c88a20;
   font-weight: bold;
   margin-top: 4px;
-  border-top: 1px solid #555;
+  border-top: 1px solid #1a3a4a;
   padding-top: 4px;
 }
 
@@ -401,7 +486,7 @@
 .game-over {
   position: fixed;
   inset: 0;
-  background: rgba(10, 10, 20, 0.97);
+  background: rgba(10, 14, 20, 0.97);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -410,32 +495,39 @@
 }
 
 .game-over h1 {
-  font-family: monospace;
-  font-size: 48px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 36px;
   margin-bottom: 16px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
 }
 
 .game-over .score-display {
-  font-family: monospace;
-  font-size: 20px;
-  color: #aaa;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 18px;
+  color: #6a8090;
   margin-bottom: 32px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .play-again-btn {
   padding: 12px 32px;
-  background: #3a8a4a;
-  border: 1px solid #5aaa6a;
-  border-radius: 6px;
-  color: #fff;
+  background: transparent;
+  border: 1px solid #00d4ff;
+  border-radius: 2px;
+  color: #00d4ff;
   cursor: pointer;
-  font-family: monospace;
-  font-size: 16px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 14px;
   font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .play-again-btn:hover {
-  background: #4a9a5a;
+  background: rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
 }
 
 /* Unit Shop */
@@ -445,34 +537,37 @@
   top: 68px;
   left: 0;
   width: 240px;
-  background: rgba(20, 20, 40, 0.95);
-  border-right: 1px solid #4a4a6a;
+  background: rgba(10, 14, 20, 0.95);
+  border-right: 1px solid #1a3a4a;
   padding: 16px;
-  color: #e0e0e0;
-  font-family: monospace;
+  color: #c8d6e0;
+  font-family: 'Courier New', 'Consolas', monospace;
   z-index: 10;
   max-height: calc(100vh - 68px);
   overflow-y: auto;
+  box-shadow: 1px 0 8px rgba(0, 212, 255, 0.08);
 }
 
 .unit-shop h3 {
-  font-size: 14px;
+  font-size: 12px;
   margin: 0 0 4px;
-  color: #fff;
+  color: #00d4ff;
+  letter-spacing: 2px;
+  text-transform: uppercase;
 }
 
 .unit-shop .resources {
   font-size: 18px;
-  color: #ffd700;
+  color: #c88a20;
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #4a4a6a;
+  border-bottom: 1px solid #1a3a4a;
 }
 
 .unit-card {
-  background: #2a2a4a;
-  border: 1px solid #4a4a6a;
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
   padding: 6px 8px;
   margin-bottom: 6px;
   cursor: pointer;
@@ -480,30 +575,33 @@
 }
 
 .unit-card:hover:not(.disabled) {
-  border-color: #8a8aaa;
+  border-color: #00d4ff;
 }
 
 .unit-card.active {
-  border-color: #ffd700;
-  background: #3a3a5a;
+  border-color: #00d4ff;
+  background: rgba(0, 212, 255, 0.08);
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.2);
 }
 
 .unit-card.disabled {
-  opacity: 0.4;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
 .unit-card .unit-name {
   font-weight: bold;
-  font-size: 13px;
-  color: #fff;
+  font-size: 12px;
+  color: #c8d6e0;
   display: inline;
   margin-right: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .unit-card .unit-cost {
-  font-size: 12px;
-  color: #ffd700;
+  font-size: 11px;
+  color: #c88a20;
   display: inline;
 }
 
@@ -512,23 +610,24 @@
   flex-wrap: wrap;
   gap: 2px 8px;
   font-size: 10px;
-  color: #aaa;
+  color: #6a8090;
   margin-top: 3px;
 }
 
 /* Build Timer (inline in HUD) */
 
 .battle-hud .hud-timer {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: bold;
+  letter-spacing: 2px;
 }
 
 .battle-hud .hud-timer-normal {
-  color: #e0e0e0;
+  color: #c8d6e0;
 }
 
 .battle-hud .hud-timer-warning {
-  color: #ffcc00;
+  color: #c88a20;
 }
 
 .battle-hud .hud-timer-critical {
@@ -548,18 +647,21 @@
 
 .battle-hud .hud-ready-btn {
   padding: 4px 16px;
-  background: #3a8a4a;
-  border: 1px solid #5aaa6a;
-  border-radius: 4px;
-  color: #fff;
+  background: transparent;
+  border: 1px solid #00d4ff;
+  border-radius: 2px;
+  color: #00d4ff;
   cursor: pointer;
-  font-family: monospace;
-  font-size: 13px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 12px;
   font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .battle-hud .hud-ready-btn:hover {
-  background: #4a9a5a;
+  background: rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
 }
 
 /* Resource Bar */
@@ -568,19 +670,22 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  font-family: monospace;
-  font-size: 13px;
-  color: #e0e0e0;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 12px;
+  color: #c8d6e0;
 }
 
 .resource-bar .resource-amount {
-  color: #ffd700;
+  color: #c88a20;
   font-weight: bold;
   font-size: 16px;
 }
 
 .resource-bar .round-info {
-  color: #aaa;
+  color: #6a8090;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
 }
 
 /* Directive Selector */
@@ -590,47 +695,54 @@
   top: 68px;
   right: 0;
   width: 220px;
-  background: rgba(20, 20, 40, 0.95);
-  border-left: 1px solid #4a4a6a;
+  background: rgba(10, 14, 20, 0.95);
+  border-left: 1px solid #1a3a4a;
   padding: 16px;
-  color: #e0e0e0;
-  font-family: monospace;
+  color: #c8d6e0;
+  font-family: 'Courier New', 'Consolas', monospace;
   z-index: 10;
+  box-shadow: -1px 0 8px rgba(0, 212, 255, 0.08);
 }
 
 .directive-selector h3 {
-  font-size: 14px;
+  font-size: 12px;
   margin: 0 0 12px;
-  color: #fff;
+  color: #00d4ff;
+  letter-spacing: 2px;
+  text-transform: uppercase;
 }
 
 .directive-selector .directive-option {
   padding: 8px 10px;
   margin-bottom: 4px;
-  border: 1px solid #3a3a5a;
-  border-radius: 4px;
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .directive-selector .directive-option:hover {
-  border-color: #6a6a8a;
+  border-color: #00d4ff;
 }
 
 .directive-selector .directive-option.active {
-  border-color: #ffd700;
-  background: #3a3a5a;
+  border-color: #00d4ff;
+  background: rgba(0, 212, 255, 0.08);
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.2);
 }
 
 .directive-selector .directive-option .directive-name {
   font-weight: bold;
-  color: #ccc;
+  color: #00d4ff;
   margin-bottom: 2px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
 }
 
 .directive-selector .directive-option .directive-desc {
-  color: #888;
-  font-size: 11px;
+  color: #6a8090;
+  font-size: 10px;
 }
 
 /* Start Menu */
@@ -641,7 +753,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 10, 30, 0.95);
+  background: rgba(10, 14, 20, 0.98);
   z-index: 100;
   overflow-y: auto;
   padding: 40px 20px;
@@ -653,31 +765,36 @@
   align-items: center;
   gap: 16px;
   padding: 40px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #1a3a4a;
   max-width: 600px;
   width: 100%;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
 }
 
 .start-menu-title {
   font-size: 48px;
-  color: #e0e0e0;
+  color: #00d4ff;
   margin: 0;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
+  letter-spacing: 6px;
+  text-transform: uppercase;
 }
 
 .start-menu-subtitle {
-  color: #888;
-  font-size: 14px;
+  color: #6a8090;
+  font-size: 12px;
   margin: -8px 0 0;
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
 .start-menu-summary {
   text-align: center;
-  color: #aaa;
-  font-size: 14px;
+  color: #6a8090;
+  font-size: 13px;
   line-height: 1.6;
 }
 
@@ -686,28 +803,30 @@
 }
 
 .start-menu-help-toggle {
-  background: none;
-  border: 1px solid #4a4a6a;
-  border-radius: 4px;
-  color: #8af;
+  background: transparent;
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
+  color: #00d4ff;
   cursor: pointer;
-  font-family: monospace;
-  font-size: 13px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
   padding: 6px 16px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .start-menu-help-toggle:hover {
-  border-color: #6a6a8a;
-  color: #adf;
+  border-color: #00d4ff;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.2);
 }
 
 .start-menu-help {
   width: 100%;
   text-align: left;
-  color: #ccc;
-  font-size: 13px;
+  color: #c8d6e0;
+  font-size: 12px;
   line-height: 1.6;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid #1a3a4a;
   padding-top: 16px;
 }
 
@@ -716,20 +835,22 @@
 }
 
 .start-menu-help .help-section h3 {
-  color: #fff;
-  font-size: 14px;
+  color: #00d4ff;
+  font-size: 12px;
   margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
 .start-menu-help .help-section p {
   margin: 4px 0;
-  color: #aaa;
+  color: #6a8090;
 }
 
 .start-menu-help .help-list {
   margin: 4px 0;
   padding-left: 20px;
-  color: #aaa;
+  color: #6a8090;
 }
 
 .start-menu-help .help-list li {
@@ -746,51 +867,51 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #aaa;
+  color: #6a8090;
 }
 
 .help-terrain-swatch {
   display: inline-block;
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: 2px;
   flex-shrink: 0;
 }
 
 .help-terrain-swatch[data-terrain="plains"] {
-  background: #4a7c59;
+  background: #6A6A58;
 }
 
 .help-terrain-swatch[data-terrain="forest"] {
-  background: #2d5a3f;
+  background: #3A4030;
 }
 
 .help-terrain-swatch[data-terrain="mountain"] {
-  background: #8b7355;
+  background: #505058;
 }
 
 .help-terrain-swatch[data-terrain="city"] {
-  background: #6b6b8d;
+  background: #7A6048;
 }
 
 .start-menu-help .help-controls {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: #aaa;
+  color: #6a8090;
 }
 
 .start-menu-help .help-note {
   margin: 6px 0 0;
-  font-size: 12px;
-  color: #888;
+  font-size: 11px;
+  color: #6a8090;
 }
 
 .help-unit-table {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .help-unit-header,
@@ -802,77 +923,89 @@
 }
 
 .help-unit-header {
-  color: #888;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #6a8090;
+  border-bottom: 1px solid #1a3a4a;
   padding-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 10px;
 }
 
 .help-unit-row {
-  color: #ccc;
+  color: #c8d6e0;
 }
 
 .help-unit-row:nth-child(even) {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 212, 255, 0.03);
 }
 
 .help-type-grid {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
-  color: #ccc;
+  font-size: 12px;
+  color: #c8d6e0;
 }
 
 .help-directives {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
-  color: #ccc;
+  font-size: 12px;
+  color: #c8d6e0;
 }
 
 .help-economy {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
-  color: #ccc;
+  font-size: 12px;
+  color: #c8d6e0;
 }
 
 .start-menu-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid #1a3a4a;
   width: 100%;
 }
 
 .start-menu-toggle {
-  color: #ccc;
-  font-size: 16px;
+  color: #c8d6e0;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
 }
 
 .start-menu-button {
   padding: 12px 32px;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: bold;
-  background: #4488cc;
-  color: white;
-  border: none;
-  border-radius: 8px;
+  background: transparent;
+  color: #00d4ff;
+  border: 1px solid #00d4ff;
+  border-radius: 2px;
   cursor: pointer;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  width: 240px;
 }
 
 .start-menu-button:hover {
-  background: #5599dd;
+  background: rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+}
+
+.start-menu-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Unit Shop Help Tip */
@@ -882,14 +1015,15 @@
   top: 68px;
   right: 0;
   width: 220px;
-  font-size: 11px;
-  color: #888;
+  font-size: 10px;
+  color: #6a8090;
   line-height: 1.5;
   padding: 12px;
-  background: rgba(20, 20, 40, 0.95);
-  border-left: 1px solid #4a4a6a;
-  border-bottom: 1px solid #4a4a6a;
+  background: rgba(10, 14, 20, 0.95);
+  border-left: 1px solid #1a3a4a;
+  border-bottom: 1px solid #1a3a4a;
   z-index: 10;
+  font-family: 'Courier New', 'Consolas', monospace;
 }
 
 /* Terrain Legend */
@@ -898,14 +1032,15 @@
   position: fixed;
   bottom: 20px;
   left: 20px;
-  background: rgba(20, 20, 40, 0.9);
-  border: 1px solid #4a4a6a;
-  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
   padding: 10px 14px;
-  font-family: monospace;
-  font-size: 11px;
-  color: #ccc;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 10px;
+  color: #c8d6e0;
   z-index: 10;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
 }
 
 .terrain-legend-header {
@@ -914,22 +1049,24 @@
   align-items: center;
   margin-bottom: 6px;
   font-weight: bold;
-  color: #fff;
-  font-size: 12px;
+  color: #00d4ff;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .terrain-legend-close {
   background: none;
   border: none;
-  color: #888;
+  color: #6a8090;
   cursor: pointer;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
   font-size: 12px;
   padding: 0 2px;
 }
 
 .terrain-legend-close:hover {
-  color: #ccc;
+  color: #00d4ff;
 }
 
 .terrain-legend-toggle {
@@ -938,12 +1075,12 @@
   left: 20px;
   width: 28px;
   height: 28px;
-  background: rgba(20, 20, 40, 0.9);
-  border: 1px solid #4a4a6a;
-  border-radius: 50%;
-  color: #888;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
+  color: #6a8090;
   cursor: pointer;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
   font-size: 14px;
   z-index: 10;
   display: flex;
@@ -952,8 +1089,8 @@
 }
 
 .terrain-legend-toggle:hover {
-  color: #ccc;
-  border-color: #6a6a8a;
+  color: #00d4ff;
+  border-color: #00d4ff;
 }
 
 .terrain-legend-item {
@@ -972,38 +1109,38 @@
 }
 
 .terrain-legend-swatch[data-terrain="plains"] {
-  background: #4a7c59;
+  background: #6A6A58;
 }
 
 .terrain-legend-swatch[data-terrain="forest"] {
-  background: #2d5a3f;
+  background: #3A4030;
 }
 
 .terrain-legend-swatch[data-terrain="mountain"] {
-  background: #8b7355;
+  background: #505058;
 }
 
 .terrain-legend-swatch[data-terrain="city"] {
-  background: #6b6b8d;
+  background: #7A6048;
 }
 
 .terrain-legend-swatch[data-terrain="objective"] {
-  background: #ffd700;
+  background: #C88A20;
 }
 
 .terrain-legend-swatch[data-terrain="deploy-friendly"] {
-  background: rgba(68, 136, 204, 0.5);
-  border: 1px solid #4488cc;
+  background: rgba(0, 212, 255, 0.3);
+  border: 1px solid #00d4ff;
 }
 
 .terrain-legend-swatch[data-terrain="deploy-enemy"] {
-  background: rgba(204, 68, 68, 0.4);
-  border: 1px solid #cc4444;
+  background: rgba(255, 68, 68, 0.3);
+  border: 1px solid #ff4444;
 }
 
 .terrain-legend-divider {
   height: 1px;
-  background: #3a3a5a;
+  background: #1a3a4a;
   margin: 6px 0;
 }
 
@@ -1015,15 +1152,16 @@
   left: 50%;
   transform: translateX(-50%);
   max-width: 420px;
-  background: rgba(20, 20, 40, 0.95);
-  border: 1px solid #4a6a8a;
-  border-radius: 8px;
+  background: rgba(10, 14, 20, 0.95);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
   padding: 14px 18px;
-  font-family: monospace;
-  font-size: 12px;
-  color: #ccc;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
+  color: #c8d6e0;
   line-height: 1.6;
   z-index: 9;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
 }
 
 .battle-help-close {
@@ -1032,14 +1170,14 @@
   right: 8px;
   background: none;
   border: none;
-  color: #888;
+  color: #6a8090;
   cursor: pointer;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
   font-size: 14px;
 }
 
 .battle-help-close:hover {
-  color: #ccc;
+  color: #00d4ff;
 }
 
 .battle-help-content p {
@@ -1062,19 +1200,21 @@
   bottom: 20px;
   right: 20px;
   padding: 6px 14px;
-  background: rgba(20, 20, 40, 0.9);
-  border: 1px solid #4a4a6a;
-  border-radius: 6px;
-  color: #aaa;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
+  color: #6a8090;
   cursor: pointer;
-  font-family: monospace;
-  font-size: 12px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
   z-index: 10;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .battle-log-toggle:hover {
-  border-color: #6a6a8a;
-  color: #ccc;
+  border-color: #00d4ff;
+  color: #00d4ff;
 }
 
 .battle-log {
@@ -1083,14 +1223,15 @@
   right: 20px;
   width: 280px;
   max-height: 260px;
-  background: rgba(20, 20, 40, 0.95);
-  border: 1px solid #4a4a6a;
-  border-radius: 8px;
-  font-family: monospace;
-  font-size: 12px;
+  background: rgba(10, 14, 20, 0.95);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
   z-index: 10;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
 }
 
 .battle-log-header {
@@ -1098,25 +1239,27 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  border-bottom: 1px solid #3a3a5a;
-  color: #ccc;
+  border-bottom: 1px solid #1a3a4a;
+  color: #00d4ff;
   font-weight: bold;
-  font-size: 13px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .battle-log-close {
   background: none;
   border: none;
-  color: #888;
+  color: #6a8090;
   cursor: pointer;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
   font-size: 16px;
   line-height: 1;
   padding: 0;
 }
 
 .battle-log-close:hover {
-  color: #ccc;
+  color: #00d4ff;
 }
 
 .battle-log-entries {
@@ -1127,9 +1270,8 @@
 
 .battle-log-empty {
   padding: 8px 12px;
-  color: #666;
+  color: #6a8090;
   text-align: center;
-  font-style: italic;
 }
 
 .battle-log-entry {
@@ -1140,29 +1282,29 @@
 }
 
 .battle-log-entry.log-kill {
-  border-left-color: #cc4444;
+  border-left-color: #ff4444;
 }
 
 .battle-log-entry.log-capture {
-  border-left-color: #44cc88;
+  border-left-color: #00d4ff;
 }
 
 .battle-log-entry.log-recapture {
-  border-left-color: #cc8844;
+  border-left-color: #c88a20;
 }
 
 .battle-log-entry.log-damage {
-  border-left-color: #ccaa44;
+  border-left-color: #c88a20;
 }
 
 .log-turn {
-  color: #666;
+  color: #6a8090;
   flex-shrink: 0;
   min-width: 24px;
 }
 
 .log-msg {
-  color: #ccc;
+  color: #c8d6e0;
 }
 
 /* Toast */
@@ -1172,16 +1314,19 @@
   top: 70px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(180, 40, 40, 0.9);
-  color: #fff;
-  font-family: monospace;
-  font-size: 14px;
+  background: rgba(255, 68, 68, 0.2);
+  border: 1px solid #ff4444;
+  color: #ff4444;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 12px;
   font-weight: bold;
   padding: 8px 20px;
-  border-radius: 6px;
+  border-radius: 2px;
   z-index: 50;
   animation: toast-fade 1.5s ease-out forwards;
   pointer-events: none;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 @keyframes toast-fade {
@@ -1206,7 +1351,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 10, 30, 0.95);
+  background: rgba(10, 14, 20, 0.98);
   z-index: 100;
   overflow-y: auto;
   padding: 40px 20px;
@@ -1218,35 +1363,38 @@
   align-items: center;
   gap: 16px;
   padding: 40px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #1a3a4a;
   max-width: 400px;
   width: 100%;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
 }
 
 .lobby-title {
-  font-size: 24px;
-  color: #e0e0e0;
+  font-size: 20px;
+  color: #00d4ff;
   margin: 0;
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
+  text-transform: uppercase;
+  letter-spacing: 3px;
 }
 
 .lobby-room-code {
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
   font-size: 48px;
   font-weight: bold;
-  color: #ffd700;
+  color: #00d4ff;
   letter-spacing: 8px;
   padding: 16px 24px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid #4a4a6a;
-  border-radius: 8px;
+  background: rgba(0, 212, 255, 0.05);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
 }
 
 .lobby-input {
-  font-family: monospace;
+  font-family: 'Courier New', 'Consolas', monospace;
   font-size: 24px;
   font-weight: bold;
   letter-spacing: 6px;
@@ -1254,26 +1402,29 @@
   text-transform: uppercase;
   width: 200px;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid #4a4a6a;
-  border-radius: 8px;
-  color: #e0e0e0;
+  background: rgba(10, 14, 20, 0.8);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
+  color: #c8d6e0;
   outline: none;
 }
 
 .lobby-input:focus {
-  border-color: #6a8aaa;
+  border-color: #00d4ff;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.3);
 }
 
 .lobby-input::placeholder {
-  color: #555;
+  color: #6a8090;
   letter-spacing: 6px;
 }
 
 .lobby-status {
-  color: #888;
-  font-size: 14px;
-  font-family: monospace;
+  color: #6a8090;
+  font-size: 12px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .lobby-actions {
@@ -1291,17 +1442,18 @@
   position: fixed;
   top: 68px;
   right: 260px;
-  background: rgba(20, 20, 40, 0.9);
-  border: 1px solid #4a4a6a;
-  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #1a3a4a;
+  border-radius: 2px;
   padding: 8px 14px;
-  font-family: monospace;
-  font-size: 12px;
-  color: #ccc;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
+  color: #c8d6e0;
   z-index: 10;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
 }
 
 .online-status-row {
@@ -1311,33 +1463,36 @@
 }
 
 .online-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
   flex-shrink: 0;
 }
 
 .online-status-dot.connected {
-  background: #44cc66;
-  box-shadow: 0 0 4px #44cc66;
+  background: #00d4ff;
+  box-shadow: 0 0 4px #00d4ff;
 }
 
 .online-status-dot.disconnected {
-  background: #cc4444;
-  box-shadow: 0 0 4px #cc4444;
+  background: #ff4444;
+  box-shadow: 0 0 4px #ff4444;
 }
 
 .online-status-label {
-  color: #aaa;
+  color: #6a8090;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 10px;
 }
 
 .online-status-room {
-  color: #888;
-  font-size: 11px;
+  color: #6a8090;
+  font-size: 10px;
 }
 
 .online-status-code {
-  color: #ffd700;
+  color: #00d4ff;
   font-weight: bold;
   letter-spacing: 2px;
 }

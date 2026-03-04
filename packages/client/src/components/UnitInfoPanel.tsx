@@ -32,7 +32,7 @@ export function UnitInfoPanel(): ReactElement | null {
       </button>
       <h3>{selectedUnit.type.toUpperCase()}</h3>
       <StatRow label="Owner" value={ownerLabel(selectedUnit.owner)} />
-      <StatRow label="HP" value={`${selectedUnit.hp}/${stats.maxHp}`} />
+      <HpBar current={selectedUnit.hp} max={stats.maxHp} />
       <StatRow label="ATK" value={String(stats.atk)} />
       <StatRow label="DEF" value={String(stats.def)} />
       <StatRow label="Move" value={String(stats.moveRange)} />
@@ -51,6 +51,30 @@ function StatRow({ label, value }: { label: string; value: string }): ReactEleme
     <div className="stat-row">
       <span className="stat-label">{label}</span>
       <span>{value}</span>
+    </div>
+  );
+}
+
+function hpColor(pct: number): string {
+  if (pct > 0.6) return '#44cc66';
+  if (pct > 0.3) return '#ccaa22';
+  return '#ff4444';
+}
+
+function HpBar({ current, max }: { current: number; max: number }): ReactElement {
+  const pct = max > 0 ? current / max : 0;
+  const color = hpColor(pct);
+
+  return (
+    <div className="hp-bar-container">
+      <span className="stat-label">HP</span>
+      <div className="hp-bar-track">
+        <div
+          className="hp-bar-fill"
+          style={{ width: `${pct * 100}%`, backgroundColor: color }}
+        />
+      </div>
+      <span className="hp-bar-text">{current}/{max}</span>
     </div>
   );
 }
