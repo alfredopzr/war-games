@@ -26,6 +26,7 @@ import {
   checkRoundEnd,
   scoreRound,
   UNIT_STATS,
+  mulberry32,
 } from '@hexwar/engine';
 
 import { filterStateForPlayer } from './state-filter';
@@ -161,6 +162,7 @@ function generateBattleEvents(
 
 export function startGame(room: Room, io: Server): void {
   const seed = Math.floor(Math.random() * 2147483647);
+  room.gameSeed = seed;
   const state = createGame(seed);
   room.gameState = state;
   room.phase = 'playing';
@@ -338,11 +340,16 @@ export function handleSubmitCommands(
 
   clearTurnTimer(room);
 
+  // Seeded RNG for deterministic combat resolution
+  const turnSeed = (room.gameSeed! * 31 + room.gameState.round.turnNumber) | 0;
+  const rng = mulberry32(turnSeed);
+  const combatRng = (): number => 0.85 + rng() * 0.3;
+
   // Snapshot state for event generation
   const prevUnits = snapshotUnits(room.gameState);
   const prevCities = snapshotCities(room.gameState);
 
-  executeTurn(room.gameState, commands);
+  executeTurn(room.gameState, commands, combatRng);
 
   const events = generateBattleEvents(prevUnits, prevCities, room.gameState, playerId);
   const roundEnd = checkRoundEnd(room.gameState);

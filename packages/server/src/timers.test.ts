@@ -15,6 +15,7 @@ function createMockRoom(): Room {
     id: 'test',
     players: new Map(),
     gameState: null,
+    gameSeed: null,
     phase: 'waiting',
     buildConfirmed: new Set(),
     disconnectedPlayers: new Map(),

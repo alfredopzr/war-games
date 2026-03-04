@@ -61,6 +61,7 @@ function createTestRoom(): Room {
     id: 'ROOM01',
     players,
     gameState: null,
+    gameSeed: null,
     phase: 'waiting',
     buildConfirmed: new Set<PlayerId>(),
     disconnectedPlayers: new Map(),

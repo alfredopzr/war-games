@@ -20,6 +20,7 @@ export interface Room {
   id: string;
   players: Map<PlayerId, ConnectedPlayer>;
   gameState: GameState | null;
+  gameSeed: number | null;
   phase: 'waiting' | 'playing' | 'finished';
   buildConfirmed: Set<PlayerId>;
   disconnectedPlayers: Map<PlayerId, DisconnectedPlayer>;
