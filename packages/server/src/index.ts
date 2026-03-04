@@ -2,9 +2,14 @@
 // HexWar Server — Entry Point
 // =============================================================================
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.resolve(__dirname, '../../../client/dist');
 
 import {
   createRoom,
@@ -42,6 +47,12 @@ const PORT = process.env.PORT || 3001;
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+app.use(express.static(clientDist));
+
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
 });
 
 io.on('connection', (socket) => {
