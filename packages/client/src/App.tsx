@@ -283,7 +283,7 @@ export function App(): ReactElement {
         if (tilesReady) {
           const img = getTileImage(terrain, hex);
           if (img) {
-            drawHexTile(ctx, img, x + ox, y + oy, HEX_SIZE, terrain === 'city');
+            drawHexTile(ctx, img, x + ox, y + oy, HEX_SIZE);
           } else {
             const fill = TERRAIN_COLORS[terrain] ?? '#4a7c59';
             const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#3d6b4c';

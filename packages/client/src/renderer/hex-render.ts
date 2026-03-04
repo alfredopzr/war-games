@@ -26,10 +26,15 @@ export function pixelToHex(px: number, py: number, hexSize: number): CubeCoord {
 }
 
 /**
- * Draw a Kenney hexagon-pack tile image centered on a hex.
- * Tiles are 120x140px; we scale by (size * 2) / 120 so the tile width
- * matches the hex diameter. City tiles get a small upward Y offset to
- * align the isometric building base with the hex center.
+ * Draw a Kenney hexagon-pack tile clipped to the flat-top hex polygon.
+ *
+ * Kenney tiles are 120×140px and designed for pointy-top hexes (height = 2R,
+ * width = √3·R). Our grid is flat-top, so the tile's baked outline is rotated
+ * 30°. We solve this by clipping the tile to the flat-top hex polygon and
+ * drawing a thin border on top, hiding the orientation mismatch entirely.
+ *
+ * Scale: (size × 2) / 120 × 1.05 — the 5% bleed prevents sub-pixel seams at
+ * hex edges.
  */
 export function drawHexTile(
   ctx: CanvasRenderingContext2D,
@@ -37,13 +42,43 @@ export function drawHexTile(
   centerX: number,
   centerY: number,
   size: number,
-  isCityTile = false,
 ): void {
-  const scale = (size * 2) / 120;
+  const scale = ((size * 2) / 120) * 1.05;
   const w = 120 * scale;
   const h = 140 * scale;
-  const yOffset = isCityTile ? -size * 0.15 : 0;
-  ctx.drawImage(img, centerX - w / 2, centerY - h / 2 + yOffset, w, h);
+
+  ctx.save();
+
+  // Clip to flat-top hex polygon
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 180) * (60 * i);
+    const px = centerX + size * Math.cos(angle);
+    const py = centerY + size * Math.sin(angle);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.clip();
+
+  // Draw tile centered on hex — tile overflows top/bottom, clipping handles it
+  ctx.drawImage(img, centerX - w / 2, centerY - h / 2, w, h);
+
+  ctx.restore();
+
+  // Thin border on top to define hex edges (replaces tile's own baked outline)
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 180) * (60 * i);
+    const px = centerX + size * Math.cos(angle);
+    const py = centerY + size * Math.sin(angle);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
 }
 
 /** Draw a single flat-top hexagon. */
