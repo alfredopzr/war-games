@@ -1,17 +1,16 @@
-import { useRef, useEffect, useCallback, useState, type ReactElement } from 'react';
+import { useRef, useEffect, useCallback, type ReactElement } from 'react';
 import {
   placeUnit,
   getAllHexes, hexToKey, calculateVisibility,
   canAttack, cubeDistance, UNIT_STATS,
 } from '@hexwar/engine';
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
-import { HEX_SIZE, TERRAIN_COLORS, TERRAIN_BORDER_COLORS, PLAYER_COLORS } from './renderer/constants';
-import { hexToPixel, pixelToHex, drawHex, drawHexTile } from './renderer/hex-render';
-import { loadAllTiles, getTileImage, getObjectiveTileImage, tilesReady } from './renderer/asset-loader';
-import { drawUnit } from './renderer/unit-render';
-import { drawObjective } from './renderer/objective-render';
-import { drawFog, drawGhostMarker } from './renderer/fog-render';
-import { createCamera } from './renderer/camera';
+import { Application, Graphics } from 'pixi.js';
+import { HEX_SIZE, TERRAIN_COLORS, PLAYER_COLORS } from './renderer/constants';
+import { hexToPixel, screenToHex } from './renderer/hex-render';
+import { initPixiApp, destroyPixiApp } from './renderer/pixi-app';
+import { setupLayers, terrainLayer, deployZoneLayer, fogLayer, unitLayer } from './renderer/layers';
+import { setupCameraControls, setMapBounds, centerCameraOnMap } from './renderer/camera-controller';
 import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
 import { UnitShop } from './components/UnitShop';
@@ -28,8 +27,6 @@ import { BattleHelp } from './components/BattleHelp';
 import { BattleLog } from './components/BattleLog';
 import { Toast } from './components/Toast';
 import { OnlineStatus } from './components/OnlineStatus';
-
-const DAMAGE_FLASH_DURATION = 500; // ms
 
 function computeGridBounds(
   hexes: CubeCoord[],
@@ -65,144 +62,222 @@ function getEnemyPlayer(player: PlayerId): PlayerId {
   return player === 'player1' ? 'player2' : 'player1';
 }
 
-function drawDirectiveArrow(
-  ctx: CanvasRenderingContext2D,
-  unit: Unit,
-  state: GameState,
-  ox: number,
-  oy: number,
-): void {
-  const unitPixel = hexToPixel(unit.position, HEX_SIZE);
-  const startX = unitPixel.x + ox;
-  const startY = unitPixel.y + oy;
+/** Draw a single flat-top hexagon into a PIXI.Graphics. */
+function drawHexGraphics(g: Graphics, cx: number, cy: number, size: number, fillColor: number, alpha: number, strokeColor?: number, strokeWidth?: number): void {
+  const points: number[] = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 180) * (60 * i);
+    points.push(cx + size * Math.cos(angle));
+    points.push(cy + size * Math.sin(angle));
+  }
+  g.poly(points, true);
+  g.fill({ color: fillColor, alpha });
+  if (strokeColor !== undefined && strokeWidth !== undefined) {
+    g.stroke({ color: strokeColor, width: strokeWidth });
+  }
+}
 
-  let targetX: number;
-  let targetY: number;
+/** Parse CSS hex color string to numeric value. */
+function parseColor(hex: string): number {
+  return parseInt(hex.replace('#', ''), 16);
+}
 
-  const objPixel = hexToPixel(state.map.centralObjective, HEX_SIZE);
-  const objX = objPixel.x + ox;
-  const objY = objPixel.y + oy;
+/** Render the full scene into PixiJS layers. */
+function renderScene(state: GameState): void {
+  const allHexes = getAllHexes(state.map.gridSize);
+  const store = useGameStore.getState();
+  const currentPlayerView = store.currentPlayerView;
+  const visibleHexes = store.visibleHexes;
+  const lastKnownEnemies = store.lastKnownEnemies;
+  const selectedUnit = store.selectedUnit;
+  const isBuildPhase = state.phase === 'build';
 
-  switch (unit.directive) {
-    case 'hold':
-      return; // No arrow for hold
-    case 'advance':
-      targetX = objX;
-      targetY = objY;
-      break;
-    case 'flank-left': {
-      const dx = objX - startX;
-      const dy = objY - startY;
-      // Rotate 40 degrees left
-      const cos = Math.cos(-0.7);
-      const sin = Math.sin(-0.7);
-      targetX = startX + dx * cos - dy * sin;
-      targetY = startY + dx * sin + dy * cos;
-      break;
+  // Clear layers
+  terrainLayer.removeChildren();
+  deployZoneLayer.removeChildren();
+  fogLayer.removeChildren();
+  unitLayer.removeChildren();
+
+  // Build deployment zone lookups for build phase
+  const friendlyDeployKeys = new Set<string>();
+  const enemyDeployKeys = new Set<string>();
+  if (isBuildPhase) {
+    const friendlyZone = currentPlayerView === 'player1'
+      ? state.map.player1Deployment
+      : state.map.player2Deployment;
+    const enemyZone = currentPlayerView === 'player1'
+      ? state.map.player2Deployment
+      : state.map.player1Deployment;
+    for (const h of friendlyZone) {
+      friendlyDeployKeys.add(hexToKey(h));
     }
-    case 'flank-right': {
-      const dx = objX - startX;
-      const dy = objY - startY;
-      // Rotate 40 degrees right
-      const cos = Math.cos(0.7);
-      const sin = Math.sin(0.7);
-      targetX = startX + dx * cos - dy * sin;
-      targetY = startY + dx * sin + dy * cos;
-      break;
-    }
-    case 'scout': {
-      // Arrow away from friendlies (opposite of average friendly direction)
-      const friendlies = getPlayerUnits(state, unit.owner);
-      if (friendlies.length <= 1) {
-        targetX = startX;
-        targetY = startY - 60;
-      } else {
-        let avgX = 0;
-        let avgY = 0;
-        let count = 0;
-        for (const f of friendlies) {
-          if (f.id === unit.id) continue;
-          const fp = hexToPixel(f.position, HEX_SIZE);
-          avgX += fp.x + ox;
-          avgY += fp.y + oy;
-          count++;
-        }
-        avgX /= count;
-        avgY /= count;
-        // Point away from average
-        targetX = startX + (startX - avgX);
-        targetY = startY + (startY - avgY);
-      }
-      break;
-    }
-    case 'support': {
-      // Arrow toward nearest friendly
-      const friendlies = getPlayerUnits(state, unit.owner);
-      let nearest = { x: startX, y: startY - 60 };
-      let bestDist = Infinity;
-      for (const f of friendlies) {
-        if (f.id === unit.id) continue;
-        const fp = hexToPixel(f.position, HEX_SIZE);
-        const dx = (fp.x + ox) - startX;
-        const dy = (fp.y + oy) - startY;
-        const d = Math.sqrt(dx * dx + dy * dy);
-        if (d < bestDist) {
-          bestDist = d;
-          nearest = { x: fp.x + ox, y: fp.y + oy };
-        }
-      }
-      targetX = nearest.x;
-      targetY = nearest.y;
-      break;
+    for (const h of enemyZone) {
+      enemyDeployKeys.add(hexToKey(h));
     }
   }
 
-  // Normalize and cap arrow length at 60px
-  const dx = targetX - startX;
-  const dy = targetY - startY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < 1) return;
+  // Draw terrain hexes
+  const terrainGraphics = new Graphics();
+  const sortedHexes = [...allHexes].sort((a, b) => a.r - b.r);
+  for (const hex of sortedHexes) {
+    const { x, y } = hexToPixel(hex, HEX_SIZE);
+    const hexKey = hexToKey(hex);
+    const terrain = state.map.terrain.get(hexKey) ?? 'plains';
+    const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
+    const fillNum = parseColor(fill);
 
-  const maxLen = 60;
-  const len = Math.min(dist, maxLen);
-  const nx = dx / dist;
-  const ny = dy / dist;
-  const endX = startX + nx * len;
-  const endY = startY + ny * len;
+    drawHexGraphics(terrainGraphics, x, y, HEX_SIZE, fillNum, 1, 0x1a1a2e, 1);
+  }
+  terrainLayer.addChild(terrainGraphics);
 
-  // Draw dashed line
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255, 255, 200, 0.4)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 4]);
-  ctx.beginPath();
-  ctx.moveTo(startX, startY);
-  ctx.lineTo(endX, endY);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  // Objective hex glow
+  const objGraphics = new Graphics();
+  const objPixel = hexToPixel(state.map.centralObjective, HEX_SIZE);
+  drawHexGraphics(objGraphics, objPixel.x, objPixel.y, HEX_SIZE, 0xc88a20, 0.6);
+  drawHexGraphics(objGraphics, objPixel.x, objPixel.y, HEX_SIZE + 2, 0x000000, 0, 0xc88a20, 2);
+  terrainLayer.addChild(objGraphics);
 
-  // Draw arrowhead
-  const headLen = 8;
-  const angle = Math.atan2(ny, nx);
-  ctx.fillStyle = 'rgba(255, 255, 200, 0.4)';
-  ctx.beginPath();
-  ctx.moveTo(endX, endY);
-  ctx.lineTo(endX - headLen * Math.cos(angle - 0.4), endY - headLen * Math.sin(angle - 0.4));
-  ctx.lineTo(endX - headLen * Math.cos(angle + 0.4), endY - headLen * Math.sin(angle + 0.4));
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  // City ownership borders
+  if (state.cityOwnership) {
+    const cityGraphics = new Graphics();
+    for (const hex of allHexes) {
+      const key = hexToKey(hex);
+      const owner = state.cityOwnership.get(key);
+      if (owner) {
+        const { x, y } = hexToPixel(hex, HEX_SIZE);
+        const ownerColor = parseColor(PLAYER_COLORS[owner].light);
+        drawHexGraphics(cityGraphics, x, y, HEX_SIZE, 0x000000, 0, ownerColor, 3);
+      }
+    }
+    terrainLayer.addChild(cityGraphics);
+  }
+
+  // Deploy zones
+  if (isBuildPhase) {
+    const deployGraphics = new Graphics();
+    for (const hex of allHexes) {
+      const hexKey = hexToKey(hex);
+      const { x, y } = hexToPixel(hex, HEX_SIZE);
+
+      if (friendlyDeployKeys.has(hexKey)) {
+        const tint = currentPlayerView === 'player1' ? 0x1e5ab4 : 0xb41e1e;
+        const stroke = currentPlayerView === 'player1' ? 0x50a0ff : 0xff5050;
+        drawHexGraphics(deployGraphics, x, y, HEX_SIZE, tint, 0.45, stroke, 2.5);
+      } else if (enemyDeployKeys.has(hexKey)) {
+        const tint = currentPlayerView === 'player1' ? 0x8c1e1e : 0x1e46a0;
+        const stroke = currentPlayerView === 'player1' ? 0xc83c3c : 0x3c78dc;
+        drawHexGraphics(deployGraphics, x, y, HEX_SIZE, tint, 0.35, stroke, 1.5);
+      }
+    }
+    deployZoneLayer.addChild(deployGraphics);
+  }
+
+  // Highlights (move/attack range)
+  const currentHighlights = store.highlightedHexes;
+  const currentHighlightMode = store.highlightMode;
+  if (currentHighlights.size > 0 && currentHighlightMode !== 'none') {
+    const hlGraphics = new Graphics();
+    const hlFill = currentHighlightMode === 'move' ? 0x64c8ff : 0xff5050;
+    const hlStroke = currentHighlightMode === 'move' ? 0x64c8ff : 0xff5050;
+    const hlAlpha = currentHighlightMode === 'move' ? 0.25 : 0.3;
+    for (const hex of allHexes) {
+      const key = hexToKey(hex);
+      if (currentHighlights.has(key)) {
+        const { x, y } = hexToPixel(hex, HEX_SIZE);
+        drawHexGraphics(hlGraphics, x, y, HEX_SIZE, hlFill, hlAlpha, hlStroke, 2);
+      }
+    }
+    terrainLayer.addChild(hlGraphics);
+  }
+
+  // Hovered hex
+  const currentHovered = store.hoveredHex;
+  if (currentHovered) {
+    const hoverGraphics = new Graphics();
+    const { x, y } = hexToPixel(currentHovered, HEX_SIZE);
+    drawHexGraphics(hoverGraphics, x, y, HEX_SIZE, 0x000000, 0, 0xffffff, 2);
+    terrainLayer.addChild(hoverGraphics);
+  }
+
+  // Selected unit highlight
+  if (selectedUnit) {
+    const selGraphics = new Graphics();
+    const { x, y } = hexToPixel(selectedUnit.position, HEX_SIZE);
+    drawHexGraphics(selGraphics, x, y, HEX_SIZE, 0x000000, 0, 0xffdd44, 3);
+    terrainLayer.addChild(selGraphics);
+  }
+
+  // Units
+  const drawUnitCircle = (g: Graphics, unit: Unit, cx: number, cy: number): void => {
+    const color = parseColor(PLAYER_COLORS[unit.owner].fill);
+    const strokeColor = parseColor(PLAYER_COLORS[unit.owner].stroke);
+    const radius = HEX_SIZE * 0.5;
+    g.circle(cx, cy, radius);
+    g.fill({ color, alpha: 1 });
+    g.stroke({ color: strokeColor, width: 2 });
+  };
+
+  if (isBuildPhase) {
+    const unitGraphics = new Graphics();
+    const friendly = getPlayerUnits(state, currentPlayerView);
+    for (const unit of friendly) {
+      const { x, y } = hexToPixel(unit.position, HEX_SIZE);
+      drawUnitCircle(unitGraphics, unit, x, y);
+    }
+    unitLayer.addChild(unitGraphics);
+  } else {
+    const unitGraphics = new Graphics();
+
+    // Friendly units (always visible)
+    const friendly = getPlayerUnits(state, currentPlayerView);
+    for (const unit of friendly) {
+      const { x, y } = hexToPixel(unit.position, HEX_SIZE);
+      drawUnitCircle(unitGraphics, unit, x, y);
+    }
+
+    // Enemy units only if in visible hexes
+    const enemyPlayer = getEnemyPlayer(currentPlayerView);
+    const enemies = getPlayerUnits(state, enemyPlayer);
+    for (const unit of enemies) {
+      const key = hexToKey(unit.position);
+      if (visibleHexes.has(key)) {
+        const { x, y } = hexToPixel(unit.position, HEX_SIZE);
+        drawUnitCircle(unitGraphics, unit, x, y);
+      }
+    }
+
+    unitLayer.addChild(unitGraphics);
+
+    // Ghost markers for last-known enemy positions
+    const ghostGraphics = new Graphics();
+    for (const [, ghost] of lastKnownEnemies) {
+      const ghostKey = hexToKey(ghost.position);
+      if (!visibleHexes.has(ghostKey)) {
+        const { x, y } = hexToPixel(ghost.position, HEX_SIZE);
+        ghostGraphics.circle(x, y, HEX_SIZE * 0.35);
+        ghostGraphics.fill({ color: 0x888888, alpha: 0.4 });
+      }
+    }
+    unitLayer.addChild(ghostGraphics);
+
+    // Fog overlay on non-visible hexes
+    const fogGraphics = new Graphics();
+    for (const hex of allHexes) {
+      const key = hexToKey(hex);
+      if (!visibleHexes.has(key)) {
+        const { x, y } = hexToPixel(hex, HEX_SIZE);
+        drawHexGraphics(fogGraphics, x, y, HEX_SIZE, 0x000000, 0.6);
+      }
+    }
+    fogLayer.addChild(fogGraphics);
+  }
 }
 
 export function App(): ReactElement {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const boundsRef = useRef<{ minX: number; minY: number; width: number; height: number } | null>(null);
-  const animFrameRef = useRef<number>(0);
-  const [assetsLoaded, setAssetsLoaded] = useState(false);
-
-  useEffect(() => {
-    loadAllTiles().then(() => setAssetsLoaded(true)).catch(() => setAssetsLoaded(true));
-  }, []);
+  const pixiContainerRef = useRef<HTMLDivElement>(null);
+  const appRef = useRef<Application | null>(null);
+  const cleanupCameraRef = useRef<(() => void) | null>(null);
+  const cameraCenteredRef = useRef(false);
 
   const gameState = useGameStore((s) => s.gameState);
   const selectedUnit = useGameStore((s) => s.selectedUnit);
@@ -222,13 +297,11 @@ export function App(): ReactElement {
   // Recalculate visibility when player view changes
   useEffect(() => {
     if (!gameState) return;
-    // In online mode, always use our own player's perspective
     const viewPlayer = (gameMode === 'online' && myPlayerId) ? myPlayerId : currentPlayerView;
     const friendly = getPlayerUnits(gameState, viewPlayer);
     const vis = calculateVisibility(friendly, gameState.map.terrain);
     setVisibleHexes(vis);
 
-    // Update last-known enemies: track enemies that leave visibility
     const enemyPlayer = getEnemyPlayer(viewPlayer);
     const enemies = getPlayerUnits(gameState, enemyPlayer);
     const store = useGameStore.getState();
@@ -244,232 +317,61 @@ export function App(): ReactElement {
     useGameStore.setState({ lastKnownEnemies: updated });
   }, [gameState, currentPlayerView, gameMode, myPlayerId, setVisibleHexes]);
 
-  const render = useCallback(
-    (canvas: HTMLCanvasElement, state: GameState, time: number): void => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+  // Initialize PixiJS app
+  useEffect(() => {
+    const container = pixiContainerRef.current;
+    if (!container) return;
 
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let cancelled = false;
 
-      const allHexes = getAllHexes(state.map.gridSize);
-      const bounds = computeGridBounds(allHexes, HEX_SIZE);
-      boundsRef.current = bounds;
-      const camera = createCamera(canvas.width, canvas.height, bounds.width, bounds.height);
-
-      const ox = camera.offsetX - bounds.minX;
-      const oy = camera.offsetY - bounds.minY;
-
-      const isBuildPhase = state.phase === 'build';
-
-      // Build deployment zone lookups for build phase
-      const friendlyDeployKeys = new Set<string>();
-      const enemyDeployKeys = new Set<string>();
-      if (isBuildPhase) {
-        const friendlyZone = currentPlayerView === 'player1'
-          ? state.map.player1Deployment
-          : state.map.player2Deployment;
-        const enemyZone = currentPlayerView === 'player1'
-          ? state.map.player2Deployment
-          : state.map.player1Deployment;
-        for (const h of friendlyZone) {
-          friendlyDeployKeys.add(hexToKey(h));
-        }
-        for (const h of enemyZone) {
-          enemyDeployKeys.add(hexToKey(h));
-        }
+    initPixiApp(container).then((app) => {
+      if (cancelled) {
+        destroyPixiApp();
+        return;
       }
+      appRef.current = app;
+      setupLayers(app);
+      const cleanup = setupCameraControls(app, app.stage);
+      cleanupCameraRef.current = cleanup;
+    });
 
-      // Draw terrain hexes — sorted by r (top to bottom) for correct isometric overlap
-      const sortedHexes = [...allHexes].sort((a, b) => a.r - b.r);
-      for (const hex of sortedHexes) {
-        const { x, y } = hexToPixel(hex, HEX_SIZE);
-        const hexKey = hexToKey(hex);
-        const terrain = state.map.terrain.get(hexKey) ?? 'plains';
-        const cx = x + ox;
-        const cy = y + oy;
-
-        if (isBuildPhase) {
-          // Render terrain tile for all hexes, then tint deployment zones
-          const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
-          drawHex(ctx, cx, cy, HEX_SIZE, fill, 'transparent', 0);
-          if (tilesReady) {
-            const img = getTileImage(terrain);
-            if (img) drawHexTile(ctx, img, cx, cy, HEX_SIZE);
-          }
-
-          if (friendlyDeployKeys.has(hexKey)) {
-            // Own deployment zone: blue/red tint + bright border
-            const tint = currentPlayerView === 'player1'
-              ? 'rgba(30, 90, 180, 0.45)'
-              : 'rgba(180, 30, 30, 0.45)';
-            const stroke = currentPlayerView === 'player1'
-              ? 'rgba(80, 160, 255, 1.0)'
-              : 'rgba(255, 80, 80, 1.0)';
-            drawHex(ctx, cx, cy, HEX_SIZE, tint, stroke, 2.5);
-          } else if (enemyDeployKeys.has(hexKey)) {
-            // Enemy deployment zone: dim opposing tint + faint border
-            const tint = currentPlayerView === 'player1'
-              ? 'rgba(140, 30, 30, 0.35)'
-              : 'rgba(30, 70, 160, 0.35)';
-            const stroke = currentPlayerView === 'player1'
-              ? 'rgba(200, 60, 60, 0.7)'
-              : 'rgba(60, 120, 220, 0.7)';
-            drawHex(ctx, cx, cy, HEX_SIZE, tint, stroke, 1.5);
-          }
-        } else {
-          // Normal phase: solid base then tile (base fills transparent tile corners)
-          const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
-          drawHex(ctx, cx, cy, HEX_SIZE, fill, 'transparent', 0);
-          if (tilesReady) {
-            const img = getTileImage(terrain);
-            if (img) {
-              drawHexTile(ctx, img, cx, cy, HEX_SIZE);
-            } else {
-              const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#4a8840';
-              drawHex(ctx, cx, cy, HEX_SIZE, 'transparent', stroke, 1.5);
-            }
-          }
-        }
+    return () => {
+      cancelled = true;
+      if (cleanupCameraRef.current) {
+        cleanupCameraRef.current();
+        cleanupCameraRef.current = null;
       }
+      destroyPixiApp();
+      appRef.current = null;
+      cameraCenteredRef.current = false;
+    };
+  }, []);
 
-      // Draw city ownership borders
-      if (state.cityOwnership) {
-        for (const hex of allHexes) {
-          const key = hexToKey(hex);
-          const owner = state.cityOwnership.get(key);
-          if (owner) {
-            const { x, y } = hexToPixel(hex, HEX_SIZE);
-            const ownerColor = PLAYER_COLORS[owner].light;
-            drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'transparent', ownerColor, 3);
-          }
-        }
-      }
+  // Render scene when game state changes
+  useEffect(() => {
+    const app = appRef.current;
+    if (!app || !gameState) return;
 
-      // Draw range highlights (move/attack)
-      const currentHighlights = useGameStore.getState().highlightedHexes;
-      const currentHighlightMode = useGameStore.getState().highlightMode;
-      if (currentHighlights.size > 0 && currentHighlightMode !== 'none') {
-        const hlFill = currentHighlightMode === 'move'
-          ? 'rgba(100, 200, 255, 0.25)'
-          : 'rgba(255, 80, 80, 0.3)';
-        const hlStroke = currentHighlightMode === 'move'
-          ? 'rgba(100, 200, 255, 0.6)'
-          : 'rgba(255, 80, 80, 0.7)';
-        for (const hex of allHexes) {
-          const key = hexToKey(hex);
-          if (currentHighlights.has(key)) {
-            const { x, y } = hexToPixel(hex, HEX_SIZE);
-            drawHex(ctx, x + ox, y + oy, HEX_SIZE, hlFill, hlStroke, 2);
-          }
-        }
-      }
+    const allHexes = getAllHexes(gameState.map.gridSize);
+    const bounds = computeGridBounds(allHexes, HEX_SIZE);
+    setMapBounds({ minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY });
 
-      // Draw hovered hex highlight
-      const currentHovered = useGameStore.getState().hoveredHex;
-      if (currentHovered) {
-        const { x, y } = hexToPixel(currentHovered, HEX_SIZE);
-        drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'transparent', 'rgba(255, 255, 255, 0.35)', 2);
-      }
+    // Center camera on first render
+    if (!cameraCenteredRef.current) {
+      centerCameraOnMap(app.stage, app, bounds);
+      cameraCenteredRef.current = true;
+    }
 
-      // Draw selected unit highlight
-      if (selectedUnit) {
-        const { x, y } = hexToPixel(selectedUnit.position, HEX_SIZE);
-        drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'transparent', '#ffdd44', 3);
-      }
+    renderScene(gameState);
+  }, [gameState, selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies]);
 
-      // Draw objective — skyscraper tile as base, then pulsing glow on top
-      const objPixel = hexToPixel(state.map.centralObjective, HEX_SIZE);
-      const objCx = objPixel.x + ox;
-      const objCy = objPixel.y + oy;
-      if (tilesReady) {
-        const skyImg = getObjectiveTileImage();
-        if (skyImg) {
-          drawHex(ctx, objCx, objCy, HEX_SIZE, TERRAIN_COLORS['city'] ?? '#a09070', 'transparent', 0);
-          drawHexTile(ctx, skyImg, objCx, objCy, HEX_SIZE);
-        }
-      }
-      drawObjective(
-        ctx,
-        objCx,
-        objCy,
-        HEX_SIZE,
-        state.round.objective,
-        time,
-      );
-
-      const now = Date.now();
-      const currentDamagedUnits = useGameStore.getState().damagedUnits;
-
-      // During build phase, show all own units (no fog)
-      if (isBuildPhase) {
-        const friendly = getPlayerUnits(state, currentPlayerView);
-        for (const unit of friendly) {
-          const { x, y } = hexToPixel(unit.position, HEX_SIZE);
-          drawUnit(ctx, unit, x + ox, y + oy, false);
-        }
-      } else {
-        const currentPendingCommands = useGameStore.getState().pendingCommands;
-        const commandedIds = new Set(currentPendingCommands.map((c) => c.unitId));
-
-        // Draw friendly units (always visible)
-        const friendly = getPlayerUnits(state, currentPlayerView);
-        for (const unit of friendly) {
-          const { x, y } = hexToPixel(unit.position, HEX_SIZE);
-          const damageTime = currentDamagedUnits.get(unit.id);
-          const isDamaged = damageTime !== undefined && now - damageTime < DAMAGE_FLASH_DURATION;
-          drawUnit(ctx, unit, x + ox, y + oy, isDamaged, commandedIds.has(unit.id));
-        }
-
-        // Draw enemy units only if in visible hexes
-        const enemyPlayer = getEnemyPlayer(currentPlayerView);
-        const enemies = getPlayerUnits(state, enemyPlayer);
-        for (const unit of enemies) {
-          const key = hexToKey(unit.position);
-          if (visibleHexes.has(key)) {
-            const { x, y } = hexToPixel(unit.position, HEX_SIZE);
-            const damageTime = currentDamagedUnits.get(unit.id);
-            const isDamaged = damageTime !== undefined && now - damageTime < DAMAGE_FLASH_DURATION;
-            drawUnit(ctx, unit, x + ox, y + oy, isDamaged);
-          }
-        }
-
-        // Draw ghost markers for last-known enemy positions
-        for (const [, ghost] of lastKnownEnemies) {
-          const ghostKey = hexToKey(ghost.position);
-          if (!visibleHexes.has(ghostKey)) {
-            const { x, y } = hexToPixel(ghost.position, HEX_SIZE);
-            drawGhostMarker(ctx, ghost.type, x + ox, y + oy);
-          }
-        }
-
-        // Draw fog overlay on non-visible hexes
-        drawFog(ctx, allHexes, visibleHexes, ox, oy, HEX_SIZE);
-
-        // Draw directive intention arrow for selected friendly unit
-        if (selectedUnit && selectedUnit.owner === currentPlayerView) {
-          drawDirectiveArrow(ctx, selectedUnit, state, ox, oy);
-        }
-      }
-    },
-    [selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies],
-  );
-
-  // Canvas click handler — handles unit selection, command mode, AND build-phase placement
+  // Click handler
   const handleClick = useCallback(
     (e: MouseEvent): void => {
-      const canvas = canvasRef.current;
-      if (!canvas || !gameState || !boundsRef.current) return;
+      const app = appRef.current;
+      if (!app || !gameState) return;
 
-      const bounds = boundsRef.current;
-      const camera = createCamera(canvas.width, canvas.height, bounds.width, bounds.height);
-      const ox = camera.offsetX - bounds.minX;
-      const oy = camera.offsetY - bounds.minY;
-
-      const pixelX = e.clientX - ox;
-      const pixelY = e.clientY - oy;
-      const hex = pixelToHex(pixelX, pixelY, HEX_SIZE);
-
+      const hex = screenToHex(e.clientX, e.clientY, HEX_SIZE, app.stage);
       const store = useGameStore.getState();
 
       // Build phase: placement mode
@@ -488,7 +390,6 @@ export function App(): ReactElement {
         const cost = UNIT_STATS[store.placementMode].cost;
         if (gameState.players[currentPlayerView].resources < cost) return;
 
-        // Online mode: send placement to server
         if (store.gameMode === 'online') {
           const unitType = store.placementMode;
           import('./network/network-manager').then(({ networkManager }) => {
@@ -497,12 +398,8 @@ export function App(): ReactElement {
           return;
         }
 
-        try {
-          placeUnit(gameState, currentPlayerView, store.placementMode, hex);
-          store.setGameState({ ...gameState });
-        } catch {
-          // placement failed — ignore
-        }
+        placeUnit(gameState, currentPlayerView, store.placementMode, hex);
+        store.setGameState({ ...gameState });
         return;
       }
 
@@ -590,25 +487,15 @@ export function App(): ReactElement {
   // Right-click handler — remove placed unit during build phase
   const handleContextMenu = useCallback(
     (e: MouseEvent): void => {
-      if (!gameState || gameState.phase !== 'build' || !boundsRef.current) return;
+      if (!gameState || gameState.phase !== 'build') return;
+      const app = appRef.current;
+      if (!app) return;
 
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const bounds = boundsRef.current;
-      const camera = createCamera(canvas.width, canvas.height, bounds.width, bounds.height);
-      const ox = camera.offsetX - bounds.minX;
-      const oy = camera.offsetY - bounds.minY;
-
-      const pixelX = e.clientX - ox;
-      const pixelY = e.clientY - oy;
-      const hex = pixelToHex(pixelX, pixelY, HEX_SIZE);
-
+      const hex = screenToHex(e.clientX, e.clientY, HEX_SIZE, app.stage);
       const unit = findUnitAtHex(gameState, hex);
       if (unit && unit.owner === currentPlayerView) {
         e.preventDefault();
 
-        // Online mode: send removal to server
         if (useGameStore.getState().gameMode === 'online') {
           import('./network/network-manager').then(({ networkManager }) => {
             networkManager.removeUnit(unit.id);
@@ -625,74 +512,43 @@ export function App(): ReactElement {
   // Mousemove handler — updates hovered hex
   const handleMouseMove = useCallback(
     (e: MouseEvent): void => {
-      if (!gameState || !boundsRef.current) return;
+      if (!gameState) return;
+      const app = appRef.current;
+      if (!app) return;
 
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const bounds = boundsRef.current;
-      const camera = createCamera(canvas.width, canvas.height, bounds.width, bounds.height);
-      const ox = camera.offsetX - bounds.minX;
-      const oy = camera.offsetY - bounds.minY;
-
-      const pixelX = e.clientX - ox;
-      const pixelY = e.clientY - oy;
-      const hex = pixelToHex(pixelX, pixelY, HEX_SIZE);
+      const hex = screenToHex(e.clientX, e.clientY, HEX_SIZE, app.stage);
       setHoveredHex(hex);
     },
     [gameState, setHoveredHex],
   );
 
-  // Clear hover when mouse leaves canvas
+  // Clear hover when mouse leaves
   const handleMouseLeave = useCallback((): void => {
     setHoveredHex(null);
   }, [setHoveredHex]);
 
-  // Animation loop + resize
+  // Attach click/hover handlers to the PixiJS container
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !gameState) return;
+    const container = pixiContainerRef.current;
+    if (!container || !gameState) return;
 
-    const resize = (): void => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-
-    resize();
-
-    const loop = (time: number): void => {
-      const currentState = useGameStore.getState().gameState;
-      if (canvas && currentState) {
-        render(canvas, currentState, time);
-      }
-      animFrameRef.current = requestAnimationFrame(loop);
-    };
-
-    animFrameRef.current = requestAnimationFrame(loop);
-
-    window.addEventListener('resize', resize);
-    canvas.addEventListener('click', handleClick);
-    canvas.addEventListener('contextmenu', handleContextMenu);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseleave', handleMouseLeave);
+    container.addEventListener('click', handleClick);
+    container.addEventListener('contextmenu', handleContextMenu);
+    container.addEventListener('mousemove', handleMouseMove);
+    container.addEventListener('mouseleave', handleMouseLeave);
 
     return () => {
-      cancelAnimationFrame(animFrameRef.current);
-      window.removeEventListener('resize', resize);
-      canvas.removeEventListener('click', handleClick);
-      canvas.removeEventListener('contextmenu', handleContextMenu);
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mouseleave', handleMouseLeave);
+      container.removeEventListener('click', handleClick);
+      container.removeEventListener('contextmenu', handleContextMenu);
+      container.removeEventListener('mousemove', handleMouseMove);
+      container.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, [gameState, render, handleClick, handleContextMenu, handleMouseMove, handleMouseLeave]);
+  }, [gameState, handleClick, handleContextMenu, handleMouseMove, handleMouseLeave]);
 
   return (
     <>
-      {!assetsLoaded && (
-        <div className="loading-screen">Loading assets...</div>
-      )}
       <StartMenu />
-      <canvas ref={canvasRef} className="game-canvas" />
+      <div ref={pixiContainerRef} className="game-canvas" />
       {gameState && (
         <>
           <BattleHUD />

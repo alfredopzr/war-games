@@ -1,16 +1,17 @@
 import type { CubeCoord } from '@hexwar/engine';
+import type { Container } from 'pixi.js';
 
-/** Flat-top hex: pixel center from cube coord. */
+/** Isometric hex: pixel center from cube coord. */
 export function hexToPixel(hex: CubeCoord, hexSize: number): { x: number; y: number } {
-  const x = hexSize * (3 / 2) * hex.q;
-  const y = hexSize * (Math.sqrt(3) / 2 * hex.q + Math.sqrt(3) * hex.r);
+  const x = hexSize * (Math.sqrt(3) * hex.q + (Math.sqrt(3) / 2) * hex.r);
+  const y = hexSize * 1.5 * hex.r;
   return { x, y };
 }
 
 /** Pixel to cube coord (for click detection) — uses cube rounding. */
 export function pixelToHex(px: number, py: number, hexSize: number): CubeCoord {
-  const q = (2 / 3 * px) / hexSize;
-  const r = (-1 / 3 * px + Math.sqrt(3) / 3 * py) / hexSize;
+  const q = (px * Math.sqrt(3) / 3 - py / 3) / hexSize;
+  const r = (py * 2 / 3) / hexSize;
   const s = -q - r;
   // Cube round
   let rq = Math.round(q);
@@ -25,17 +26,18 @@ export function pixelToHex(px: number, py: number, hexSize: number): CubeCoord {
   return { q: rq, r: rr, s: rs };
 }
 
-/**
- * Draw a Kenney hexagon-pack tile clipped to the flat-top hex polygon.
- *
- * Kenney tiles are 120×140px and designed for pointy-top hexes (height = 2R,
- * width = √3·R). Our grid is flat-top, so the tile's baked outline is rotated
- * 30°. We solve this by clipping the tile to the flat-top hex polygon and
- * drawing a thin border on top, hiding the orientation mismatch entirely.
- *
- * Scale: (size × 2) / 120 × 1.05 — the 5% bleed prevents sub-pixel seams at
- * hex edges.
- */
+/** Convert screen coordinates (accounting for stage pan/zoom) to cube coord. */
+export function screenToHex(screenX: number, screenY: number, hexSize: number, stage: Container): CubeCoord {
+  const scale = stage.scale.x;
+  const px = (screenX - stage.position.x) / scale;
+  const py = (screenY - stage.position.y) / scale;
+  return pixelToHex(px, py, hexSize);
+}
+
+// Legacy Canvas 2D drawing functions — kept temporarily so fog-render.ts and
+// objective-render.ts (owned by other agents) still compile. These will be
+// deleted when those modules are ported to PixiJS.
+
 export function drawHexTile(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
@@ -48,8 +50,6 @@ export function drawHexTile(
   const h = 140 * scale;
 
   ctx.save();
-
-  // Clip to flat-top hex polygon
   ctx.beginPath();
   for (let i = 0; i < 6; i++) {
     const angle = (Math.PI / 180) * (60 * i);
@@ -60,13 +60,9 @@ export function drawHexTile(
   }
   ctx.closePath();
   ctx.clip();
-
-  // Draw tile centered on hex — tile overflows top/bottom, clipping handles it
   ctx.drawImage(img, centerX - w / 2, centerY - h / 2, w, h);
-
   ctx.restore();
 
-  // Thin border on top to define hex edges (replaces tile's own baked outline)
   ctx.beginPath();
   for (let i = 0; i < 6; i++) {
     const angle = (Math.PI / 180) * (60 * i);
@@ -81,7 +77,6 @@ export function drawHexTile(
   ctx.stroke();
 }
 
-/** Draw a single flat-top hexagon. */
 export function drawHex(
   ctx: CanvasRenderingContext2D,
   centerX: number,
