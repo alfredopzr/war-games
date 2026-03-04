@@ -283,10 +283,13 @@ function applyCommand(
 ): void {
   const friendlyUnits = state.players[currentPlayer].units;
 
+  // Stale unit refs: unit may have died between command submission and execution.
+  // Soft-fail (return) instead of throwing. Non-issue once we switch to
+  // resolve-all-turns-simultaneously mode — commands will reference live state.
   switch (command.type) {
     case 'direct-move': {
       const unit = findUnitById(friendlyUnits, command.unitId);
-      if (!unit) throw new Error(`Unit ${command.unitId} not found`);
+      if (!unit) return;
 
       const targetKey = hexToKey(command.targetHex);
       if (!state.map.terrain.has(targetKey)) {
@@ -316,11 +319,11 @@ function applyCommand(
 
     case 'direct-attack': {
       const attacker = findUnitById(friendlyUnits, command.unitId);
-      if (!attacker) throw new Error(`Unit ${command.unitId} not found`);
+      if (!attacker) return;
 
       const enemyUnits = state.players[enemyPlayer].units;
       const defender = findUnitById(enemyUnits, command.targetUnitId);
-      if (!defender) throw new Error(`Target unit ${command.targetUnitId} not found`);
+      if (!defender) return;
 
       if (!canAttack(attacker, defender)) {
         throw new Error('Cannot attack target');
@@ -341,7 +344,7 @@ function applyCommand(
 
     case 'redirect': {
       const unit = findUnitById(friendlyUnits, command.unitId);
-      if (!unit) throw new Error(`Unit ${command.unitId} not found`);
+      if (!unit) return;
       unit.directive = command.newDirective;
       if (command.target) {
         unit.directiveTarget = command.target;
@@ -352,7 +355,7 @@ function applyCommand(
 
     case 'retreat': {
       const unit = findUnitById(friendlyUnits, command.unitId);
-      if (!unit) throw new Error(`Unit ${command.unitId} not found`);
+      if (!unit) return;
 
       const deploymentZone = currentPlayer === 'player1'
         ? state.map.player1Deployment
