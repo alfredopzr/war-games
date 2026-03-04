@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { Unit, CubeCoord } from './types';
-import { resetUnitIdCounter, createUnit } from './units';
 import { calculateDamage, canAttack } from './combat';
 
 // ---------------------------------------------------------------------------
@@ -17,6 +16,7 @@ function makeUnit(
     hp: overrides.hp ?? 10,
     position: overrides.position,
     directive: overrides.directive ?? 'advance',
+    directiveTarget: overrides.directiveTarget ?? { type: 'central-objective' },
     hasActed: overrides.hasActed ?? false,
   };
 }

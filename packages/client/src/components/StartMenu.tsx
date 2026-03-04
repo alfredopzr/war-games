@@ -208,11 +208,13 @@ export function StartMenu(): ReactElement | null {
             <div className="help-section">
               <h3>Directives</h3>
               <div className="help-directives">
-                <div><strong>Advance</strong> — Move toward the objective, attack enemies in range</div>
-                <div><strong>Hold</strong> — Stay in position, attack if enemies enter range</div>
-                <div><strong>Flank Left / Right</strong> — Arc around the objective from the side</div>
-                <div><strong>Scout</strong> — Explore and reveal enemies, retreat from adjacent foes</div>
-                <div><strong>Support</strong> — Follow nearby friendlies, provide fire support</div>
+                <div><strong>Advance</strong> — Push toward objective or target, attack enemies en route</div>
+                <div><strong>Hold</strong> — Move to target, then dig in (+1 DEF). Attacks enemies in range</div>
+                <div><strong>Flank Left / Right</strong> — Arc around the target from the side</div>
+                <div><strong>Scout</strong> — Reconnoiter target area, retreat from adjacent foes</div>
+                <div><strong>Support</strong> — Follow and heal a target friendly unit</div>
+                <div><strong>Hunt</strong> — Pursue and destroy a specific enemy unit</div>
+                <div><strong>Capture</strong> — Move to a city, occupy it, then hold position</div>
               </div>
             </div>
 

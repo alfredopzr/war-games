@@ -6,10 +6,10 @@
 export type {
   CubeCoord, AxialCoord, GridSize,
   TerrainType, TerrainDefinition, HexTile,
-  UnitType, UnitStats, Unit, DirectiveType, PlayerId,
+  UnitType, UnitStats, Unit, DirectiveType, DirectiveTarget, DirectiveTargetType, PlayerId,
   UnitAction, Command, CommandPool,
   GamePhase, ObjectiveState, PlayerState, RoundState, GameState, GameMap,
-  IncomeParams, MapValidation, RoundEndResult, DirectiveContext,
+  IncomeParams, MapValidation, RoundEndResult, DirectiveContext, ResolvedTarget,
   // Network protocol
   BattleEvent,
   ClientCreateRoom, ClientJoinRoom, ClientLeaveRoom, ClientReconnect,
@@ -61,10 +61,10 @@ export { createNoiseGenerator } from './noise';
 export { mulberry32 } from './rng';
 
 // Directives
-export { executeDirective } from './directives';
+export { executeDirective, resolveTarget } from './directives';
 
 // Commands
-export { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND } from './commands';
+export { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND, validateDirectiveTarget } from './commands';
 
 // Game state
 export {

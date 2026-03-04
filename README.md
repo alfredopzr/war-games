@@ -50,7 +50,7 @@ The engine is a standalone, framework-agnostic TypeScript library. It handles al
 | `combat.ts` | Damage calculation with type multipliers and terrain defense |
 | `pathfinding.ts` | A* pathfinding with terrain-aware movement costs |
 | `vision.ts` | Fog of war with line-of-sight raycasting and forest concealment |
-| `directives.ts` | 6 autonomous unit behaviors (advance, hold, flank, scout, support) |
+| `directives.ts` | 8 autonomous unit behaviors (advance, hold, flank, scout, support, hunt, capture) with parameterized targeting |
 | `commands.ts` | Command point system (4 CP per turn) |
 | `economy.ts` | Income, carryover, maintenance, catch-up bonus |
 | `map-gen.ts` | Procedural symmetric map generation with seeded PRNG |
@@ -112,11 +112,15 @@ Each player starts with **500 gold** (plus income from previous rounds). Purchas
 
 Assign each unit a **directive** that controls its autonomous behavior:
 
-- **Advance** — Move toward the central objective, attack enemies in range
-- **Hold** — Stay in position, attack if enemies are in range
-- **Flank Left/Right** — Arc around the objective from the side
-- **Scout** — Explore far from friendly units, retreat from adjacent enemies
-- **Support** — Follow nearby friendly units at ~2 hex distance
+- **Advance** — Push toward objective or target, attack enemies en route
+- **Hold** — Move to target, then dig in (+1 DEF). Attacks enemies in range
+- **Flank Left/Right** — Arc around the target from the side
+- **Scout** — Reconnoiter target area, retreat from adjacent foes
+- **Support** — Follow and heal a target friendly unit
+- **Hunt** — Pursue and destroy a specific enemy unit
+- **Capture** — Move to a city, occupy it, then hold position
+
+All directives accept an optional **target** (city, enemy unit, friendly unit, or hex). Without a target, they default to the central objective.
 
 ### Battle Phase
 

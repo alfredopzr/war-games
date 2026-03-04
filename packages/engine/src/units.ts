@@ -1,4 +1,4 @@
-import type { UnitType, UnitStats, Unit, PlayerId, CubeCoord, DirectiveType } from './types';
+import type { UnitType, UnitStats, Unit, PlayerId, CubeCoord, DirectiveType, DirectiveTarget } from './types';
 
 // =============================================================================
 // Unit Stats — design spec values for all 4 MVP unit types
@@ -62,6 +62,7 @@ export function createUnit(
   owner: PlayerId,
   position: CubeCoord,
   directive: DirectiveType = 'advance',
+  directiveTarget: DirectiveTarget = { type: 'central-objective' },
 ): Unit {
   unitIdCounter += 1;
   return {
@@ -71,6 +72,7 @@ export function createUnit(
     hp: UNIT_STATS[type].maxHp,
     position,
     directive,
+    directiveTarget,
     hasActed: false,
   };
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND } from './commands';
-import type { Command, CommandPool } from './types';
+import { createCommandPool, spendCommand, canIssueCommand, validateDirectiveTarget } from './commands';
+import type { Command, DirectiveTarget } from './types';
 
 describe('createCommandPool', () => {
   it('starts with 4 CP', () => {
@@ -81,5 +81,28 @@ describe('canIssueCommand', () => {
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u3' });
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u4' });
     expect(canIssueCommand(pool, 'u5')).toBe(false);
+  });
+});
+
+describe('validateDirectiveTarget', () => {
+  it('rejects hunt without enemy-unit target', () => {
+    const target: DirectiveTarget = { type: 'city', cityId: 'city-1' };
+    expect(() => validateDirectiveTarget('hunt', target)).toThrow();
+  });
+  it('accepts hunt with enemy-unit target', () => {
+    const target: DirectiveTarget = { type: 'enemy-unit', unitId: 'unit-1' };
+    expect(() => validateDirectiveTarget('hunt', target)).not.toThrow();
+  });
+  it('rejects capture without city target', () => {
+    const target: DirectiveTarget = { type: 'hex', hex: { q: 0, r: 0, s: 0 } };
+    expect(() => validateDirectiveTarget('capture', target)).toThrow();
+  });
+  it('accepts capture with city target', () => {
+    const target: DirectiveTarget = { type: 'city', cityId: 'city-1' };
+    expect(() => validateDirectiveTarget('capture', target)).not.toThrow();
+  });
+  it('accepts advance with any target type', () => {
+    const target: DirectiveTarget = { type: 'hex', hex: { q: 0, r: 0, s: 0 } };
+    expect(() => validateDirectiveTarget('advance', target)).not.toThrow();
   });
 });

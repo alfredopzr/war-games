@@ -138,6 +138,10 @@ class NetworkManager {
 
     this.socket.on('room-error', (data: { message: string }) => {
       store().showToast(data.message);
+      if (data.message.includes('does not exist') || data.message.includes('not found')) {
+        sessionStorage.removeItem('hexwar-reconnect-token');
+        sessionStorage.removeItem('hexwar-room-id');
+      }
       const s = store();
       if (s.lobbyState === 'joining' || s.lobbyState === 'creating') {
         s.setLobbyState('menu');

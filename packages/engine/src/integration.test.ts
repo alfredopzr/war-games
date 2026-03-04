@@ -7,7 +7,7 @@
 // =============================================================================
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { CubeCoord, PlayerId, UnitType, GameState } from './index';
+import type { CubeCoord, PlayerId, GameState } from './index';
 import {
   createGame, placeUnit, startBattlePhase, executeTurn,
   checkRoundEnd, scoreRound, getWinner, resetUnitIdCounter,
@@ -68,17 +68,17 @@ describe('Full game simulation', () => {
       const p2Open = findOpenDeploymentHexes(game, 'player2', 3);
 
       // Player 1: 2 infantry + 1 tank if affordable
-      if (p1Open.length >= 1) placeUnit(game, 'player1', 'infantry', p1Open[0]);
-      if (p1Open.length >= 2) placeUnit(game, 'player1', 'infantry', p1Open[1]);
+      if (p1Open.length >= 1) placeUnit(game, 'player1', 'infantry', p1Open[0]!);
+      if (p1Open.length >= 2) placeUnit(game, 'player1', 'infantry', p1Open[1]!);
       if (p1Open.length >= 3 && canAfford(game.players.player1.resources, UNIT_STATS.tank.cost)) {
-        placeUnit(game, 'player1', 'tank', p1Open[2]);
+        placeUnit(game, 'player1', 'tank', p1Open[2]!);
       }
 
       // Player 2: 2 infantry + 1 tank if affordable
-      if (p2Open.length >= 1) placeUnit(game, 'player2', 'infantry', p2Open[0]);
-      if (p2Open.length >= 2) placeUnit(game, 'player2', 'infantry', p2Open[1]);
+      if (p2Open.length >= 1) placeUnit(game, 'player2', 'infantry', p2Open[0]!);
+      if (p2Open.length >= 2) placeUnit(game, 'player2', 'infantry', p2Open[1]!);
       if (p2Open.length >= 3 && canAfford(game.players.player2.resources, UNIT_STATS.tank.cost)) {
-        placeUnit(game, 'player2', 'tank', p2Open[2]);
+        placeUnit(game, 'player2', 'tank', p2Open[2]!);
       }
 
       expect(game.players.player1.units.length).toBeGreaterThanOrEqual(2);
@@ -134,11 +134,11 @@ describe('Full game simulation', () => {
       const p2Open = findOpenDeploymentHexes(game, 'player2', 1);
 
       // Player 1: 1 tank + 1 infantry (aggressive)
-      placeUnit(game, 'player1', 'tank', p1Open[0]);
-      placeUnit(game, 'player1', 'infantry', p1Open[1]);
+      placeUnit(game, 'player1', 'tank', p1Open[0]!);
+      placeUnit(game, 'player1', 'infantry', p1Open[1]!);
 
       // Player 2: 1 infantry (weak)
-      placeUnit(game, 'player2', 'infantry', p2Open[0]);
+      placeUnit(game, 'player2', 'infantry', p2Open[0]!);
 
       startBattlePhase(game);
 
@@ -171,8 +171,8 @@ describe('Full game simulation', () => {
     expect(game.players.player1.resources).toBe(800);
 
     // Place one cheap unit
-    placeUnit(game, 'player1', 'infantry', game.map.player1Deployment[0]);
-    placeUnit(game, 'player2', 'infantry', game.map.player2Deployment[0]);
+    placeUnit(game, 'player1', 'infantry', game.map.player1Deployment[0]!);
+    placeUnit(game, 'player2', 'infantry', game.map.player2Deployment[0]!);
 
     const resourcesAfterBuy = game.players.player1.resources;
     expect(resourcesAfterBuy).toBe(700); // 800 - 100
@@ -244,8 +244,8 @@ describe('Full game simulation', () => {
     expect(game.phase).toBe('build');
 
     // Cannot start battle without units? Actually we can, let's place at least one
-    placeUnit(game, 'player1', 'infantry', game.map.player1Deployment[0]);
-    placeUnit(game, 'player2', 'infantry', game.map.player2Deployment[0]);
+    placeUnit(game, 'player1', 'infantry', game.map.player1Deployment[0]!);
+    placeUnit(game, 'player2', 'infantry', game.map.player2Deployment[0]!);
 
     // build -> battle
     startBattlePhase(game);
@@ -253,7 +253,7 @@ describe('Full game simulation', () => {
 
     // Cannot place units during battle
     expect(() => {
-      placeUnit(game, 'player1', 'infantry', game.map.player1Deployment[1]);
+      placeUnit(game, 'player1', 'infantry', game.map.player1Deployment[1]!);
     }).toThrow('Can only place units during build phase');
 
     // Cannot start battle again

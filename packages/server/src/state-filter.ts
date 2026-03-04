@@ -111,6 +111,7 @@ function stripDirective(unit: Unit): Unit {
     hp: unit.hp,
     position: { q: unit.position.q, r: unit.position.r, s: unit.position.s },
     directive: 'advance',
+    directiveTarget: { type: 'central-objective' },
     hasActed: unit.hasActed,
   };
 }
@@ -127,6 +128,7 @@ function cloneUnit(unit: Unit): Unit {
     hp: unit.hp,
     position: { q: unit.position.q, r: unit.position.r, s: unit.position.s },
     directive: unit.directive,
+    directiveTarget: { ...unit.directiveTarget },
     hasActed: unit.hasActed,
   };
 }

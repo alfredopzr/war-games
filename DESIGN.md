@@ -131,12 +131,21 @@ During the build phase, each unit is assigned exactly one directive. This is the
 
 | Directive | Behavior | Best For |
 |---|---|---|
-| **Advance** | Move toward the central objective by the shortest path. Attack enemies encountered along the way. | Tanks, Infantry pushing the center |
-| **Hold** | Stay on current hex. Attack any enemy that enters range. Do not move. | Artillery, units on strong terrain |
-| **Flank Left** | Advance toward the objective but bias pathfinding to the left side of the map. Attack enemies in range. | Creating crossfires, flanking maneuvers |
+| **Advance** | Move toward the target (or central objective) by the shortest path. Attack enemies encountered along the way. | Tanks, Infantry pushing a position |
+| **Hold** | Move to target position, then stay and dig in (+1 DEF). Attack any enemy that enters range. | Artillery, defending chokepoints or cities |
+| **Flank Left** | Advance toward the target but bias pathfinding to the left side. Attack enemies in range. | Creating crossfires, flanking maneuvers |
 | **Flank Right** | Same as Flank Left but biased to the right side. | Mirror of Flank Left |
-| **Scout** | Move toward nearest unexplored/fog hex. Avoid combat — retreat if enemy is adjacent. | Recon units |
-| **Support** | Follow the nearest friendly unit within 3 hexes. Attack enemies in range but don't lead the charge. | Artillery following tanks, AA covering pushes |
+| **Scout** | Reconnoiter the target area from 2-3 hex distance. Retreat if enemy is adjacent. | Recon units, shadowing enemy units |
+| **Support** | Follow a targeted friendly unit (or nearest friendly) within ~2 hexes. Heals adjacent friendlies. | Artillery following tanks, medic behavior |
+| **Hunt** | Aggressively pursue a specific enemy unit. Close distance every turn, attack as soon as in range. On target death, retargets nearest enemy. | Assassinating key targets, tanks chasing artillery |
+| **Capture** | Move to a target city, occupy it (city ownership flips), then hold position with DEF bonus. After capturing, retargets the nearest uncaptured enemy city. | Infantry seizing objectives, territory control |
+
+**Directive targeting:**
+All directives accept an optional **target**: a specific city, enemy unit, friendly unit, or hex coordinate. Without a target, directives default to the central objective (preserving original behavior). When a target becomes invalid (e.g., targeted enemy dies, city is captured), the unit automatically retargets to the nearest similar target.
+
+- `hunt` requires an enemy unit target.
+- `capture` requires a city target.
+- All other directives accept any target type.
 
 **Directive AI behavior rules:**
 - Units with directives execute one action per turn automatically: either move (following directive pathfinding) or attack (if an enemy is in range and attackable).

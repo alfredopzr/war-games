@@ -9,12 +9,14 @@ interface DirectiveInfo {
 }
 
 const DIRECTIVES: readonly DirectiveInfo[] = [
-  { type: 'advance', name: 'Advance', desc: 'Push straight toward the objective' },
-  { type: 'hold', name: 'Hold', desc: '+1 DEF — dig in and absorb attacks' },
-  { type: 'flank-left', name: 'Flank Left', desc: 'Arc left — forests cost 1 MP instead of 2' },
-  { type: 'flank-right', name: 'Flank Right', desc: 'Arc right — forests cost 1 MP instead of 2' },
-  { type: 'scout', name: 'Scout', desc: 'Acts first — explores and reveals flanks' },
-  { type: 'support', name: 'Support', desc: 'Heals adjacent friendlies — stay near your troops' },
+  { type: 'advance', name: 'Advance', desc: 'Push toward objective or target' },
+  { type: 'hold', name: 'Hold', desc: '+1 DEF — move to target, then dig in' },
+  { type: 'flank-left', name: 'Flank Left', desc: 'Arc left around target' },
+  { type: 'flank-right', name: 'Flank Right', desc: 'Arc right around target' },
+  { type: 'scout', name: 'Scout', desc: 'Acts first — reconnoiter target area' },
+  { type: 'support', name: 'Support', desc: 'Follow and heal target friendly' },
+  { type: 'hunt', name: 'Hunt', desc: 'Pursue and destroy target enemy' },
+  { type: 'capture', name: 'Capture', desc: 'Move to city, occupy, then hold' },
 ] as const;
 
 export function DirectiveSelector(): ReactElement | null {
@@ -22,13 +24,18 @@ export function DirectiveSelector(): ReactElement | null {
   const selectedUnit = useGameStore((s) => s.selectedUnit);
   const currentPlayerView = useGameStore((s) => s.currentPlayerView);
   const setUnitDirective = useGameStore((s) => s.setUnitDirective);
+  const setTargetSelectionMode = useGameStore((s) => s.setTargetSelectionMode);
 
   const handleSelect = useCallback(
     (directive: DirectiveType): void => {
       if (!selectedUnit) return;
+      if (directive === 'hunt' || directive === 'capture') {
+        setTargetSelectionMode(true, directive);
+        return;
+      }
       setUnitDirective(selectedUnit.id, directive);
     },
-    [selectedUnit, setUnitDirective],
+    [selectedUnit, setUnitDirective, setTargetSelectionMode],
   );
 
   if (!gameState || gameState.phase !== 'build') return null;

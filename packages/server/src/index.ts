@@ -2,9 +2,14 @@
 // HexWar Server — Entry Point
 // =============================================================================
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.resolve(__dirname, '../../client/dist');
 
 import {
   createRoom,
@@ -28,7 +33,7 @@ import {
 import { log } from './logger';
 import { logViewerRouter } from './log-viewer';
 
-import type { PlayerId } from '@hexwar/engine';
+import type { PlayerId, DirectiveTarget } from '@hexwar/engine';
 import { getRoomPhase } from './types';
 
 const app = express();
@@ -48,6 +53,12 @@ app.get('/health', (_req, res) => {
 });
 
 app.use(logViewerRouter);
+
+app.use(express.static(clientDist));
+
+app.get('{*path}', (_req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
 
 io.on('connection', (socket) => {
   socket.on('create-room', () => {
@@ -113,7 +124,7 @@ io.on('connection', (socket) => {
 
   socket.on(
     'place-unit',
-    (data: { unitType: string; position: { q: number; r: number; s: number }; directive: string }) => {
+    (data: { unitType: string; position: { q: number; r: number; s: number }; directive: string; target?: unknown }) => {
       const found = getRoomBySocket(socket.id);
       if (!found) return;
       try {
@@ -124,6 +135,7 @@ io.on('connection', (socket) => {
           data.position,
           data.directive as Parameters<typeof handlePlaceUnit>[4],
           io,
+          data.target as DirectiveTarget | undefined,
         );
       } catch (err) {
         log('warn', 'game', `Error in room: ${(err as Error).message}`);
@@ -149,7 +161,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('set-directive', (data: { unitId: string; directive: string }) => {
+  socket.on('set-directive', (data: { unitId: string; directive: string; target?: unknown }) => {
     const found = getRoomBySocket(socket.id);
     if (!found) return;
     try {
@@ -159,6 +171,7 @@ io.on('connection', (socket) => {
         data.unitId,
         data.directive as Parameters<typeof handleSetDirective>[3],
         io,
+        data.target as DirectiveTarget | undefined,
       );
     } catch (err) {
       log('warn', 'game', `Error in room ${found.room.id}: ${(err as Error).message}`);
@@ -172,13 +185,27 @@ io.on('connection', (socket) => {
   socket.on('confirm-build', () => {
     const found = getRoomBySocket(socket.id);
     if (!found) return;
-    handleConfirmBuild(found.room, found.playerId, io);
+    try {
+      handleConfirmBuild(found.room, found.playerId, io);
+    } catch (err) {
+      socket.emit('room-error', {
+        type: 'room-error',
+        message: (err as Error).message,
+      });
+    }
   });
 
   socket.on('submit-commands', (data: { commands: Parameters<typeof handleSubmitCommands>[2] }) => {
     const found = getRoomBySocket(socket.id);
     if (!found) return;
-    handleSubmitCommands(found.room, found.playerId, data.commands, io);
+    try {
+      handleSubmitCommands(found.room, found.playerId, data.commands, io);
+    } catch (err) {
+      socket.emit('room-error', {
+        type: 'room-error',
+        message: (err as Error).message,
+      });
+    }
   });
 
   socket.on(
@@ -233,6 +260,7 @@ io.on('connection', (socket) => {
       const disconnected = room.disconnectedPlayers.get(playerId);
       if (disconnected) {
         disconnected.forfeitTimer = setTimeout(() => {
+          if (getRoomPhase(room) !== 'playing') return;
           socket.to(room.id).emit('forfeit', {
             type: 'forfeit',
             winner: enemyId,

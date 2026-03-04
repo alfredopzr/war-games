@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { CubeCoord, GridSize } from './types';
+import type { GridSize } from './types';
 import {
   createHex,
   cubeDistance,
@@ -213,7 +213,7 @@ describe('hexLineDraw', () => {
     const b = createHex(3, -1);
     const line = hexLineDraw(a, b);
     for (let i = 0; i < line.length - 1; i++) {
-      expect(cubeDistance(line[i], line[i + 1])).toBe(1);
+      expect(cubeDistance(line[i]!, line[i + 1]!)).toBe(1);
     }
   });
 
