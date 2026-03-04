@@ -478,6 +478,38 @@ export function App(): ReactElement {
 
       const store = useGameStore.getState();
 
+      // Build phase: target selection for hunt/capture directives
+      if (gameState.phase === 'build' && store.targetSelectionMode && store.selectedUnit) {
+        const hexKey = hexToKey(hex);
+        const directive = store.targetSelectionDirective;
+
+        if (directive === 'hunt') {
+          const enemyPlayer = currentPlayerView === 'player1' ? 'player2' : 'player1';
+          const enemy = gameState.players[enemyPlayer].units.find(
+            (u) => hexToKey(u.position) === hexKey,
+          );
+          if (enemy) {
+            store.setUnitDirectiveTarget(store.selectedUnit.id, directive, {
+              type: 'enemy-unit',
+              unitId: enemy.id,
+            });
+          } else {
+            store.showToast('Select a hex with an enemy unit');
+          }
+        } else if (directive === 'capture') {
+          const terrain = gameState.map.terrain.get(hexKey);
+          if (terrain === 'city') {
+            store.setUnitDirectiveTarget(store.selectedUnit.id, directive, {
+              type: 'city',
+              hex,
+            });
+          } else {
+            store.showToast('Select a city hex');
+          }
+        }
+        return;
+      }
+
       // Build phase: placement mode
       if (gameState.phase === 'build' && store.placementMode) {
         const hexKey = hexToKey(hex);
@@ -497,6 +529,7 @@ export function App(): ReactElement {
         // Online mode: send placement to server
         if (store.gameMode === 'online') {
           const unitType = store.placementMode;
+          store.exitPlacementMode();
           import('./network/network-manager').then(({ networkManager }) => {
             networkManager.placeUnit(unitType, hex, 'advance');
           });
@@ -505,6 +538,7 @@ export function App(): ReactElement {
 
         try {
           placeUnit(gameState, currentPlayerView, store.placementMode, hex);
+          store.exitPlacementMode();
           store.setGameState({ ...gameState });
         } catch {
           // placement failed — ignore
