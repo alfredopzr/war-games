@@ -155,6 +155,12 @@ function drawDirectiveArrow(
       targetY = nearest.y;
       break;
     }
+    case 'hunt':
+    case 'capture':
+    default:
+      targetX = objX;
+      targetY = objY;
+      break;
   }
 
   // Normalize and cap arrow length at 60px
