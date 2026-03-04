@@ -43,7 +43,7 @@ export function drawHexTile(
   centerY: number,
   size: number,
 ): void {
-  const scale = ((size * 2) / 120) * 1.05;
+  const scale = ((size * 2) / 120) * 1.2;
   const w = 120 * scale;
   const h = 140 * scale;
 

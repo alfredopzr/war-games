@@ -3,17 +3,17 @@ export const GRID_WIDTH = 16;
 export const GRID_HEIGHT = 12;
 
 export const TERRAIN_COLORS: Record<string, string> = {
-  plains: '#4a7c59',
-  forest: '#2d5a3f',
-  mountain: '#8b7355',
-  city: '#6b6b8d',
+  plains: '#5a9a50',
+  forest: '#2d6030',
+  mountain: '#7a7a7a',
+  city: '#a09070',
 };
 
 export const TERRAIN_BORDER_COLORS: Record<string, string> = {
-  plains: '#3d6b4c',
-  forest: '#234a32',
-  mountain: '#7a6347',
-  city: '#5a5a7c',
+  plains: '#4a8840',
+  forest: '#204a24',
+  mountain: '#606060',
+  city: '#887860',
 };
 
 export const GRID_LINE_COLOR = '#2a2a3e';

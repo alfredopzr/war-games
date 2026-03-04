@@ -279,45 +279,52 @@ export function App(): ReactElement {
       const sortedHexes = [...allHexes].sort((a, b) => a.r - b.r);
       for (const hex of sortedHexes) {
         const { x, y } = hexToPixel(hex, HEX_SIZE);
-        const terrain = state.map.terrain.get(hexToKey(hex)) ?? 'plains';
-        if (tilesReady) {
-          const img = getTileImage(terrain, hex);
-          if (img) {
-            drawHexTile(ctx, img, x + ox, y + oy, HEX_SIZE);
+        const hexKey = hexToKey(hex);
+        const terrain = state.map.terrain.get(hexKey) ?? 'plains';
+        const cx = x + ox;
+        const cy = y + oy;
+
+        if (isBuildPhase) {
+          if (friendlyDeployKeys.has(hexKey)) {
+            // Own deployment zone: solid player color, no terrain tile
+            const fill = currentPlayerView === 'player1'
+              ? 'rgba(30, 90, 180, 0.9)'
+              : 'rgba(180, 30, 30, 0.9)';
+            const stroke = currentPlayerView === 'player1'
+              ? 'rgba(80, 160, 255, 1.0)'
+              : 'rgba(255, 80, 80, 1.0)';
+            drawHex(ctx, cx, cy, HEX_SIZE, fill, stroke, 2.5);
+          } else if (enemyDeployKeys.has(hexKey)) {
+            // Enemy deployment zone: dimmer opposite color, no terrain tile
+            const fill = currentPlayerView === 'player1'
+              ? 'rgba(140, 30, 30, 0.7)'
+              : 'rgba(30, 70, 160, 0.7)';
+            const stroke = currentPlayerView === 'player1'
+              ? 'rgba(200, 60, 60, 0.8)'
+              : 'rgba(60, 120, 220, 0.8)';
+            drawHex(ctx, cx, cy, HEX_SIZE, fill, stroke, 1.5);
           } else {
-            const fill = TERRAIN_COLORS[terrain] ?? '#4a7c59';
-            const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#3d6b4c';
-            drawHex(ctx, x + ox, y + oy, HEX_SIZE, fill, stroke, 1.5);
+            // Non-deployment hex: terrain tile + dark overlay to de-emphasise
+            const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
+            drawHex(ctx, cx, cy, HEX_SIZE, fill, 'transparent', 0);
+            if (tilesReady) {
+              const img = getTileImage(terrain, hex);
+              if (img) drawHexTile(ctx, img, cx, cy, HEX_SIZE);
+            }
+            drawHex(ctx, cx, cy, HEX_SIZE, 'rgba(0, 0, 0, 0.4)', 'transparent', 0);
           }
         } else {
-          const fill = TERRAIN_COLORS[terrain] ?? '#4a7c59';
-          const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#3d6b4c';
-          drawHex(ctx, x + ox, y + oy, HEX_SIZE, fill, stroke, 1.5);
-        }
-
-        // During build phase: highlight both deployment zones, dim the rest
-        if (isBuildPhase) {
-          const key = hexToKey(hex);
-          if (friendlyDeployKeys.has(key)) {
-            // Your zone: strong blue tint + border
-            const tintFill = currentPlayerView === 'player1'
-              ? 'rgba(68, 136, 204, 0.35)'
-              : 'rgba(204, 68, 68, 0.35)';
-            const tintBorder = currentPlayerView === 'player1'
-              ? 'rgba(68, 160, 255, 0.6)'
-              : 'rgba(255, 80, 80, 0.6)';
-            drawHex(ctx, x + ox, y + oy, HEX_SIZE, tintFill, tintBorder, 2);
-          } else if (enemyDeployKeys.has(key)) {
-            // Enemy zone: dimmed red tint + border
-            const enemyFill = currentPlayerView === 'player1'
-              ? 'rgba(204, 68, 68, 0.2)'
-              : 'rgba(68, 136, 204, 0.2)';
-            const enemyBorder = currentPlayerView === 'player1'
-              ? 'rgba(255, 80, 80, 0.35)'
-              : 'rgba(68, 160, 255, 0.35)';
-            drawHex(ctx, x + ox, y + oy, HEX_SIZE, enemyFill, enemyBorder, 1.5);
-          } else {
-            drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'rgba(0, 0, 0, 0.35)', 'transparent', 0);
+          // Normal phase: solid base then tile (base fills transparent tile corners)
+          const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
+          drawHex(ctx, cx, cy, HEX_SIZE, fill, 'transparent', 0);
+          if (tilesReady) {
+            const img = getTileImage(terrain, hex);
+            if (img) {
+              drawHexTile(ctx, img, cx, cy, HEX_SIZE);
+            } else {
+              const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#4a8840';
+              drawHex(ctx, cx, cy, HEX_SIZE, 'transparent', stroke, 1.5);
+            }
           }
         }
       }
