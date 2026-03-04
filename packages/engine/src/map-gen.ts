@@ -127,57 +127,63 @@ export function generateMap(seed?: number): GameMap {
     }
   }
 
-  // Second pass: neutral zone terrain (rows 3-5), mirror to rows 8-10
-  // Mountain pairs (3-5)
-  const mountainPairs = 3 + Math.floor(rng() * 3);
+  // Second pass: neutral zone terrain (rows 3-6), mirror to rows 10-7.
+  // Mountains require min distance 2 from any other mountain (no adjacent clusters).
+  const mountainPairs = 5 + Math.floor(rng() * 4); // 5-8 pairs
   let mountainsPlaced = 0;
+  const placedMountains: CubeCoord[] = [];
 
-  // Collect neutral zone positions for rows 3-5 (top half of neutral)
   const neutralTopPositions: Array<{ col: number; row: number }> = [];
   for (let col = 0; col < GRID.width; col++) {
-    for (let row = 3; row < 6; row++) {
+    for (let row = 3; row < 7; row++) {
       neutralTopPositions.push({ col, row });
     }
   }
 
-  // Build terrain for each neutral top-half position (excluding cities for now)
+  // Shuffle so mountains spread randomly rather than top-left biased
+  for (let i = neutralTopPositions.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = neutralTopPositions[i]!;
+    neutralTopPositions[i] = neutralTopPositions[j]!;
+    neutralTopPositions[j] = tmp;
+  }
+
   for (const { col, row } of neutralTopPositions) {
     const topHex = offsetToHex(col, row);
     const bottomHex = offsetToHex(col, mirrorOffsetRow(row));
     const topKey = hexToKey(topHex);
     const bottomKey = hexToKey(bottomHex);
 
-    // Try to place mountains
-    if (mountainsPlaced < mountainPairs && rng() < 0.08) {
-      terrain.set(topKey, 'mountain');
-      terrain.set(bottomKey, 'mountain');
-      mountainsPlaced++;
-      continue;
+    // Try to place a mountain pair — enforce min distance 2 from all existing mountains
+    if (mountainsPlaced < mountainPairs && rng() < 0.45) {
+      const tooClose = placedMountains.some(
+        (m) => cubeDistance(m, topHex) < 2 || cubeDistance(m, bottomHex) < 2,
+      );
+      if (!tooClose) {
+        terrain.set(topKey, 'mountain');
+        terrain.set(bottomKey, 'mountain');
+        placedMountains.push(topHex, bottomHex);
+        mountainsPlaced++;
+        continue;
+      }
     }
 
-    // Forest for chokepoints (~30%)
-    if (rng() < 0.30) {
-      terrain.set(topKey, 'forest');
-      terrain.set(bottomKey, 'forest');
-      continue;
-    }
+    if (terrain.has(topKey)) continue;
 
-    // Default: plains
-    terrain.set(topKey, 'plains');
-    terrain.set(bottomKey, 'plains');
+    // Forest (~28%) or plains
+    const t: TerrainType = rng() < 0.28 ? 'forest' : 'plains';
+    terrain.set(topKey, t);
+    terrain.set(bottomKey, t);
   }
 
-  // Fill remaining neutral rows 6-7 (mirrors of each other: mirrorOffsetRow(6)=7, mirrorOffsetRow(7)=6)
-  // Generate row 6 and mirror symmetrically to row 7
+  // Fill center rows 6-7 (they mirror each other: mirrorOffsetRow(6)=7, (7)=6)
   for (let col = 0; col < GRID.width; col++) {
     const hex6 = offsetToHex(col, 6);
     const hex7 = offsetToHex(col, 7);
     const key6 = hexToKey(hex6);
     const key7 = hexToKey(hex7);
-
     if (terrain.has(key6) && terrain.has(key7)) continue;
-
-    const t: TerrainType = rng() < 0.30 ? 'forest' : 'plains';
+    const t: TerrainType = rng() < 0.28 ? 'forest' : 'plains';
     terrain.set(key6, t);
     terrain.set(key7, t);
   }

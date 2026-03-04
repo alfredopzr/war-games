@@ -26,15 +26,19 @@ export function pixelToHex(px: number, py: number, hexSize: number): CubeCoord {
 }
 
 /**
- * Draw a Kenney hexagon-pack tile clipped to the flat-top hex polygon.
+ * Draw a Kenney hexagon-pack tile WITHOUT clipping.
  *
- * Kenney tiles are 120×140px and designed for pointy-top hexes (height = 2R,
- * width = √3·R). Our grid is flat-top, so the tile's baked outline is rotated
- * 30°. We solve this by clipping the tile to the flat-top hex polygon and
- * drawing a thin border on top, hiding the orientation mismatch entirely.
+ * Tiles are 120×140px for a flat-top hex: the hex ground occupies the full
+ * 120px width and ~104px of height (= size×2 wide, size×√3 tall). The top
+ * ~36px are 3D overhead where buildings and trees extend above the hex.
  *
- * Scale: (size × 2) / 120 × 1.05 — the 5% bleed prevents sub-pixel seams at
- * hex edges.
+ * The hex ground center sits at y=88 in the tile (36px overhead + 52px =
+ * half of 104px hex height). We anchor that point to the canvas hex center so
+ * the ground tiles seamlessly and 3D objects naturally protrude upward into
+ * the row above — the intended isometric look.
+ *
+ * Draw order (sorted ascending r before calling this) ensures lower rows draw
+ * on top of upper-row objects, giving correct isometric depth.
  */
 export function drawHexTile(
   ctx: CanvasRenderingContext2D,
@@ -43,42 +47,12 @@ export function drawHexTile(
   centerY: number,
   size: number,
 ): void {
-  const scale = ((size * 2) / 120) * 1.2;
+  const scale = (size * 2) / 120;
   const w = 120 * scale;
   const h = 140 * scale;
-
-  ctx.save();
-
-  // Clip to flat-top hex polygon
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 180) * (60 * i);
-    const px = centerX + size * Math.cos(angle);
-    const py = centerY + size * Math.sin(angle);
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.clip();
-
-  // Draw tile centered on hex — tile overflows top/bottom, clipping handles it
-  ctx.drawImage(img, centerX - w / 2, centerY - h / 2, w, h);
-
-  ctx.restore();
-
-  // Thin border on top to define hex edges (replaces tile's own baked outline)
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 180) * (60 * i);
-    const px = centerX + size * Math.cos(angle);
-    const py = centerY + size * Math.sin(angle);
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  // Anchor the hex ground center (y=88 in the 120×140 tile) to canvas center
+  const yAnchor = h * (88 / 140);
+  ctx.drawImage(img, centerX - w / 2, centerY - yAnchor, w, h);
 }
 
 /** Draw a single flat-top hexagon. */
