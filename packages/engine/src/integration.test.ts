@@ -146,7 +146,8 @@ describe('Full game simulation', () => {
       const highDamageRng = (): number => 1.15;
       let turnCount = 0;
 
-      while (turnCount < 20) {
+      // Loop past maxTurnsPerSide (12 each = 24 calls) so checkRoundEnd always fires
+      while (turnCount < 30) {
         executeTurn(game, [], highDamageRng);
         const result = checkRoundEnd(game);
         if (result.roundOver) {
@@ -154,10 +155,6 @@ describe('Full game simulation', () => {
           break;
         }
         turnCount++;
-      }
-
-      if (turnCount >= 20) {
-        scoreRound(game, null);
       }
     }
 

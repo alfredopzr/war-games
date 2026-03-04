@@ -29,36 +29,36 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('calculateVisibility', () => {
-  it('infantry (vision 2) sees hexes within range 2 but not range 3', () => {
+  it('infantry (vision 3) sees hexes within range 3 but not range 4', () => {
     const terrain = makePlainsTerrain();
     const unit = createUnit('infantry', 'player1', createHex(3, 0));
     const visible = calculateVisibility([unit], terrain);
 
-    // Hex at distance 2 should be visible
-    const hexDist2 = createHex(5, -2); // cubeDistance from (3,0) = 2
-    expect(cubeDistance(unit.position, hexDist2)).toBe(2);
-    expect(visible.has(hexToKey(hexDist2))).toBe(true);
-
-    // Hex at distance 3 should NOT be visible
+    // Hex at distance 3 should be visible
     const hexDist3 = createHex(6, -3); // cubeDistance from (3,0) = 3
     expect(cubeDistance(unit.position, hexDist3)).toBe(3);
-    expect(visible.has(hexToKey(hexDist3))).toBe(false);
+    expect(visible.has(hexToKey(hexDist3))).toBe(true);
+
+    // Hex at distance 4 should NOT be visible
+    const hexDist4 = createHex(7, -4); // cubeDistance from (3,0) = 4
+    expect(cubeDistance(unit.position, hexDist4)).toBe(4);
+    expect(visible.has(hexToKey(hexDist4))).toBe(false);
   });
 
-  it('recon (vision 5) sees farther than infantry', () => {
-    const terrain = makePlainsTerrain();
+  it('recon (vision 6) sees farther than infantry', () => {
+    const terrain = makePlainsTerrain(20, 14);
     const recon = createUnit('recon', 'player1', createHex(5, -2));
     const visible = calculateVisibility([recon], terrain);
 
-    // Hex at distance 5 should be visible
-    const hexDist5 = createHex(0, 0); // cubeDistance from (5,-2) = max(5,2,3) = 5
-    expect(cubeDistance(recon.position, hexDist5)).toBe(5);
-    expect(visible.has(hexToKey(hexDist5))).toBe(true);
-
-    // Hex at distance 6 should NOT be visible
+    // Hex at distance 6 should be visible
     const hexDist6 = createHex(5, 4); // cubeDistance from (5,-2) = 6
     expect(cubeDistance(recon.position, hexDist6)).toBe(6);
-    expect(visible.has(hexToKey(hexDist6))).toBe(false);
+    expect(visible.has(hexToKey(hexDist6))).toBe(true);
+
+    // Hex at distance 7 should NOT be visible
+    const hexDist7 = createHex(5, 5); // cubeDistance from (5,-2) = 7
+    expect(cubeDistance(recon.position, hexDist7)).toBe(7);
+    expect(visible.has(hexToKey(hexDist7))).toBe(false);
   });
 
   it('forest blocks LoS: observer sees forest but not hex behind it', () => {
@@ -76,24 +76,24 @@ describe('calculateVisibility', () => {
     expect(visible.has(hexToKey(createHex(5, 0)))).toBe(false);
   });
 
-  it('mountain grants +2 vision: infantry on mountain sees range 4', () => {
-    const terrain = makePlainsTerrain();
+  it('mountain grants +2 vision: infantry on mountain sees range 5', () => {
+    const terrain = makePlainsTerrain(16, 12);
     const mountPos = createHex(3, 0);
     terrain.set(hexToKey(mountPos), 'mountain');
 
     const unit = createUnit('infantry', 'player1', mountPos);
     const visible = calculateVisibility([unit], terrain);
 
-    // Infantry base vision = 2, mountain +2 = 4
-    // Hex at distance 4 should be visible
-    const hexDist4 = createHex(7, -2); // cubeDistance from (3,0) = max(4,2,2) = 4
-    expect(cubeDistance(unit.position, hexDist4)).toBe(4);
-    expect(visible.has(hexToKey(hexDist4))).toBe(true);
-
-    // Hex at distance 5 should NOT be visible
+    // Infantry base vision = 3, mountain +2 = 5
+    // Hex at distance 5 should be visible
     const hexDist5 = createHex(8, -3); // cubeDistance from (3,0) = max(5,3,2) = 5
     expect(cubeDistance(unit.position, hexDist5)).toBe(5);
-    expect(visible.has(hexToKey(hexDist5))).toBe(false);
+    expect(visible.has(hexToKey(hexDist5))).toBe(true);
+
+    // Hex at distance 6 should NOT be visible
+    const hexDist6 = createHex(9, -4); // cubeDistance from (3,0) = max(6,4,2) = 6
+    expect(cubeDistance(unit.position, hexDist6)).toBe(6);
+    expect(visible.has(hexToKey(hexDist6))).toBe(false);
   });
 
   it('multiple units combine their visibility', () => {
