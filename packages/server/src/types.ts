@@ -29,7 +29,7 @@ export interface Room {
   players: Map<PlayerId, ConnectedPlayer>;
   gameState: GameState | null;
   gameSeed: number | null;
-  phase: 'waiting' | 'playing' | 'finished';
+  forfeited: boolean;
   buildConfirmed: Set<PlayerId>;
   disconnectedPlayers: Map<PlayerId, DisconnectedPlayer>;
   turnLog: TurnRecord[];
@@ -37,4 +37,13 @@ export interface Room {
     build: ReturnType<typeof setTimeout> | null;
     turn: ReturnType<typeof setTimeout> | null;
   };
+}
+
+export type RoomPhase = 'waiting' | 'playing' | 'finished';
+
+export function getRoomPhase(room: Room): RoomPhase {
+  if (!room.gameState) return 'waiting';
+  if (room.forfeited) return 'finished';
+  if (room.gameState.phase === 'game-over') return 'finished';
+  return 'playing';
 }

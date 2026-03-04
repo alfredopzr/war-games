@@ -27,6 +27,7 @@ import {
 } from './game-loop';
 
 import type { PlayerId } from '@hexwar/engine';
+import { getRoomPhase } from './types';
 
 const app = express();
 const httpServer = createServer(app);
@@ -86,7 +87,7 @@ io.on('connection', (socket) => {
     const { room, playerId } = found;
     socket.leave(room.id);
 
-    if (room.phase === 'playing') {
+    if (getRoomPhase(room) === 'playing') {
       const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
       socket.to(room.id).emit('forfeit', {
         type: 'forfeit',
@@ -94,7 +95,7 @@ io.on('connection', (socket) => {
         reason: 'leave',
       });
       clearAllTimers(room);
-      room.phase = 'finished';
+      room.forfeited = true;
     }
 
     leaveRoom(room.id, playerId);
@@ -204,7 +205,7 @@ io.on('connection', (socket) => {
     if (!found) return;
     const { room, playerId } = found;
 
-    if (room.phase === 'playing') {
+    if (getRoomPhase(room) === 'playing') {
       handleDisconnect(room.id, playerId);
       const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
       const deadline = Date.now() + 30000;
@@ -222,11 +223,11 @@ io.on('connection', (socket) => {
             reason: 'disconnect',
           });
           clearAllTimers(room);
-          room.phase = 'finished';
+          room.forfeited = true;
           deleteRoom(room.id);
         }, 30000);
       }
-    } else if (room.phase === 'waiting') {
+    } else if (getRoomPhase(room) === 'waiting') {
       leaveRoom(room.id, playerId);
     }
   });

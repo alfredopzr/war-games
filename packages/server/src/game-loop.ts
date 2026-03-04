@@ -165,7 +165,6 @@ export function startGame(room: Room, io: Server): void {
   room.gameSeed = seed;
   const state = createGame(seed);
   room.gameState = state;
-  room.phase = 'playing';
 
   for (const [playerId, player] of room.players) {
     const filtered = filterStateForPlayer(state, playerId);
@@ -392,7 +391,6 @@ export function handleSubmitCommands(
       emitFilteredStatePerPlayer(io, room, 'game-over', () => ({
         winner: room.gameState!.winner,
       }));
-      room.phase = 'finished';
     } else {
       // Next round — back to build phase
       for (const [pid, player] of room.players) {

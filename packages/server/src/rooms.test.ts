@@ -10,6 +10,7 @@ import {
   deleteRoom,
   rooms,
 } from './rooms';
+import { getRoomPhase } from './types';
 
 beforeEach(() => {
   rooms.clear();
@@ -23,7 +24,7 @@ describe('createRoom', () => {
 
   it('creates a room with waiting phase', () => {
     const room = createRoom();
-    expect(room.phase).toBe('waiting');
+    expect(getRoomPhase(room)).toBe('waiting');
   });
 
   it('stores the room in the rooms map', () => {
