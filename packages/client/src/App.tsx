@@ -7,7 +7,7 @@ import {
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
 import { HEX_SIZE, TERRAIN_COLORS, TERRAIN_BORDER_COLORS, PLAYER_COLORS } from './renderer/constants';
 import { hexToPixel, pixelToHex, drawHex, drawHexTile } from './renderer/hex-render';
-import { loadAllTiles, getTileImage, tilesReady } from './renderer/asset-loader';
+import { loadAllTiles, getTileImage, getObjectiveTileImage, tilesReady } from './renderer/asset-loader';
 import { drawUnit } from './renderer/unit-render';
 import { drawObjective } from './renderer/objective-render';
 import { drawFog, drawGhostMarker } from './renderer/fog-render';
@@ -308,7 +308,7 @@ export function App(): ReactElement {
             const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
             drawHex(ctx, cx, cy, HEX_SIZE, fill, 'transparent', 0);
             if (tilesReady) {
-              const img = getTileImage(terrain, hex);
+              const img = getTileImage(terrain);
               if (img) drawHexTile(ctx, img, cx, cy, HEX_SIZE);
             }
             drawHex(ctx, cx, cy, HEX_SIZE, 'rgba(0, 0, 0, 0.4)', 'transparent', 0);
@@ -318,7 +318,7 @@ export function App(): ReactElement {
           const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
           drawHex(ctx, cx, cy, HEX_SIZE, fill, 'transparent', 0);
           if (tilesReady) {
-            const img = getTileImage(terrain, hex);
+            const img = getTileImage(terrain);
             if (img) {
               drawHexTile(ctx, img, cx, cy, HEX_SIZE);
             } else {
@@ -374,12 +374,21 @@ export function App(): ReactElement {
         drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'transparent', '#ffdd44', 3);
       }
 
-      // Draw objective with pulsing glow
+      // Draw objective — skyscraper tile as base, then pulsing glow on top
       const objPixel = hexToPixel(state.map.centralObjective, HEX_SIZE);
+      const objCx = objPixel.x + ox;
+      const objCy = objPixel.y + oy;
+      if (tilesReady) {
+        const skyImg = getObjectiveTileImage();
+        if (skyImg) {
+          drawHex(ctx, objCx, objCy, HEX_SIZE, TERRAIN_COLORS['city'] ?? '#a09070', 'transparent', 0);
+          drawHexTile(ctx, skyImg, objCx, objCy, HEX_SIZE);
+        }
+      }
       drawObjective(
         ctx,
-        objPixel.x + ox,
-        objPixel.y + oy,
+        objCx,
+        objCy,
         HEX_SIZE,
         state.round.objective,
         time,
