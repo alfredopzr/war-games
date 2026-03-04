@@ -464,8 +464,8 @@
 .unit-shop .resources {
   font-size: 18px;
   color: #ffd700;
-  margin-bottom: 16px;
-  padding-bottom: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid #4a4a6a;
 }
 
@@ -473,8 +473,8 @@
   background: #2a2a4a;
   border: 1px solid #4a4a6a;
   border-radius: 6px;
-  padding: 10px;
-  margin-bottom: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
   cursor: pointer;
   transition: border-color 0.15s;
 }
@@ -495,55 +495,43 @@
 
 .unit-card .unit-name {
   font-weight: bold;
-  font-size: 14px;
+  font-size: 13px;
   color: #fff;
-  margin-bottom: 4px;
+  display: inline;
+  margin-right: 8px;
 }
 
 .unit-card .unit-cost {
   font-size: 12px;
   color: #ffd700;
-  margin-bottom: 6px;
+  display: inline;
 }
 
 .unit-card .unit-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-  font-size: 11px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 10px;
   color: #aaa;
+  margin-top: 3px;
 }
 
-/* Build Timer */
+/* Build Timer (inline in HUD) */
 
-.build-timer {
-  position: fixed;
-  top: 68px;
-  left: 50%;
-  transform: translateX(-50%);
-  text-align: center;
-  font-family: monospace;
-  z-index: 10;
-  padding: 8px 24px;
-  background: rgba(20, 20, 40, 0.9);
-  border: 1px solid #4a4a6a;
-  border-radius: 0 0 8px 8px;
-}
-
-.build-timer .timer-value {
-  font-size: 32px;
+.battle-hud .hud-timer {
+  font-size: 18px;
   font-weight: bold;
 }
 
-.build-timer .timer-normal {
+.battle-hud .hud-timer-normal {
   color: #e0e0e0;
 }
 
-.build-timer .timer-warning {
+.battle-hud .hud-timer-warning {
   color: #ffcc00;
 }
 
-.build-timer .timer-critical {
+.battle-hud .hud-timer-critical {
   color: #ff4444;
   animation: pulse 0.5s infinite alternate;
 }
@@ -558,10 +546,8 @@
   }
 }
 
-.ready-btn {
-  display: block;
-  margin: 8px auto 0;
-  padding: 6px 24px;
+.battle-hud .hud-ready-btn {
+  padding: 4px 16px;
   background: #3a8a4a;
   border: 1px solid #5aaa6a;
   border-radius: 4px;
@@ -569,9 +555,10 @@
   cursor: pointer;
   font-family: monospace;
   font-size: 13px;
+  font-weight: bold;
 }
 
-.ready-btn:hover {
+.battle-hud .hud-ready-btn:hover {
   background: #4a9a5a;
 }
 
@@ -891,14 +878,18 @@
 /* Unit Shop Help Tip */
 
 .shop-help-tip {
+  position: fixed;
+  top: 68px;
+  right: 0;
+  width: 220px;
   font-size: 11px;
   color: #888;
   line-height: 1.5;
-  margin-bottom: 12px;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid #3a3a5a;
-  border-radius: 4px;
+  padding: 12px;
+  background: rgba(20, 20, 40, 0.95);
+  border-left: 1px solid #4a4a6a;
+  border-bottom: 1px solid #4a4a6a;
+  z-index: 10;
 }
 
 /* Terrain Legend */

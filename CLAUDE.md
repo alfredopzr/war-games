@@ -41,6 +41,10 @@ HexWar is a hex-based tactical strategy game. See `DESIGN.md` for the full game 
 - Combat is **deterministic with ±15% variance**: `BaseDamage = ATK * TypeMultiplier * TerrainModifier * random(0.85, 1.15)`.
 - Line-of-sight uses **hex line drawing** algorithm.
 
+## Commits
+
+Keep each commit scoped to a single feature or fix. Do not bundle unrelated changes into one commit.
+
 ## Commands
 
 - `pnpm test` — run all tests

@@ -10,7 +10,7 @@ import type {
 } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
-const DEFAULT_SERVER_URL = 'http://localhost:3001';
+const DEFAULT_SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 class NetworkManager {
   private socket: Socket | null = null;
