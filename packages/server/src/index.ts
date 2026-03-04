@@ -9,7 +9,7 @@ import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const clientDist = path.resolve(__dirname, '../../../client/dist');
+const clientDist = path.resolve(__dirname, '../../client/dist');
 
 import {
   createRoom,
