@@ -11,10 +11,10 @@ describe('UNIT_STATS', () => {
       maxHp: 3,
       atk: 2,
       def: 2,
-      moveRange: 2,
+      moveRange: 3,
       attackRange: 1,
       minAttackRange: 1,
-      visionRange: 2,
+      visionRange: 3,
     });
   });
 
@@ -26,10 +26,10 @@ describe('UNIT_STATS', () => {
       maxHp: 4,
       atk: 4,
       def: 3,
-      moveRange: 3,
+      moveRange: 4,
       attackRange: 1,
       minAttackRange: 1,
-      visionRange: 2,
+      visionRange: 3,
     });
   });
 
@@ -41,10 +41,10 @@ describe('UNIT_STATS', () => {
       maxHp: 2,
       atk: 5,
       def: 1,
-      moveRange: 1,
+      moveRange: 2,
       attackRange: 3,
       minAttackRange: 2,
-      visionRange: 2,
+      visionRange: 3,
     });
   });
 
@@ -56,10 +56,10 @@ describe('UNIT_STATS', () => {
       maxHp: 2,
       atk: 1,
       def: 1,
-      moveRange: 4,
+      moveRange: 5,
       attackRange: 1,
       minAttackRange: 1,
-      visionRange: 5,
+      visionRange: 6,
     });
   });
 });
