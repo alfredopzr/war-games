@@ -159,6 +159,7 @@ function cloneRoundState(round: RoundState): RoundState {
 function cloneMap(map: GameMap): GameMap {
   return {
     terrain: new Map(map.terrain),
+    elevation: new Map(map.elevation),
     centralObjective: map.centralObjective,
     player1Deployment: [...map.player1Deployment],
     player2Deployment: [...map.player2Deployment],

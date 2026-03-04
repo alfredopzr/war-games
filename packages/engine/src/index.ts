@@ -54,6 +54,12 @@ export {
 // Map generation
 export { generateMap, validateMap } from './map-gen';
 
+// Noise
+export { createNoiseGenerator } from './noise';
+
+// RNG
+export { mulberry32 } from './rng';
+
 // Directives
 export { executeDirective } from './directives';
 

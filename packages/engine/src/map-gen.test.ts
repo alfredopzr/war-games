@@ -51,7 +51,6 @@ describe('generateMap', () => {
   it('map is symmetric (cities can be asymmetric)', () => {
     const map = generateMap(42);
     const validation = validateMap(map);
-    // Non-city terrain should be symmetric, cities can be asymmetric
     expect(validation.isSymmetric).toBe(true);
   });
 
@@ -128,6 +127,68 @@ describe('generateMap', () => {
   });
 });
 
+describe('elevation', () => {
+  it('elevation map has 280 entries', () => {
+    const map = generateMap(42);
+    expect(map.elevation.size).toBe(280);
+  });
+
+  it('all elevation values are integers in [0, 3]', () => {
+    const map = generateMap(42);
+    for (const [, elev] of map.elevation) {
+      expect(Number.isInteger(elev)).toBe(true);
+      expect(elev).toBeGreaterThanOrEqual(0);
+      expect(elev).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('deployment zone elevation is always 0', () => {
+    const map = generateMap(42);
+    for (const coord of [...map.player1Deployment, ...map.player2Deployment]) {
+      const elev = map.elevation.get(hexToKey(coord));
+      expect(elev).toBe(0);
+    }
+  });
+
+  it('city elevation is at most 2', () => {
+    for (const seed of [1, 42, 100, 999]) {
+      const map = generateMap(seed);
+      for (const [key, terrain] of map.terrain) {
+        if (terrain === 'city') {
+          const elev = map.elevation.get(key)!;
+          expect(elev).toBeLessThanOrEqual(2);
+        }
+      }
+    }
+  });
+
+  it('mountain elevation is at least 2', () => {
+    const map = generateMap(42);
+    for (const [key, terrain] of map.terrain) {
+      if (terrain === 'mountain') {
+        const elev = map.elevation.get(key)!;
+        expect(elev).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
+  it('elevation is symmetric (excluding cities)', () => {
+    const map = generateMap(42);
+    const validation = validateMap(map);
+    expect(validation.isSymmetric).toBe(true);
+  });
+
+  it('same seed produces same elevation', () => {
+    const map1 = generateMap(42);
+    const map2 = generateMap(42);
+
+    expect(map1.elevation.size).toBe(map2.elevation.size);
+    for (const [key, elev] of map1.elevation) {
+      expect(map2.elevation.get(key)).toBe(elev);
+    }
+  });
+});
+
 describe('validateMap', () => {
   it('returns valid=true for generated maps', () => {
     for (const seed of [1, 42, 100, 999]) {
@@ -140,7 +201,6 @@ describe('validateMap', () => {
 
   it('detects incorrect grid size', () => {
     const map = generateMap(42);
-    // Remove a hex to break size
     const badTerrain = new Map(map.terrain);
     const firstKey = badTerrain.keys().next().value!;
     badTerrain.delete(firstKey);
@@ -164,8 +224,7 @@ describe('validateMap', () => {
   it('detects asymmetric maps', () => {
     const map = generateMap(42);
     const badTerrain = new Map(map.terrain);
-    // Set a hex in the neutral zone to a terrain different from its current value
-    const hex = createHex(3, 1); // offset row 2 (neutral)
+    const hex = createHex(3, 1);
     const current = badTerrain.get(hexToKey(hex));
     const forced: TerrainType = current === 'mountain' ? 'forest' : 'mountain';
     badTerrain.set(hexToKey(hex), forced);
@@ -178,11 +237,32 @@ describe('validateMap', () => {
   it('detects invalid deployment zone terrain', () => {
     const map = generateMap(42);
     const badTerrain = new Map(map.terrain);
-    // Put a mountain in player1 deployment zone (row 0)
     const deployHex = map.player1Deployment[0]!;
     badTerrain.set(hexToKey(deployHex), 'mountain');
 
     const badMap: GameMap = { ...map, terrain: badTerrain };
+    const validation = validateMap(badMap);
+    expect(validation.valid).toBe(false);
+  });
+
+  it('detects missing elevation map', () => {
+    const map = generateMap(42);
+    const badElevation = new Map(map.elevation);
+    const firstKey = badElevation.keys().next().value!;
+    badElevation.delete(firstKey);
+
+    const badMap: GameMap = { ...map, elevation: badElevation };
+    const validation = validateMap(badMap);
+    expect(validation.valid).toBe(false);
+  });
+
+  it('detects non-zero deployment elevation', () => {
+    const map = generateMap(42);
+    const badElevation = new Map(map.elevation);
+    const deployHex = map.player1Deployment[0]!;
+    badElevation.set(hexToKey(deployHex), 2);
+
+    const badMap: GameMap = { ...map, elevation: badElevation };
     const validation = validateMap(badMap);
     expect(validation.valid).toBe(false);
   });
