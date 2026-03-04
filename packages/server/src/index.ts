@@ -171,13 +171,27 @@ io.on('connection', (socket) => {
   socket.on('confirm-build', () => {
     const found = getRoomBySocket(socket.id);
     if (!found) return;
-    handleConfirmBuild(found.room, found.playerId, io);
+    try {
+      handleConfirmBuild(found.room, found.playerId, io);
+    } catch (err) {
+      socket.emit('room-error', {
+        type: 'room-error',
+        message: (err as Error).message,
+      });
+    }
   });
 
   socket.on('submit-commands', (data: { commands: Parameters<typeof handleSubmitCommands>[2] }) => {
     const found = getRoomBySocket(socket.id);
     if (!found) return;
-    handleSubmitCommands(found.room, found.playerId, data.commands, io);
+    try {
+      handleSubmitCommands(found.room, found.playerId, data.commands, io);
+    } catch (err) {
+      socket.emit('room-error', {
+        type: 'room-error',
+        message: (err as Error).message,
+      });
+    }
   });
 
   socket.on(

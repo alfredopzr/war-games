@@ -27,6 +27,9 @@ import {
   checkRoundEnd,
   scoreRound,
   UNIT_STATS,
+  hexToKey,
+  canAttack,
+  cubeDistance,
 } from '@hexwar/engine';
 
 import { filterStateForPlayer } from './state-filter';
@@ -318,6 +321,61 @@ function transitionToBattle(room: Room, io: Server): void {
 }
 
 // -----------------------------------------------------------------------------
+// Command Validation
+// -----------------------------------------------------------------------------
+
+function filterValidCommands(
+  state: GameState,
+  commands: Command[],
+  playerId: PlayerId,
+): Command[] {
+  const friendlyUnits = state.players[playerId].units;
+  const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
+  const enemyUnits = state.players[enemyId].units;
+
+  const allUnits = [...friendlyUnits, ...enemyUnits];
+
+  return commands.filter((cmd) => {
+    // Every command references a unit — check it exists and belongs to player
+    const unit = friendlyUnits.find((u) => u.id === cmd.unitId);
+    if (!unit) return false;
+
+    switch (cmd.type) {
+      case 'direct-move': {
+        const targetKey = hexToKey(cmd.targetHex);
+        // Target hex must exist on the map
+        if (!state.map.terrain.has(targetKey)) return false;
+        // Target hex must be unoccupied
+        const occupied = allUnits.some(
+          (u) => u.id !== unit.id && hexToKey(u.position) === targetKey,
+        );
+        if (occupied) return false;
+        // Must be within move range
+        const stats = UNIT_STATS[unit.type];
+        if (cubeDistance(unit.position, cmd.targetHex) > stats.moveRange) return false;
+        return true;
+      }
+
+      case 'direct-attack': {
+        const target = enemyUnits.find((u) => u.id === cmd.targetUnitId);
+        if (!target) return false;
+        if (!canAttack(unit, target)) return false;
+        return true;
+      }
+
+      case 'redirect':
+        return true;
+
+      case 'retreat':
+        return true;
+
+      default:
+        return false;
+    }
+  });
+}
+
+// -----------------------------------------------------------------------------
 // Battle Phase Handlers
 // -----------------------------------------------------------------------------
 
@@ -329,6 +387,17 @@ export function handleSubmitCommands(
 ): void {
   if (!room.gameState) {
     throw new Error('Game has not started');
+  }
+
+  if (room.gameState.phase !== 'battle') {
+    const player = room.players.get(playerId);
+    if (player) {
+      io.to(player.socketId).emit('room-error', {
+        type: 'room-error',
+        message: 'Cannot submit commands outside battle phase',
+      });
+    }
+    return;
   }
 
   if (room.gameState.round.currentPlayer !== playerId) {
@@ -344,11 +413,14 @@ export function handleSubmitCommands(
 
   clearTurnTimer(room);
 
+  // Validate commands against current state — filter out stale/invalid ones
+  const validCommands = filterValidCommands(room.gameState, commands, playerId);
+
   // Snapshot state for event generation
   const prevUnits = snapshotUnits(room.gameState);
   const prevCities = snapshotCities(room.gameState);
 
-  executeTurn(room.gameState, commands);
+  executeTurn(room.gameState, validCommands);
 
   const events = generateBattleEvents(prevUnits, prevCities, room.gameState, playerId);
   const roundEnd = checkRoundEnd(room.gameState);
@@ -368,7 +440,7 @@ export function handleSubmitCommands(
     // Round ended
     scoreRound(room.gameState, roundEnd.winner);
 
-    if (room.gameState.phase === 'game-over') {
+    if ((room.gameState.phase as string) === 'game-over') {
       emitFilteredStatePerPlayer(io, room, 'game-over', () => ({
         winner: room.gameState!.winner,
       }));
