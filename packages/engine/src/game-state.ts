@@ -11,6 +11,7 @@ import type {
   UnitType,
   CubeCoord,
   DirectiveType,
+  DirectiveTarget,
   Command,
   RoundEndResult,
   Unit,
@@ -84,6 +85,7 @@ export function placeUnit(
   unitType: UnitType,
   position: CubeCoord,
   directive: DirectiveType = 'advance',
+  directiveTarget?: DirectiveTarget,
 ): GameState {
   if (state.phase !== 'build') {
     throw new Error('Can only place units during build phase');
@@ -111,7 +113,7 @@ export function placeUnit(
     throw new Error('Cannot afford unit');
   }
 
-  const unit = createUnit(unitType, playerId, position, directive);
+  const unit = createUnit(unitType, playerId, position, directive, directiveTarget);
   state.players[playerId].resources -= cost;
   state.players[playerId].units.push(unit);
 
@@ -237,6 +239,7 @@ function executeUnitDirective(
     terrain: state.map.terrain,
     centralObjective: state.map.centralObjective,
     gridSize: state.map.gridSize,
+    cities: state.cityOwnership,
   };
 
   const action = executeDirective(unit, context);
@@ -340,6 +343,9 @@ function applyCommand(
       const unit = findUnitById(friendlyUnits, command.unitId);
       if (!unit) throw new Error(`Unit ${command.unitId} not found`);
       unit.directive = command.newDirective;
+      if (command.target) {
+        unit.directiveTarget = command.target;
+      }
       unit.hasActed = true;
       break;
     }
