@@ -352,6 +352,15 @@ export function handleSubmitCommands(
   executeTurn(room.gameState, commands, combatRng);
 
   const events = generateBattleEvents(prevUnits, prevCities, room.gameState, playerId);
+
+  room.turnLog.push({
+    turnNumber: room.gameState.round.turnNumber - 1,
+    player: playerId,
+    commandsSubmitted: commands.length,
+    rngSeed: turnSeed,
+    events,
+  });
+
   const roundEnd = checkRoundEnd(room.gameState);
 
   if (!roundEnd.roundOver) {
@@ -370,6 +379,7 @@ export function handleSubmitCommands(
     scoreRound(room.gameState, roundEnd.winner);
 
     if (room.gameState.phase === 'game-over') {
+      console.log(`[game-over] room=${room.id} winner=${room.gameState.winner} turns=${room.turnLog.length}`);
       emitFilteredStatePerPlayer(io, room, 'game-over', () => ({
         winner: room.gameState!.winner,
       }));

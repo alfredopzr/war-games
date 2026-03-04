@@ -65,6 +65,7 @@ function createTestRoom(): Room {
     phase: 'waiting',
     buildConfirmed: new Set<PlayerId>(),
     disconnectedPlayers: new Map(),
+    turnLog: [],
     timers: {
       build: null,
       turn: null,

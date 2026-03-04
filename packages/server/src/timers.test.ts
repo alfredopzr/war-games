@@ -19,6 +19,7 @@ function createMockRoom(): Room {
     phase: 'waiting',
     buildConfirmed: new Set(),
     disconnectedPlayers: new Map(),
+    turnLog: [],
     timers: { build: null, turn: null },
   };
 }
