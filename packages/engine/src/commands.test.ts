@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND, validateDirectiveTarget } from './commands';
-import type { Command, CommandPool, DirectiveTarget } from './types';
+import { createCommandPool, spendCommand, canIssueCommand, validateDirectiveTarget } from './commands';
+import type { Command, DirectiveTarget } from './types';
 
 describe('createCommandPool', () => {
   it('starts with 4 CP', () => {

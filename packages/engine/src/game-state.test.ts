@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { GameState, PlayerId, CubeCoord, Command } from './types';
-import { resetUnitIdCounter, UNIT_STATS, createUnit } from './units';
-import { hexToKey, createHex, hexNeighbors } from './hex';
-import { createCommandPool } from './commands';
+import { resetUnitIdCounter, UNIT_STATS } from './units';
+import { hexToKey, createHex } from './hex';
 import {
   createGame,
   placeUnit,
@@ -27,7 +26,7 @@ function getDeploymentHex(state: GameState, player: PlayerId, index: number = 0)
   const zone = player === 'player1'
     ? state.map.player1Deployment
     : state.map.player2Deployment;
-  return zone[index];
+  return zone[index]!;
 }
 
 /** Place infantry in the first available deployment hex. */
@@ -119,9 +118,9 @@ describe('placeUnit', () => {
     state = placeUnit(state, 'player1', 'infantry', hex);
 
     expect(state.players.player1.units).toHaveLength(1);
-    expect(state.players.player1.units[0].type).toBe('infantry');
-    expect(state.players.player1.units[0].owner).toBe('player1');
-    expect(hexToKey(state.players.player1.units[0].position)).toBe(hexToKey(hex));
+    expect(state.players.player1.units[0]!.type).toBe('infantry');
+    expect(state.players.player1.units[0]!.owner).toBe('player1');
+    expect(hexToKey(state.players.player1.units[0]!.position)).toBe(hexToKey(hex));
     expect(state.players.player1.resources).toBe(800 - UNIT_STATS.infantry.cost);
   });
 
@@ -170,7 +169,7 @@ describe('placeUnit', () => {
     const hex = getDeploymentHex(state, 'player1', 0);
     state = placeUnit(state, 'player1', 'infantry', hex, 'hold');
 
-    expect(state.players.player1.units[0].directive).toBe('hold');
+    expect(state.players.player1.units[0]!.directive).toBe('hold');
   });
 });
 
@@ -225,10 +224,10 @@ describe('startBattlePhase', () => {
     state = placeInfantry(state, 'player2', 0);
 
     // Manually set to true to verify reset
-    state.players.player1.units[0].hasActed = true;
+    state.players.player1.units[0]!.hasActed = true;
     state = startBattlePhase(state);
 
-    expect(state.players.player1.units[0].hasActed).toBe(false);
+    expect(state.players.player1.units[0]!.hasActed).toBe(false);
   });
 
   it('resets objective state', () => {
@@ -251,9 +250,8 @@ describe('executeTurn', () => {
 
   it('commanded units execute their move commands', () => {
     let state = setupBattleGame();
-    const unit = state.players.player1.units[0];
+    const unit = state.players.player1.units[0]!;
     const unitId = unit.id;
-    const originalPos = unit.position;
 
     // Find a valid adjacent hex that's on the map and unoccupied
     const targetHex = findValidMoveTarget(state, unit);
@@ -296,8 +294,8 @@ describe('executeTurn', () => {
     state = placeInfantry(state, 'player2', 0);
     state = startBattlePhase(state);
 
-    const attacker = state.players.player1.units[0];
-    const defender = state.players.player2.units[0];
+    const attacker = state.players.player1.units[0]!;
+    const defender = state.players.player2.units[0]!;
 
     // Place them adjacent manually
     attacker.position = createHex(4, 0);
@@ -313,8 +311,9 @@ describe('executeTurn', () => {
     state = executeTurn(state, commands, () => 1.0);
 
     // Damage should have been applied
-    if (state.players.player2.units.find((u) => u.id === defender.id)) {
-      expect(defender.hp).toBeLessThan(defenderHpBefore);
+    const defAfter = state.players.player2.units.find((u) => u.id === defender.id);
+    if (defAfter) {
+      expect(defAfter.hp).toBeLessThan(defenderHpBefore);
     }
     // If killed, unit should be removed
   });
@@ -363,7 +362,7 @@ describe('executeTurn', () => {
     state = startBattlePhase(state);
 
     // Move a unit onto the central objective
-    const unit = state.players.player1.units[0];
+    const unit = state.players.player1.units[0]!;
     unit.position = state.map.centralObjective;
 
     // Give player1 ownership of 2 cities so KotH gate passes
@@ -379,7 +378,7 @@ describe('executeTurn', () => {
 
   it('redirect command changes unit directive', () => {
     let state = setupBattleGame();
-    const unit = state.players.player1.units[0];
+    const unit = state.players.player1.units[0]!;
     expect(unit.directive).toBe('advance');
 
     const commands: Command[] = [
@@ -410,7 +409,7 @@ describe('city capture HP cost', () => {
     if (cityKeys.length === 0) return;
     const cityKey = cityKeys[0]!;
 
-    const unit = state.players.player1.units[0];
+    const unit = state.players.player1.units[0]!;
     const cityCoord = findCoordForKey(state, cityKey);
     if (!cityCoord) return;
     unit.position = cityCoord;
@@ -436,7 +435,7 @@ describe('city capture HP cost', () => {
     if (cityKeys.length === 0) return;
     const cityKey = cityKeys[0]!;
 
-    const unit = state.players.player1.units[0];
+    const unit = state.players.player1.units[0]!;
     const cityCoord = findCoordForKey(state, cityKey);
     if (!cityCoord) return;
     unit.position = cityCoord;
@@ -464,7 +463,7 @@ describe('city capture HP cost', () => {
     // Pre-own the city
     state.cityOwnership.set(cityKey, 'player1');
 
-    const unit = state.players.player1.units[0];
+    const unit = state.players.player1.units[0]!;
     const cityCoord = findCoordForKey(state, cityKey);
     if (!cityCoord) return;
     unit.position = cityCoord;
@@ -493,7 +492,7 @@ describe('KotH city gate', () => {
     state = startBattlePhase(state);
 
     // Move player1 onto objective but no cities held
-    const unit = state.players.player1.units[0];
+    const unit = state.players.player1.units[0]!;
     unit.position = state.map.centralObjective;
 
     state = executeTurn(state, [], () => 1.0);
@@ -515,7 +514,7 @@ describe('KotH city gate', () => {
     state.cityOwnership.set(cityKeys[1]!, 'player1');
 
     // Move player1 onto objective
-    const unit = state.players.player1.units[0];
+    const unit = state.players.player1.units[0]!;
     unit.position = state.map.centralObjective;
 
     state = executeTurn(state, [], () => 1.0);
@@ -570,8 +569,8 @@ describe('support directive heals adjacent', () => {
     state = startBattlePhase(state);
 
     // Place them adjacent
-    const supportUnit = state.players.player1.units[0];
-    const damagedUnit = state.players.player1.units[1];
+    const supportUnit = state.players.player1.units[0]!;
+    const damagedUnit = state.players.player1.units[1]!;
     supportUnit.position = createHex(4, 0);
     damagedUnit.position = createHex(5, 0);
     damagedUnit.hp = 1; // Below maxHp (infantry maxHp = 3)
@@ -627,7 +626,7 @@ describe('checkRoundEnd', () => {
     state.round.turnsPlayed = { player1: 12, player2: 12 };
 
     // Put player2 unit on central hex
-    state.players.player2.units[0].position = state.map.centralObjective;
+    state.players.player2.units[0]!.position = state.map.centralObjective;
 
     const result = checkRoundEnd(state);
     expect(result.roundOver).toBe(true);
@@ -641,11 +640,11 @@ describe('checkRoundEnd', () => {
 
     const central = state.map.centralObjective;
     // Place player1 unit 1 hex away, player2 unit 3 hexes away
-    state.players.player1.units = [state.players.player1.units[0]];
-    state.players.player2.units = [state.players.player2.units[0]];
+    state.players.player1.units = [state.players.player1.units[0]!];
+    state.players.player2.units = [state.players.player2.units[0]!];
 
-    state.players.player1.units[0].position = createHex(central.q + 1, central.r);
-    state.players.player2.units[0].position = createHex(central.q + 3, central.r);
+    state.players.player1.units[0]!.position = createHex(central.q + 1, central.r);
+    state.players.player2.units[0]!.position = createHex(central.q + 3, central.r);
 
     const result = checkRoundEnd(state);
     expect(result.roundOver).toBe(true);
@@ -659,14 +658,14 @@ describe('checkRoundEnd', () => {
 
     // Same distance from center, but different HP
     const central = state.map.centralObjective;
-    state.players.player1.units = [state.players.player1.units[0]];
-    state.players.player2.units = [state.players.player2.units[0]];
+    state.players.player1.units = [state.players.player1.units[0]!];
+    state.players.player2.units = [state.players.player2.units[0]!];
 
-    state.players.player1.units[0].position = createHex(central.q + 1, central.r);
-    state.players.player2.units[0].position = createHex(central.q - 1, central.r);
+    state.players.player1.units[0]!.position = createHex(central.q + 1, central.r);
+    state.players.player2.units[0]!.position = createHex(central.q - 1, central.r);
 
-    state.players.player1.units[0].hp = 3;
-    state.players.player2.units[0].hp = 1;
+    state.players.player1.units[0]!.hp = 3;
+    state.players.player2.units[0]!.hp = 1;
 
     const result = checkRoundEnd(state);
     expect(result.roundOver).toBe(true);
@@ -680,14 +679,14 @@ describe('checkRoundEnd', () => {
 
     // Same distance, same HP
     const central = state.map.centralObjective;
-    state.players.player1.units = [state.players.player1.units[0]];
-    state.players.player2.units = [state.players.player2.units[0]];
+    state.players.player1.units = [state.players.player1.units[0]!];
+    state.players.player2.units = [state.players.player2.units[0]!];
 
-    state.players.player1.units[0].position = createHex(central.q + 1, central.r);
-    state.players.player2.units[0].position = createHex(central.q - 1, central.r);
+    state.players.player1.units[0]!.position = createHex(central.q + 1, central.r);
+    state.players.player2.units[0]!.position = createHex(central.q - 1, central.r);
 
-    state.players.player1.units[0].hp = 3;
-    state.players.player2.units[0].hp = 3;
+    state.players.player1.units[0]!.hp = 3;
+    state.players.player2.units[0]!.hp = 3;
 
     const result = checkRoundEnd(state);
     expect(result.roundOver).toBe(true);
@@ -745,8 +744,6 @@ describe('scoreRound', () => {
 
   it('awards resources correctly', () => {
     let state = setupBattleGame();
-    const p1ResourcesBefore = state.players.player1.resources;
-
     state = scoreRound(state, 'player1');
 
     // Player should have received income (base 650 + round win bonus 200)
@@ -787,7 +784,7 @@ describe('scoreRound', () => {
 
   it('resets units hasActed', () => {
     let state = setupBattleGame();
-    state.players.player1.units[0].hasActed = true;
+    state.players.player1.units[0]!.hasActed = true;
 
     state = scoreRound(state, 'player1');
 
@@ -984,7 +981,7 @@ describe('city ownership', () => {
     const cityKey = cityKeys[0]!;
 
     // Move unit onto the city hex
-    const unit = state.players.player1.units[0];
+    const unit = state.players.player1.units[0]!;
     const cityCoord = findCoordForKey(state, cityKey);
     if (!cityCoord) return;
     unit.position = cityCoord;
@@ -1005,7 +1002,7 @@ describe('city ownership', () => {
     const cityKey = cityKeys[0]!;
 
     // P1 captures first
-    const p1Unit = state.players.player1.units[0];
+    const p1Unit = state.players.player1.units[0]!;
     const cityCoord = findCoordForKey(state, cityKey);
     if (!cityCoord) return;
     p1Unit.position = cityCoord;
@@ -1013,7 +1010,7 @@ describe('city ownership', () => {
     expect(state.cityOwnership.get(cityKey)).toBe('player1');
 
     // P2 moves onto same city (P1 unit is elsewhere now from directive AI)
-    const p2Unit = state.players.player2.units[0];
+    const p2Unit = state.players.player2.units[0]!;
     p2Unit.position = cityCoord;
     state = executeTurn(state, [], () => 1.0);
     expect(state.cityOwnership.get(cityKey)).toBe('player2');
@@ -1032,7 +1029,6 @@ describe('city ownership', () => {
     state.cityOwnership.set(cityKeys[1]!, 'player1');
 
     // scoreRound should use cityOwnership for income calculation
-    const p1ResourcesBefore = state.players.player1.resources;
     state = scoreRound(state, 'player1');
     // Player1 owns 2 cities, so they should get city income
     expect(state.players.player1.resources).toBeGreaterThan(0);
@@ -1061,7 +1057,7 @@ describe('city ownership', () => {
 // Helpers (test-internal)
 // ---------------------------------------------------------------------------
 
-function findCoordForKey(state: GameState, key: string): CubeCoord | null {
+function findCoordForKey(_state: GameState, key: string): CubeCoord | null {
   // Parse hex key "q,r,s" back to CubeCoord
   const parts = key.split(',').map(Number);
   if (parts.length !== 3) return null;

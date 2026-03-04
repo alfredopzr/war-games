@@ -97,7 +97,7 @@ describe('findPath', () => {
     expect(path).not.toBeNull();
     // Intermediate hexes should not include the occupied one
     for (let i = 1; i < path!.length - 1; i++) {
-      expect(hexToKey(path![i])).not.toBe(blockedKey);
+      expect(hexToKey(path![i]!)).not.toBe(blockedKey);
     }
   });
 
