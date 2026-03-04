@@ -197,6 +197,9 @@ export function handlePlaceUnit(
   if (room.gameState.phase !== 'build') {
     throw new Error('Can only place units during build phase');
   }
+  if (room.buildConfirmed.has(playerId)) {
+    throw new Error('Build already confirmed');
+  }
 
   placeUnit(room.gameState, playerId, unitType, position, directive);
 
@@ -218,6 +221,9 @@ export function handleRemoveUnit(
 ): void {
   if (!room.gameState) {
     throw new Error('Game has not started');
+  }
+  if (room.buildConfirmed.has(playerId)) {
+    throw new Error('Build already confirmed');
   }
 
   const playerState = room.gameState.players[playerId];
@@ -254,6 +260,9 @@ export function handleSetDirective(
 ): void {
   if (!room.gameState) {
     throw new Error('Game has not started');
+  }
+  if (room.buildConfirmed.has(playerId)) {
+    throw new Error('Build already confirmed');
   }
 
   const playerState = room.gameState.players[playerId];
