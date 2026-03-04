@@ -3,7 +3,7 @@
 // =============================================================================
 
 import type { GameMap, MapValidation, TerrainType, GridSize, CubeCoord } from './types';
-import { createHex, hexToKey, getAllHexes } from './hex';
+import { createHex, hexToKey, getAllHexes, cubeDistance } from './hex';
 
 // -----------------------------------------------------------------------------
 // Seeded PRNG (mulberry32)
@@ -36,16 +36,12 @@ function offsetToHex(col: number, row: number): CubeCoord {
 }
 
 function mirrorOffsetRow(row: number): number {
-  return 13 - row;
+  return GRID.height - 1 - row;
 }
 
 // -----------------------------------------------------------------------------
 // City Placement Helpers
 // -----------------------------------------------------------------------------
-
-function hexDistance(a: CubeCoord, b: CubeCoord): number {
-  return Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.s - b.s));
-}
 
 function placeSectoredCities(
   terrain: Map<string, TerrainType>,
@@ -63,8 +59,8 @@ function placeSectoredCities(
     { colMin: 14, colMax: 19 },  // right
   ];
 
-  // Neutral top half: rows 3-8
-  const neutralTopRows = [3, 4, 5, 6, 7, 8];
+  // Neutral top half: rows 3-6 (mirrors to rows 10-7 respectively)
+  const neutralTopRows = [3, 4, 5, 6];
 
   for (const sector of sectors) {
     const candidates: CubeCoord[] = [];
@@ -73,8 +69,13 @@ function placeSectoredCities(
         const hex = offsetToHex(col, row);
         const key = hexToKey(hex);
         if (terrain.get(key) === 'city') continue;
-        const tooClose = placedCities.some((c) => hexDistance(hex, c) < 3);
+        const tooClose = placedCities.some((c) => cubeDistance(hex, c) < 3);
         if (tooClose) continue;
+        const mirrorRow = mirrorOffsetRow(row);
+        const mirrored = offsetToHex(col, mirrorRow);
+        if (cubeDistance(hex, mirrored) < 3) continue;
+        const mirrorTooClose = placedCities.some((c) => cubeDistance(mirrored, c) < 3);
+        if (mirrorTooClose) continue;
         candidates.push(hex);
       }
     }
@@ -243,7 +244,7 @@ export function validateMap(map: GameMap): MapValidation {
   for (const hex of allHexes) {
     const col = hex.q;
     const row = cubeToOffsetRow(hex);
-    const mirrorRow = 13 - row;
+    const mirrorRow = GRID.height - 1 - row;
     const mirrorHex = offsetToHex(col, mirrorRow);
 
     const t1 = map.terrain.get(hexToKey(hex));
