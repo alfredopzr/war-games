@@ -256,14 +256,31 @@ describe('filterStateForPlayer — always-included data', () => {
     expect(filtered.round.objective).toEqual(state.round.objective);
   });
 
-  it('should include enemy player resources and roundsWon (public info)', () => {
+  it('should hide enemy resources during build phase', () => {
     const state = setupGameWithUnits();
     state.players.player2.resources = 500;
-    state.players.player2.roundsWon = 1;
+
+    const filtered = filterStateForPlayer(state, 'player1');
+
+    expect(filtered.players.player2.resources).toBe(0);
+  });
+
+  it('should include enemy resources during battle phase', () => {
+    const state = setupGameWithUnits();
+    startBattlePhase(state);
+    state.players.player2.resources = 500;
 
     const filtered = filterStateForPlayer(state, 'player1');
 
     expect(filtered.players.player2.resources).toBe(500);
+  });
+
+  it('should include enemy roundsWon', () => {
+    const state = setupGameWithUnits();
+    state.players.player2.roundsWon = 1;
+
+    const filtered = filterStateForPlayer(state, 'player1');
+
     expect(filtered.players.player2.roundsWon).toBe(1);
   });
 });

@@ -61,7 +61,7 @@ export function filterStateForPlayer(
       [playerId]: clonePlayerState(state.players[playerId]),
       [enemyId]: {
         id: enemyId,
-        resources: state.players[enemyId].resources,
+        resources: state.phase === 'build' ? 0 : state.players[enemyId].resources,
         units: filteredEnemyUnits,
         roundsWon: state.players[enemyId].roundsWon,
       },
