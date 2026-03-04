@@ -12,6 +12,7 @@ import type {
   CubeCoord,
   UnitType,
   DirectiveType,
+  DirectiveTarget,
   Command,
   GameState,
   BattleEvent,
@@ -188,6 +189,7 @@ export function handlePlaceUnit(
   position: CubeCoord,
   directive: DirectiveType,
   io: Server,
+  target?: DirectiveTarget,
 ): void {
   if (!room.gameState) {
     throw new Error('Game has not started');
@@ -196,7 +198,7 @@ export function handlePlaceUnit(
     throw new Error('Can only place units during build phase');
   }
 
-  placeUnit(room.gameState, playerId, unitType, position, directive);
+  placeUnit(room.gameState, playerId, unitType, position, directive, target);
 
   const player = room.players.get(playerId);
   if (player) {
@@ -249,6 +251,7 @@ export function handleSetDirective(
   unitId: string,
   directive: DirectiveType,
   io: Server,
+  target?: DirectiveTarget,
 ): void {
   if (!room.gameState) {
     throw new Error('Game has not started');
@@ -264,6 +267,9 @@ export function handleSetDirective(
   }
 
   unit.directive = directive;
+  if (target) {
+    unit.directiveTarget = target;
+  }
 
   const player = room.players.get(playerId);
   if (player) {

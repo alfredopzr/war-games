@@ -31,7 +31,7 @@ import {
   handleSubmitCommands,
 } from './game-loop';
 
-import type { PlayerId } from '@hexwar/engine';
+import type { PlayerId, DirectiveTarget } from '@hexwar/engine';
 
 const app = express();
 const httpServer = createServer(app);
@@ -113,7 +113,7 @@ io.on('connection', (socket) => {
 
   socket.on(
     'place-unit',
-    (data: { unitType: string; position: { q: number; r: number; s: number }; directive: string }) => {
+    (data: { unitType: string; position: { q: number; r: number; s: number }; directive: string; target?: unknown }) => {
       const found = getRoomBySocket(socket.id);
       if (!found) return;
       try {
@@ -124,6 +124,7 @@ io.on('connection', (socket) => {
           data.position,
           data.directive as Parameters<typeof handlePlaceUnit>[4],
           io,
+          data.target as DirectiveTarget | undefined,
         );
       } catch (err) {
         socket.emit('room-error', {
@@ -147,7 +148,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('set-directive', (data: { unitId: string; directive: string }) => {
+  socket.on('set-directive', (data: { unitId: string; directive: string; target?: unknown }) => {
     const found = getRoomBySocket(socket.id);
     if (!found) return;
     try {
@@ -157,6 +158,7 @@ io.on('connection', (socket) => {
         data.unitId,
         data.directive as Parameters<typeof handleSetDirective>[3],
         io,
+        data.target as DirectiveTarget | undefined,
       );
     } catch (err) {
       socket.emit('room-error', {
