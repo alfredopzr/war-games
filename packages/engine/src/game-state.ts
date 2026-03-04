@@ -168,6 +168,8 @@ export function executeTurn(
 
   // Apply player commands
   for (const command of commands) {
+    const unit = findUnitById(friendlyUnits, command.unitId);
+    if (!unit) continue; // dead unit — skip, don't spend CP
     commandPool = spendCommand(commandPool, command);
     commandedUnitIds.add(command.unitId);
 
