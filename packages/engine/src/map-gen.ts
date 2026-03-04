@@ -23,7 +23,7 @@ function mulberry32(seed: number): () => number {
 // Coordinate Helpers
 // -----------------------------------------------------------------------------
 
-const GRID: GridSize = { width: 16, height: 12 };
+const GRID: GridSize = { width: 20, height: 14 };
 
 function cubeToOffsetRow(hex: CubeCoord): number {
   return hex.r + Math.floor(hex.q / 2);
@@ -36,7 +36,60 @@ function offsetToHex(col: number, row: number): CubeCoord {
 }
 
 function mirrorOffsetRow(row: number): number {
-  return 11 - row;
+  return 13 - row;
+}
+
+// -----------------------------------------------------------------------------
+// City Placement Helpers
+// -----------------------------------------------------------------------------
+
+function hexDistance(a: CubeCoord, b: CubeCoord): number {
+  return Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.s - b.s));
+}
+
+function placeSectoredCities(
+  terrain: Map<string, TerrainType>,
+  centralObjective: CubeCoord,
+  rng: () => number,
+): void {
+  // Always place central objective first
+  terrain.set(hexToKey(centralObjective), 'city');
+
+  const placedCities: CubeCoord[] = [centralObjective];
+
+  const sectors = [
+    { colMin: 0, colMax: 5 },    // left
+    { colMin: 6, colMax: 13 },   // center
+    { colMin: 14, colMax: 19 },  // right
+  ];
+
+  // Neutral top half: rows 3-8
+  const neutralTopRows = [3, 4, 5, 6, 7, 8];
+
+  for (const sector of sectors) {
+    const candidates: CubeCoord[] = [];
+    for (let col = sector.colMin; col <= sector.colMax; col++) {
+      for (const row of neutralTopRows) {
+        const hex = offsetToHex(col, row);
+        const key = hexToKey(hex);
+        if (terrain.get(key) === 'city') continue;
+        const tooClose = placedCities.some((c) => hexDistance(hex, c) < 3);
+        if (tooClose) continue;
+        candidates.push(hex);
+      }
+    }
+
+    if (candidates.length === 0) continue;
+
+    const idx = Math.floor(rng() * candidates.length);
+    const chosen = candidates[idx]!;
+    const mirrorRow = mirrorOffsetRow(cubeToOffsetRow(chosen));
+    const mirrored = offsetToHex(chosen.q, mirrorRow);
+
+    terrain.set(hexToKey(chosen), 'city');
+    terrain.set(hexToKey(mirrored), 'city');
+    placedCities.push(chosen, mirrored);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -49,15 +102,15 @@ export function generateMap(seed?: number): GameMap {
   const terrain = new Map<string, TerrainType>();
   const player1Deployment: CubeCoord[] = [];
   const player2Deployment: CubeCoord[] = [];
-  const centralObjective = createHex(8, 2); // offset (8, 6) = center of 16x12
+  const centralObjective = createHex(10, 2); // offset (10, 7) = center of 20x14
 
   // Zone layout (offset rows):
-  // Rows 0-2:  Player 1 deployment (48 hexes)
-  // Rows 3-5:  Top neutral zone
-  // Rows 6-8:  Bottom neutral zone (mirror of 3-5)
-  // Rows 9-11: Player 2 deployment (mirror of 0-2)
+  // Rows 0-2:  Player 1 deployment (60 hexes)
+  // Rows 3-8:  Neutral zone
+  // Rows 9-10: Neutral zone (mirror of 3-4)
+  // Rows 11-13: Player 2 deployment (mirror of 0-2)
 
-  // First pass: deployment zone terrain (rows 0-2), mirror to rows 9-11
+  // First pass: deployment zone terrain (rows 0-2), mirror to rows 11-13
   for (let col = 0; col < GRID.width; col++) {
     for (let row = 0; row < 3; row++) {
       const t: TerrainType = rng() < 0.2 ? 'forest' : 'plains';
@@ -73,7 +126,7 @@ export function generateMap(seed?: number): GameMap {
     }
   }
 
-  // Second pass: neutral zone terrain (rows 3-5), mirror to rows 6-8
+  // Second pass: neutral zone terrain (rows 3-5), mirror to rows 8-10
   // Mountain pairs (3-5)
   const mountainPairs = 3 + Math.floor(rng() * 3);
   let mountainsPlaced = 0;
@@ -113,44 +166,23 @@ export function generateMap(seed?: number): GameMap {
     terrain.set(bottomKey, 'plains');
   }
 
-  // Place cities randomly across the entire map (excluding deployment zones)
-  // Collect all non-deployment hex positions
-  const deploymentKeys = new Set<string>();
-  for (const hex of [...player1Deployment, ...player2Deployment]) {
-    deploymentKeys.add(hexToKey(hex));
+  // Fill remaining neutral rows 6-7 (mirrors of each other: mirrorOffsetRow(6)=7, mirrorOffsetRow(7)=6)
+  // Generate row 6 and mirror symmetrically to row 7
+  for (let col = 0; col < GRID.width; col++) {
+    const hex6 = offsetToHex(col, 6);
+    const hex7 = offsetToHex(col, 7);
+    const key6 = hexToKey(hex6);
+    const key7 = hexToKey(hex7);
+
+    if (terrain.has(key6) && terrain.has(key7)) continue;
+
+    const t: TerrainType = rng() < 0.30 ? 'forest' : 'plains';
+    terrain.set(key6, t);
+    terrain.set(key7, t);
   }
 
-  const allHexes = getAllHexes(GRID);
-  const candidateCityPositions = allHexes.filter(
-    (hex) => !deploymentKeys.has(hexToKey(hex)),
-  );
-
-  // Shuffle candidate positions using Fisher-Yates
-  const shuffled = [...candidateCityPositions];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
-  }
-
-  // Place central objective city first
-  const centralKey = hexToKey(centralObjective);
-  terrain.set(centralKey, 'city');
-
-  // Determine number of additional cities (5-7 more, for 6-8 total)
-  const targetCityCount = 6 + Math.floor(rng() * 3); // 6, 7, or 8
-  let cityCount = 1; // Central objective already placed
-
-  // Place additional cities randomly (can replace any terrain type)
-  for (const hex of shuffled) {
-    if (cityCount >= targetCityCount) break;
-    const key = hexToKey(hex);
-    // Skip if already a city (central objective)
-    const currentTerrain = terrain.get(key);
-    if (currentTerrain && currentTerrain !== 'city') {
-      terrain.set(key, 'city');
-      cityCount++;
-    }
-  }
+  // Place sectored cities
+  placeSectoredCities(terrain, centralObjective, rng);
 
   return {
     terrain,
@@ -184,8 +216,8 @@ export function validateMap(map: GameMap): MapValidation {
 
   // Check city count
   const cityCount = [...map.terrain.values()].filter((t) => t === 'city').length;
-  if (cityCount < 6 || cityCount > 8) {
-    errors.push(`Expected 6-8 cities, got ${cityCount}`);
+  if (cityCount !== 7) {
+    errors.push(`Expected 7 cities, got ${cityCount}`);
   }
 
   // Check deployment zones: only plains and forest
@@ -211,7 +243,7 @@ export function validateMap(map: GameMap): MapValidation {
   for (const hex of allHexes) {
     const col = hex.q;
     const row = cubeToOffsetRow(hex);
-    const mirrorRow = 11 - row;
+    const mirrorRow = 13 - row;
     const mirrorHex = offsetToHex(col, mirrorRow);
 
     const t1 = map.terrain.get(hexToKey(hex));

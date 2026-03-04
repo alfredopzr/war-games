@@ -113,8 +113,8 @@ describe('generateMap', () => {
     const cityCoords = [...map.terrain.entries()]
       .filter(([, t]) => t === 'city')
       .map(([k]) => {
-        const [q, r, s] = k.split(',').map(Number);
-        return { q: q!, r: r!, s: s! };
+        const [q, r] = k.split(',').map(Number);
+        return { q: q!, r: r!, s: (-q! - r!) || 0 };
       });
 
     for (let i = 0; i < cityCoords.length; i++) {
