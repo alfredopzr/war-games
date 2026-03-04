@@ -9,6 +9,8 @@ const DIRECTIVE_ICONS: Record<DirectiveType, string> = {
   'flank-right': '\u25BA', // ►
   'scout': '\u25CF',     // ●
   'support': '\u25C6',   // ◆
+  'hunt': '\u2716',      // ✖
+  'capture': '\u2691',   // ⚑
 };
 
 /** Draw a small directive indicator above the unit circle. */

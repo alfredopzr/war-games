@@ -14,6 +14,8 @@ const DIRECTIVE_INFO: Record<DirectiveType, { name: string; desc: string }> = {
   'flank-right': { name: 'Flank Right', desc: 'Circle around the right side' },
   'scout': { name: 'Scout', desc: 'Explore and reveal enemy positions' },
   'support': { name: 'Support', desc: 'Stay back and provide fire support' },
+  'hunt': { name: 'Hunt', desc: 'Pursue and destroy a target enemy' },
+  'capture': { name: 'Capture', desc: 'Move to city, occupy, then hold' },
 };
 
 export function UnitInfoPanel(): ReactElement | null {

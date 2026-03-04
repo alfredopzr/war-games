@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
-import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, Command, PlayerId } from '@hexwar/engine';
+import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, DirectiveTarget, Command, PlayerId } from '@hexwar/engine';
 
 export type GameMode = 'hotseat' | 'vsAI' | 'online';
 export type LobbyState = 'menu' | 'creating' | 'waiting' | 'joining' | null;
@@ -77,6 +77,10 @@ interface GameStore {
   // Battle log
   battleLog: BattleLogEntry[];
 
+  // Target selection mode (for hunt/capture directives)
+  targetSelectionMode: boolean;
+  targetSelectionDirective: DirectiveType | null;
+
   // Toast messages
   toastMessage: string | null;
 
@@ -105,6 +109,8 @@ interface GameStore {
   enterPlacementMode: (type: UnitType) => void;
   exitPlacementMode: () => void;
   setUnitDirective: (unitId: string, directive: DirectiveType) => void;
+  setTargetSelectionMode: (active: boolean, directive?: DirectiveType) => void;
+  setUnitDirectiveTarget: (unitId: string, directive: DirectiveType, target: DirectiveTarget) => void;
   removePlacedUnit: (unitId: string) => void;
   addPendingCommand: (command: Command) => void;
   clearPendingCommands: () => void;
@@ -147,6 +153,8 @@ export const useGameStore = create<GameStore>((set) => ({
   buildTimeRemaining: 120,
   buildTimerInterval: null,
   survivingUnitIds: new Set<string>(),
+  targetSelectionMode: false,
+  targetSelectionDirective: null,
   toastMessage: null,
   showTransition: false,
   showRoundResult: false,
@@ -209,6 +217,31 @@ export const useGameStore = create<GameStore>((set) => ({
         ? { ...prev.selectedUnit, directive }
         : prev.selectedUnit;
       return { gameState: { ...prev.gameState }, selectedUnit: updatedSelected };
+    }),
+
+  setTargetSelectionMode: (active: boolean, directive?: DirectiveType): void =>
+    set({
+      targetSelectionMode: active,
+      targetSelectionDirective: directive ?? null,
+    }),
+
+  setUnitDirectiveTarget: (unitId: string, directive: DirectiveType, target: DirectiveTarget): void =>
+    set((prev) => {
+      if (!prev.gameState) return {};
+      const player = prev.gameState.players[prev.currentPlayerView];
+      const unit = player.units.find((u) => u.id === unitId);
+      if (!unit) return {};
+      unit.directive = directive;
+      unit.directiveTarget = target;
+      const updatedSelected = prev.selectedUnit?.id === unitId
+        ? { ...prev.selectedUnit, directive, directiveTarget: target }
+        : prev.selectedUnit;
+      return {
+        gameState: { ...prev.gameState },
+        selectedUnit: updatedSelected,
+        targetSelectionMode: false,
+        targetSelectionDirective: null,
+      };
     }),
 
   removePlacedUnit: (unitId: string): void =>
@@ -468,6 +501,8 @@ export const useGameStore = create<GameStore>((set) => ({
       buildTimerInterval: null,
       survivingUnitIds: new Set<string>(),
       toastMessage: null,
+      targetSelectionMode: false,
+      targetSelectionDirective: null,
       showTransition: false,
       showRoundResult: false,
       roundResult: null,
