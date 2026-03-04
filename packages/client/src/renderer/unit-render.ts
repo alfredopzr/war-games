@@ -20,11 +20,23 @@ function drawDirectiveIndicator(
   radius: number,
 ): void {
   const icon = DIRECTIVE_ICONS[directive];
-  ctx.fillStyle = 'rgba(200, 200, 220, 0.6)';
-  ctx.font = '10px monospace';
+  const iconY = centerY - radius - 10;
+
+  // Dark background pill for contrast
+  ctx.font = 'bold 14px monospace';
+  const metrics = ctx.measureText(icon);
+  const pillW = metrics.width + 8;
+  const pillH = 16;
+  ctx.fillStyle = 'rgba(20, 20, 40, 0.7)';
+  ctx.beginPath();
+  ctx.roundRect(centerX - pillW / 2, iconY - pillH / 2, pillW, pillH, 4);
+  ctx.fill();
+
+  // Icon text
+  ctx.fillStyle = 'rgba(220, 220, 240, 0.9)';
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText(icon, centerX, centerY - radius - 2);
+  ctx.textBaseline = 'middle';
+  ctx.fillText(icon, centerX, iconY);
 }
 
 /** Draw a unit as a colored circle with letter label, HP pips, and directive icon. */
@@ -34,6 +46,7 @@ export function drawUnit(
   centerX: number,
   centerY: number,
   isDamaged = false,
+  isCommanded = false,
 ): void {
   const colors = PLAYER_COLORS[unit.owner];
   const radius = 16;
@@ -64,6 +77,21 @@ export function drawUnit(
 
   // Directive indicator above
   drawDirectiveIndicator(ctx, unit.directive, centerX, centerY, radius);
+
+  // Commanded checkmark at top-right
+  if (isCommanded) {
+    const checkX = centerX + radius - 2;
+    const checkY = centerY - radius + 2;
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.7)';
+    ctx.beginPath();
+    ctx.arc(checkX, checkY, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#4f4';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\u2713', checkX, checkY);
+  }
 
   // HP pips below
   const maxHp = UNIT_STATS[unit.type].maxHp;

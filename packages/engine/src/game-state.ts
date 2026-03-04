@@ -21,7 +21,7 @@ import { generateMap } from './map-gen';
 import { createUnit, UNIT_STATS } from './units';
 import { canAfford, calculateIncome, applyCarryover, applyMaintenance } from './economy';
 import { createCommandPool, spendCommand } from './commands';
-import { hexToKey, cubeDistance } from './hex';
+import { hexToKey, cubeDistance, hexNeighbors } from './hex';
 import { canAttack, calculateDamage } from './combat';
 import { findPath } from './pathfinding';
 import { executeDirective } from './directives';
@@ -33,18 +33,26 @@ import { executeDirective } from './directives';
 export function createGame(seed?: number): GameState {
   const map = generateMap(seed);
 
+  // Initialize city ownership — all city hexes start neutral
+  const cityOwnership = new Map<string, PlayerId | null>();
+  for (const [key, terrain] of map.terrain) {
+    if (terrain === 'city') {
+      cityOwnership.set(key, null);
+    }
+  }
+
   return {
     phase: 'build',
     players: {
       player1: {
         id: 'player1',
-        resources: 500,
+        resources: 800,
         units: [],
         roundsWon: 0,
       },
       player2: {
         id: 'player2',
-        resources: 500,
+        resources: 800,
         units: [],
         roundsWon: 0,
       },
@@ -53,7 +61,7 @@ export function createGame(seed?: number): GameState {
       roundNumber: 1,
       turnNumber: 0,
       currentPlayer: 'player1',
-      maxTurnsPerSide: 8,
+      maxTurnsPerSide: 12,
       turnsPlayed: { player1: 0, player2: 0 },
       commandPool: createCommandPool(),
       objective: { occupiedBy: null, turnsHeld: 0 },
@@ -62,6 +70,7 @@ export function createGame(seed?: number): GameState {
     map,
     maxRounds: 3,
     winner: null,
+    cityOwnership,
   };
 }
 
@@ -168,26 +177,22 @@ export function executeTurn(
   state.round.commandPool = commandPool;
 
   // Execute directive AI for non-commanded friendly units
+  // Pass 1: Scout units act first
   for (const unit of [...friendlyUnits]) {
-    if (commandedUnitIds.has(unit.id)) continue;
-    if (unit.hasActed) continue;
-    // Unit may have been killed during command resolution
-    if (!friendlyUnits.includes(unit)) continue;
-
-    const context: DirectiveContext = {
-      friendlyUnits: [...friendlyUnits],
-      enemyUnits: [...state.players[enemyPlayer].units],
-      terrain: state.map.terrain,
-      centralObjective: state.map.centralObjective,
-      gridSize: state.map.gridSize,
-    };
-
-    const action = executeDirective(unit, context);
-    applyDirectiveAction(state, unit, action, currentPlayer, enemyPlayer, randomFn);
-    unit.hasActed = true;
+    if (unit.directive !== 'scout') continue;
+    executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
   }
 
-  // Update objective tracking
+  // Pass 2: All other non-commanded units
+  for (const unit of [...friendlyUnits]) {
+    if (unit.directive === 'scout') continue;
+    executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
+  }
+
+  // Update city ownership BEFORE objective tracking (so KotH gate has current data)
+  updateCityOwnership(state);
+
+  // Update objective tracking (with city gate check)
   updateObjective(state);
 
   // Increment turnsPlayed for current player
@@ -206,6 +211,60 @@ export function executeTurn(
   }
 
   return state;
+}
+
+// -----------------------------------------------------------------------------
+// Directive Execution Helper
+// -----------------------------------------------------------------------------
+
+function executeUnitDirective(
+  state: GameState,
+  unit: Unit,
+  commandedUnitIds: Set<string>,
+  friendlyUnits: Unit[],
+  currentPlayer: PlayerId,
+  enemyPlayer: PlayerId,
+  randomFn?: () => number,
+): void {
+  if (commandedUnitIds.has(unit.id)) return;
+  if (unit.hasActed) return;
+  // Unit may have been killed during command resolution
+  if (!friendlyUnits.includes(unit)) return;
+
+  const context: DirectiveContext = {
+    friendlyUnits: [...friendlyUnits],
+    enemyUnits: [...state.players[enemyPlayer].units],
+    terrain: state.map.terrain,
+    centralObjective: state.map.centralObjective,
+    gridSize: state.map.gridSize,
+  };
+
+  const action = executeDirective(unit, context);
+  applyDirectiveAction(state, unit, action, currentPlayer, enemyPlayer, randomFn);
+  unit.hasActed = true;
+
+  // Support directive: heal adjacent friendly with lowest HP (below maxHp)
+  if (unit.directive === 'support') {
+    const neighbors = hexNeighbors(unit.position);
+    const neighborKeys = new Set(neighbors.map(hexToKey));
+    let bestTarget: Unit | null = null;
+    let lowestHp = Infinity;
+
+    for (const friendly of friendlyUnits) {
+      if (friendly.id === unit.id) continue;
+      const fKey = hexToKey(friendly.position);
+      if (!neighborKeys.has(fKey)) continue;
+      const stats = UNIT_STATS[friendly.type];
+      if (friendly.hp < stats.maxHp && friendly.hp < lowestHp) {
+        lowestHp = friendly.hp;
+        bestTarget = friendly;
+      }
+    }
+
+    if (bestTarget) {
+      bestTarget.hp += 1;
+    }
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -321,6 +380,7 @@ function applyCommand(
           state.map.terrain,
           unit.type,
           occupied,
+          unit.directive,
         );
         if (path && path.length > 1) {
           const stepIndex = Math.min(stats.moveRange, path.length - 1);
@@ -404,10 +464,18 @@ function updateObjective(state: GameState): void {
 
   const occupier = unitOnObjective.owner;
 
+  // KotH city gate: occupier must hold 2+ cities to progress
+  const citiesHeld = countCitiesHeld(state, occupier);
+
   if (state.round.objective.occupiedBy === occupier) {
-    state.round.objective.turnsHeld += 1;
+    if (citiesHeld >= 2) {
+      state.round.objective.turnsHeld += 1;
+    } else {
+      // Present but not progressing — reset turnsHeld
+      state.round.objective.turnsHeld = 0;
+    }
   } else {
-    state.round.objective = { occupiedBy: occupier, turnsHeld: 1 };
+    state.round.objective = { occupiedBy: occupier, turnsHeld: citiesHeld >= 2 ? 1 : 0 };
   }
 }
 
@@ -559,6 +627,11 @@ export function scoreRound(
   state.round.objective = { occupiedBy: null, turnsHeld: 0 };
   state.round.unitsKilledThisRound = { player1: 0, player2: 0 };
 
+  // Reset city ownership to neutral
+  for (const key of state.cityOwnership.keys()) {
+    state.cityOwnership.set(key, null);
+  }
+
   // Reset all units' hasActed
   for (const player of Object.values(state.players)) {
     for (const unit of player.units) {
@@ -580,6 +653,34 @@ export function getWinner(state: GameState): PlayerId | null {
   if (state.players.player2.roundsWon >= roundsNeeded) return 'player2';
 
   return null;
+}
+
+// -----------------------------------------------------------------------------
+// City Ownership
+// -----------------------------------------------------------------------------
+
+function updateCityOwnership(state: GameState): void {
+  const allUnits = [...state.players.player1.units, ...state.players.player2.units];
+  const unitByHex = new Map<string, Unit>();
+  for (const unit of allUnits) {
+    unitByHex.set(hexToKey(unit.position), unit);
+  }
+
+  for (const cityKey of state.cityOwnership.keys()) {
+    const unit = unitByHex.get(cityKey);
+    if (unit) {
+      const currentOwner = state.cityOwnership.get(cityKey);
+      if (currentOwner !== unit.owner) {
+        // City flips to new owner — unit loses 1 HP
+        state.cityOwnership.set(cityKey, unit.owner);
+        unit.hp -= 1;
+        if (unit.hp <= 0) {
+          removeUnit(state.players[unit.owner].units, unit.id);
+        }
+      }
+      // If city already owned by this player, no HP cost
+    }
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -608,9 +709,8 @@ function getTotalHp(units: Unit[]): number {
 
 function countCitiesHeld(state: GameState, playerId: PlayerId): number {
   let count = 0;
-  for (const unit of state.players[playerId].units) {
-    const terrain = state.map.terrain.get(hexToKey(unit.position));
-    if (terrain === 'city') {
+  for (const owner of state.cityOwnership.values()) {
+    if (owner === playerId) {
       count += 1;
     }
   }

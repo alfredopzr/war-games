@@ -1,6 +1,6 @@
 import type { Command, CommandPool } from './types';
 
-export const CP_PER_ROUND = 3;
+export const CP_PER_ROUND = 4;
 
 export function createCommandPool(): CommandPool {
   return {

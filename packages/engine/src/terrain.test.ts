@@ -77,6 +77,30 @@ describe('getMoveCost', () => {
   });
 });
 
+describe('flank directive forest cost', () => {
+  it('flank-left reduces forest cost to 1', () => {
+    expect(getMoveCost('forest', 'infantry', 'flank-left')).toBe(1);
+  });
+
+  it('flank-right reduces forest cost to 1', () => {
+    expect(getMoveCost('forest', 'tank', 'flank-right')).toBe(1);
+  });
+
+  it('non-flank directives keep forest cost at 2', () => {
+    expect(getMoveCost('forest', 'infantry', 'advance')).toBe(2);
+    expect(getMoveCost('forest', 'infantry', 'hold')).toBe(2);
+    expect(getMoveCost('forest', 'infantry', 'scout')).toBe(2);
+    expect(getMoveCost('forest', 'infantry', 'support')).toBe(2);
+    expect(getMoveCost('forest', 'infantry')).toBe(2);
+  });
+
+  it('flank does not affect non-forest terrain', () => {
+    expect(getMoveCost('plains', 'infantry', 'flank-left')).toBe(1);
+    expect(getMoveCost('city', 'infantry', 'flank-right')).toBe(1);
+    expect(getMoveCost('mountain', 'infantry', 'flank-left')).toBe(3);
+  });
+});
+
 describe('getDefenseModifier', () => {
   it('plains gives 0 defense', () => {
     expect(getDefenseModifier('plains')).toBe(0);

@@ -8,7 +8,7 @@ import { calculateVisibility, isUnitVisible } from './vision';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makePlainsTerrain(width = 10, height = 8): Map<string, TerrainType> {
+function makePlainsTerrain(width = 16, height = 12): Map<string, TerrainType> {
   const terrain = new Map<string, TerrainType>();
   for (let col = 0; col < width; col++) {
     for (let row = 0; row < height; row++) {

@@ -4,13 +4,13 @@ import type { IncomeParams } from './types';
 // Constants
 // ---------------------------------------------------------------------------
 
-export const BASE_INCOME = 500;
-export const CITY_INCOME = 100;
+export const BASE_INCOME = 650;
+export const CITY_INCOME = 125;
 export const KILL_BONUS = 25;
-export const ROUND_WIN_BONUS = 150;
-export const CATCH_UP_BONUS = 200;
+export const ROUND_WIN_BONUS = 200;
+export const CATCH_UP_BONUS = 250;
 export const CARRYOVER_RATE = 0.5;
-export const MAINTENANCE_RATE = 0.2;
+export const MAINTENANCE_RATE = 0.15;
 
 // ---------------------------------------------------------------------------
 // Functions

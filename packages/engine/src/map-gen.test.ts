@@ -4,14 +4,14 @@ import { hexToKey, createHex } from './hex';
 import { generateMap, validateMap } from './map-gen';
 
 describe('generateMap', () => {
-  it('generates 80 hexes for a 10x8 grid', () => {
+  it('generates 192 hexes for a 16x12 grid', () => {
     const map = generateMap(42);
-    expect(map.terrain.size).toBe(80);
+    expect(map.terrain.size).toBe(192);
   });
 
-  it('has gridSize 10x8', () => {
+  it('has gridSize 16x12', () => {
     const map = generateMap(42);
-    expect(map.gridSize).toEqual({ width: 10, height: 8 });
+    expect(map.gridSize).toEqual({ width: 16, height: 12 });
   });
 
   it('central hex is always city terrain', () => {
@@ -20,17 +20,17 @@ describe('generateMap', () => {
     expect(map.terrain.get(centralKey)).toBe('city');
   });
 
-  it('central hex is at q=5, r=2', () => {
+  it('central hex is at q=8, r=2', () => {
     const map = generateMap(42);
-    expect(map.centralObjective).toEqual(createHex(5, 2));
+    expect(map.centralObjective).toEqual(createHex(8, 2));
   });
 
-  it('has 2-4 city hexes total', () => {
+  it('has 6-8 city hexes total', () => {
     for (const seed of [1, 42, 100, 999, 12345]) {
       const map = generateMap(seed);
       const cityCount = [...map.terrain.values()].filter((t) => t === 'city').length;
-      expect(cityCount).toBeGreaterThanOrEqual(2);
-      expect(cityCount).toBeLessThanOrEqual(4);
+      expect(cityCount).toBeGreaterThanOrEqual(6);
+      expect(cityCount).toBeLessThanOrEqual(8);
     }
   });
 
@@ -49,9 +49,10 @@ describe('generateMap', () => {
     }
   });
 
-  it('map is symmetric', () => {
+  it('map is symmetric (cities can be asymmetric)', () => {
     const map = generateMap(42);
     const validation = validateMap(map);
+    // Non-city terrain should be symmetric, cities can be asymmetric
     expect(validation.isSymmetric).toBe(true);
   });
 
@@ -81,14 +82,14 @@ describe('generateMap', () => {
     expect(differences).toBeGreaterThan(0);
   });
 
-  it('player1Deployment has 20 hexes (10 cols x 2 rows)', () => {
+  it('player1Deployment has 48 hexes (16 cols x 3 rows)', () => {
     const map = generateMap(42);
-    expect(map.player1Deployment.length).toBe(20);
+    expect(map.player1Deployment.length).toBe(48);
   });
 
-  it('player2Deployment has 20 hexes (10 cols x 2 rows)', () => {
+  it('player2Deployment has 48 hexes (16 cols x 3 rows)', () => {
     const map = generateMap(42);
-    expect(map.player2Deployment.length).toBe(20);
+    expect(map.player2Deployment.length).toBe(48);
   });
 });
 

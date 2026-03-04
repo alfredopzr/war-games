@@ -1,4 +1,4 @@
-import type { TerrainType, TerrainDefinition, UnitType } from './types';
+import type { TerrainType, TerrainDefinition, UnitType, DirectiveType } from './types';
 
 export const TERRAIN: Record<TerrainType, TerrainDefinition> = {
   plains: {
@@ -35,10 +35,14 @@ export const TERRAIN: Record<TerrainType, TerrainDefinition> = {
   },
 } as const;
 
-export function getMoveCost(terrain: TerrainType, unitType: UnitType): number {
+export function getMoveCost(terrain: TerrainType, unitType: UnitType, directive?: DirectiveType): number {
   const def = TERRAIN[terrain];
   if (def.infantryOnly && unitType !== 'infantry') {
     return Infinity;
+  }
+  // Flank directives reduce forest cost to 1
+  if (terrain === 'forest' && (directive === 'flank-left' || directive === 'flank-right')) {
+    return 1;
   }
   return def.moveCost;
 }

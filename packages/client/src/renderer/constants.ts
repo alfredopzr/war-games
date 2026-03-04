@@ -1,6 +1,6 @@
-export const HEX_SIZE = 40; // pixels from center to corner (flat-top)
-export const GRID_WIDTH = 10;
-export const GRID_HEIGHT = 8;
+export const HEX_SIZE = 32; // pixels from center to corner (flat-top)
+export const GRID_WIDTH = 16;
+export const GRID_HEIGHT = 12;
 
 export const TERRAIN_COLORS: Record<string, string> = {
   plains: '#4a7c59',

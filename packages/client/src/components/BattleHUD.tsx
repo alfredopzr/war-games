@@ -3,10 +3,11 @@ import {
   executeTurn, checkRoundEnd, scoreRound,
   CP_PER_ROUND, UNIT_STATS,
   calculateIncome, applyCarryover, applyMaintenance,
-  hexToKey, aiBattlePhase,
+  aiBattlePhase,
 } from '@hexwar/engine';
-import type { PlayerId, ObjectiveState, GameState } from '@hexwar/engine';
+import type { PlayerId, ObjectiveState, GameState, Unit } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
+import type { BattleLogEntry } from '../store/game-store';
 
 function phaseClass(phase: string): string {
   switch (phase) {
@@ -29,10 +30,33 @@ function playerColor(player: PlayerId): string {
   return player === 'player1' ? '#4488cc' : '#cc4444';
 }
 
-function objectiveText(objective: ObjectiveState): string {
-  if (!objective.occupiedBy) return 'Neutral';
+function objectiveText(objective: ObjectiveState, state: GameState): string {
+  if (!objective.occupiedBy) return 'Objective: Neutral';
   const label = playerLabel(objective.occupiedBy);
+  const citiesHeld = countCitiesForPlayer(state, objective.occupiedBy);
+  if (citiesHeld < 2) {
+    return `${label} on objective (needs 2 cities)`;
+  }
   return `${label} holds (${objective.turnsHeld}/2)`;
+}
+
+function countCitiesForPlayer(state: GameState, playerId: PlayerId): number {
+  let count = 0;
+  for (const owner of state.cityOwnership.values()) {
+    if (owner === playerId) count++;
+  }
+  return count;
+}
+
+function cityOwnershipText(state: GameState): string {
+  let p1 = 0;
+  let p2 = 0;
+  for (const owner of state.cityOwnership.values()) {
+    if (owner === 'player1') p1++;
+    else if (owner === 'player2') p2++;
+  }
+  if (p1 === 0 && p2 === 0) return '';
+  return `Cities: P1 \u00D7${p1} | P2 \u00D7${p2}`;
 }
 
 interface IncomeBreakdown {
@@ -48,10 +72,10 @@ function computeIncomeBreakdown(
   roundWinner: PlayerId | null,
 ): IncomeBreakdown {
   const player = state.players[playerId];
-  const citiesHeld = player.units.reduce((count, unit) => {
-    const terrain = state.map.terrain.get(hexToKey(unit.position));
-    return terrain === 'city' ? count + 1 : count;
-  }, 0);
+  let citiesHeld = 0;
+  for (const owner of state.cityOwnership.values()) {
+    if (owner === playerId) citiesHeld++;
+  }
 
   const income = calculateIncome({
     citiesHeld,
@@ -71,6 +95,62 @@ function computeIncomeBreakdown(
     maintenance,
     total: Math.max(0, carryover - maintenance + income),
   };
+}
+
+function diffBattleLog(
+  before: { units: Map<string, Unit>; cities: Map<string, PlayerId | null> },
+  after: GameState,
+  actingPlayer: PlayerId,
+  turnNumber: number,
+): BattleLogEntry[] {
+  const entries: BattleLogEntry[] = [];
+  const unitLabels: Record<string, string> = { infantry: 'Infantry', tank: 'Tank', artillery: 'Artillery', recon: 'Recon' };
+
+  // Check for kills
+  for (const [id, unit] of before.units) {
+    const allAfter = [...after.players.player1.units, ...after.players.player2.units];
+    if (!allAfter.find((u) => u.id === id)) {
+      entries.push({
+        turn: turnNumber,
+        player: actingPlayer,
+        type: 'kill',
+        message: `${actingPlayer === 'player1' ? 'P1' : 'P2'} destroyed ${unit.owner === 'player1' ? 'P1' : 'P2'} ${unitLabels[unit.type] ?? unit.type}`,
+      });
+    }
+  }
+
+  // Check for city captures
+  for (const [key, newOwner] of after.cityOwnership) {
+    const prevOwner = before.cities.get(key);
+    if (newOwner !== prevOwner) {
+      if (newOwner) {
+        const label = newOwner === 'player1' ? 'P1' : 'P2';
+        const type = prevOwner ? 'recapture' : 'capture';
+        entries.push({
+          turn: turnNumber,
+          player: newOwner,
+          type,
+          message: `${label} ${type === 'recapture' ? 'recaptured' : 'captured'} a city`,
+        });
+      }
+    }
+  }
+
+  return entries;
+}
+
+function snapshotUnits(gameState: GameState): Map<string, Unit> {
+  const m = new Map<string, Unit>();
+  for (const player of Object.values(gameState.players)) {
+    for (const unit of player.units) {
+      m.set(unit.id, { ...unit });
+    }
+  }
+  return m;
+}
+
+function snapshotCities(gameState: GameState): Map<string, PlayerId | null> {
+  return new Map(gameState.cityOwnership);
 }
 
 function executeAiTurn(gameState: GameState): void {
@@ -127,6 +207,12 @@ export function BattleHUD(): ReactElement | null {
     if (aiThinking) return;
     if (!gameState) return;
 
+    // Snapshot state before turn for diff
+    const unitsBefore = snapshotUnits(gameState);
+    const citiesBefore = snapshotCities(gameState);
+    const actingPlayer = gameState.round.currentPlayer;
+    const turnNum = gameState.round.turnNumber;
+
     // Snapshot unit HPs before execution for damage flash detection
     const allUnitsBefore = new Map<string, number>();
     for (const player of Object.values(gameState.players)) {
@@ -137,6 +223,17 @@ export function BattleHUD(): ReactElement | null {
 
     // Execute the turn with pending commands
     executeTurn(gameState, pendingCommands);
+
+    // Generate and store battle log entries
+    const logEntries = diffBattleLog(
+      { units: unitsBefore, cities: citiesBefore },
+      gameState,
+      actingPlayer,
+      turnNum,
+    );
+    if (logEntries.length > 0) {
+      useGameStore.getState().addBattleLogEntries(logEntries);
+    }
 
     // Check for damage and flash units
     const store = useGameStore.getState();
@@ -261,7 +358,8 @@ export function BattleHUD(): ReactElement | null {
             />
           ))}
         </div>
-        <span className="objective-status">{objectiveText(round.objective)}</span>
+        <span className="objective-status">{objectiveText(round.objective, gameState)}</span>
+        <span className="city-ownership">{cityOwnershipText(gameState)}</span>
       </div>
 
       <div className="turn-info">

@@ -9,12 +9,12 @@ interface DirectiveInfo {
 }
 
 const DIRECTIVES: readonly DirectiveInfo[] = [
-  { type: 'advance', name: 'Advance', desc: 'Move toward the objective aggressively' },
-  { type: 'hold', name: 'Hold', desc: 'Stay in position and defend' },
-  { type: 'flank-left', name: 'Flank Left', desc: 'Circle around the left side' },
-  { type: 'flank-right', name: 'Flank Right', desc: 'Circle around the right side' },
-  { type: 'scout', name: 'Scout', desc: 'Explore and reveal enemy positions' },
-  { type: 'support', name: 'Support', desc: 'Stay back and provide fire support' },
+  { type: 'advance', name: 'Advance', desc: 'Push straight toward the objective' },
+  { type: 'hold', name: 'Hold', desc: '+1 DEF — dig in and absorb attacks' },
+  { type: 'flank-left', name: 'Flank Left', desc: 'Arc left — forests cost 1 MP instead of 2' },
+  { type: 'flank-right', name: 'Flank Right', desc: 'Arc right — forests cost 1 MP instead of 2' },
+  { type: 'scout', name: 'Scout', desc: 'Acts first — explores and reveals flanks' },
+  { type: 'support', name: 'Support', desc: 'Heals adjacent friendlies — stay near your troops' },
 ] as const;
 
 export function DirectiveSelector(): ReactElement | null {

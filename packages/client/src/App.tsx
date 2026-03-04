@@ -5,7 +5,7 @@ import {
   canAttack, cubeDistance, UNIT_STATS,
 } from '@hexwar/engine';
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
-import { HEX_SIZE, TERRAIN_COLORS, TERRAIN_BORDER_COLORS } from './renderer/constants';
+import { HEX_SIZE, TERRAIN_COLORS, TERRAIN_BORDER_COLORS, PLAYER_COLORS } from './renderer/constants';
 import { hexToPixel, pixelToHex, drawHex } from './renderer/hex-render';
 import { drawUnit } from './renderer/unit-render';
 import { drawObjective } from './renderer/objective-render';
@@ -25,6 +25,8 @@ import { GameOverScreen } from './components/GameOverScreen';
 import { StartMenu } from './components/StartMenu';
 import { TerrainLegend } from './components/TerrainLegend';
 import { BattleHelp } from './components/BattleHelp';
+import { BattleLog } from './components/BattleLog';
+import { Toast } from './components/Toast';
 
 const DAMAGE_FLASH_DURATION = 500; // ms
 
@@ -60,6 +62,135 @@ function getPlayerUnits(state: GameState, player: PlayerId): Unit[] {
 
 function getEnemyPlayer(player: PlayerId): PlayerId {
   return player === 'player1' ? 'player2' : 'player1';
+}
+
+function drawDirectiveArrow(
+  ctx: CanvasRenderingContext2D,
+  unit: Unit,
+  state: GameState,
+  ox: number,
+  oy: number,
+): void {
+  const unitPixel = hexToPixel(unit.position, HEX_SIZE);
+  const startX = unitPixel.x + ox;
+  const startY = unitPixel.y + oy;
+
+  let targetX: number;
+  let targetY: number;
+
+  const objPixel = hexToPixel(state.map.centralObjective, HEX_SIZE);
+  const objX = objPixel.x + ox;
+  const objY = objPixel.y + oy;
+
+  switch (unit.directive) {
+    case 'hold':
+      return; // No arrow for hold
+    case 'advance':
+      targetX = objX;
+      targetY = objY;
+      break;
+    case 'flank-left': {
+      const dx = objX - startX;
+      const dy = objY - startY;
+      // Rotate 40 degrees left
+      const cos = Math.cos(-0.7);
+      const sin = Math.sin(-0.7);
+      targetX = startX + dx * cos - dy * sin;
+      targetY = startY + dx * sin + dy * cos;
+      break;
+    }
+    case 'flank-right': {
+      const dx = objX - startX;
+      const dy = objY - startY;
+      // Rotate 40 degrees right
+      const cos = Math.cos(0.7);
+      const sin = Math.sin(0.7);
+      targetX = startX + dx * cos - dy * sin;
+      targetY = startY + dx * sin + dy * cos;
+      break;
+    }
+    case 'scout': {
+      // Arrow away from friendlies (opposite of average friendly direction)
+      const friendlies = getPlayerUnits(state, unit.owner);
+      if (friendlies.length <= 1) {
+        targetX = startX;
+        targetY = startY - 60;
+      } else {
+        let avgX = 0;
+        let avgY = 0;
+        let count = 0;
+        for (const f of friendlies) {
+          if (f.id === unit.id) continue;
+          const fp = hexToPixel(f.position, HEX_SIZE);
+          avgX += fp.x + ox;
+          avgY += fp.y + oy;
+          count++;
+        }
+        avgX /= count;
+        avgY /= count;
+        // Point away from average
+        targetX = startX + (startX - avgX);
+        targetY = startY + (startY - avgY);
+      }
+      break;
+    }
+    case 'support': {
+      // Arrow toward nearest friendly
+      const friendlies = getPlayerUnits(state, unit.owner);
+      let nearest = { x: startX, y: startY - 60 };
+      let bestDist = Infinity;
+      for (const f of friendlies) {
+        if (f.id === unit.id) continue;
+        const fp = hexToPixel(f.position, HEX_SIZE);
+        const dx = (fp.x + ox) - startX;
+        const dy = (fp.y + oy) - startY;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < bestDist) {
+          bestDist = d;
+          nearest = { x: fp.x + ox, y: fp.y + oy };
+        }
+      }
+      targetX = nearest.x;
+      targetY = nearest.y;
+      break;
+    }
+  }
+
+  // Normalize and cap arrow length at 60px
+  const dx = targetX - startX;
+  const dy = targetY - startY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 1) return;
+
+  const maxLen = 60;
+  const len = Math.min(dist, maxLen);
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const endX = startX + nx * len;
+  const endY = startY + ny * len;
+
+  // Draw dashed line
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 200, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw arrowhead
+  const headLen = 8;
+  const angle = Math.atan2(ny, nx);
+  ctx.fillStyle = 'rgba(255, 255, 200, 0.4)';
+  ctx.beginPath();
+  ctx.moveTo(endX, endY);
+  ctx.lineTo(endX - headLen * Math.cos(angle - 0.4), endY - headLen * Math.sin(angle - 0.4));
+  ctx.lineTo(endX - headLen * Math.cos(angle + 0.4), endY - headLen * Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 
 export function App(): ReactElement {
@@ -173,6 +304,38 @@ export function App(): ReactElement {
         }
       }
 
+      // Draw city ownership borders
+      if (state.cityOwnership) {
+        for (const hex of allHexes) {
+          const key = hexToKey(hex);
+          const owner = state.cityOwnership.get(key);
+          if (owner) {
+            const { x, y } = hexToPixel(hex, HEX_SIZE);
+            const ownerColor = PLAYER_COLORS[owner].light;
+            drawHex(ctx, x + ox, y + oy, HEX_SIZE, 'transparent', ownerColor, 3);
+          }
+        }
+      }
+
+      // Draw range highlights (move/attack)
+      const currentHighlights = useGameStore.getState().highlightedHexes;
+      const currentHighlightMode = useGameStore.getState().highlightMode;
+      if (currentHighlights.size > 0 && currentHighlightMode !== 'none') {
+        const hlFill = currentHighlightMode === 'move'
+          ? 'rgba(100, 200, 255, 0.25)'
+          : 'rgba(255, 80, 80, 0.3)';
+        const hlStroke = currentHighlightMode === 'move'
+          ? 'rgba(100, 200, 255, 0.6)'
+          : 'rgba(255, 80, 80, 0.7)';
+        for (const hex of allHexes) {
+          const key = hexToKey(hex);
+          if (currentHighlights.has(key)) {
+            const { x, y } = hexToPixel(hex, HEX_SIZE);
+            drawHex(ctx, x + ox, y + oy, HEX_SIZE, hlFill, hlStroke, 2);
+          }
+        }
+      }
+
       // Draw hovered hex highlight
       const currentHovered = useGameStore.getState().hoveredHex;
       if (currentHovered) {
@@ -208,13 +371,16 @@ export function App(): ReactElement {
           drawUnit(ctx, unit, x + ox, y + oy, false);
         }
       } else {
+        const currentPendingCommands = useGameStore.getState().pendingCommands;
+        const commandedIds = new Set(currentPendingCommands.map((c) => c.unitId));
+
         // Draw friendly units (always visible)
         const friendly = getPlayerUnits(state, currentPlayerView);
         for (const unit of friendly) {
           const { x, y } = hexToPixel(unit.position, HEX_SIZE);
           const damageTime = currentDamagedUnits.get(unit.id);
           const isDamaged = damageTime !== undefined && now - damageTime < DAMAGE_FLASH_DURATION;
-          drawUnit(ctx, unit, x + ox, y + oy, isDamaged);
+          drawUnit(ctx, unit, x + ox, y + oy, isDamaged, commandedIds.has(unit.id));
         }
 
         // Draw enemy units only if in visible hexes
@@ -241,6 +407,11 @@ export function App(): ReactElement {
 
         // Draw fog overlay on non-visible hexes
         drawFog(ctx, allHexes, visibleHexes, ox, oy, HEX_SIZE);
+
+        // Draw directive intention arrow for selected friendly unit
+        if (selectedUnit && selectedUnit.owner === currentPlayerView) {
+          drawDirectiveArrow(ctx, selectedUnit, state, ox, oy);
+        }
       }
     },
     [selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies],
@@ -306,20 +477,26 @@ export function App(): ReactElement {
       if (mode === 'move' && selected && selected.owner === currentPlayerView) {
         const stats = UNIT_STATS[selected.type];
         const dist = cubeDistance(selected.position, hex);
+        const targetKey = hexToKey(hex);
         if (dist <= stats.moveRange && dist > 0) {
-          // Check hex is not occupied
-          const targetKey = hexToKey(hex);
           const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
           const isOccupied = allUnits.some((u) => hexToKey(u.position) === targetKey);
-          if (!isOccupied && gameState.map.terrain.has(targetKey)) {
-            const command: Command = { type: 'direct-move', unitId: selected.id, targetHex: hex };
-            useGameStore.getState().addPendingCommand(command);
-            useGameStore.getState().selectUnit(null);
+          if (isOccupied) {
+            useGameStore.getState().showToast('Hex occupied');
             return;
           }
+          if (!gameState.map.terrain.has(targetKey)) {
+            useGameStore.getState().showToast('Invalid hex');
+            return;
+          }
+          const command: Command = { type: 'direct-move', unitId: selected.id, targetHex: hex };
+          useGameStore.getState().addPendingCommand(command);
+          useGameStore.getState().selectUnit(null);
+          return;
         }
-        // Invalid target — cancel mode
+        useGameStore.getState().showToast('Out of range');
         useGameStore.getState().setCommandMode('none');
+        useGameStore.getState().clearHighlightedHexes();
         return;
       }
 
@@ -337,9 +514,12 @@ export function App(): ReactElement {
             useGameStore.getState().selectUnit(null);
             return;
           }
+          useGameStore.getState().showToast('Out of attack range');
+          return;
         }
-        // Invalid target — cancel mode
+        useGameStore.getState().showToast('No enemy target');
         useGameStore.getState().setCommandMode('none');
+        useGameStore.getState().clearHighlightedHexes();
         return;
       }
 
@@ -465,8 +645,10 @@ export function App(): ReactElement {
           <CommandMenu />
           <TerrainLegend />
           <BattleHelp />
+          <BattleLog />
         </>
       )}
+      <Toast />
       {showTransition && <TurnTransition />}
       {showRoundResult && <RoundResult />}
       {showGameOver && <GameOverScreen />}

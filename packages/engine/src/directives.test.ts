@@ -10,8 +10,8 @@ import { executeDirective } from './directives';
 
 function makeContext(overrides: Partial<DirectiveContext> = {}): DirectiveContext {
   const terrain = new Map<string, TerrainType>();
-  for (let col = 0; col < 10; col++) {
-    for (let row = 0; row < 8; row++) {
+  for (let col = 0; col < 16; col++) {
+    for (let row = 0; row < 12; row++) {
       terrain.set(`${col},${row - Math.floor(col / 2)}`, 'plains');
     }
   }
@@ -19,8 +19,8 @@ function makeContext(overrides: Partial<DirectiveContext> = {}): DirectiveContex
     friendlyUnits: [],
     enemyUnits: [],
     terrain,
-    centralObjective: createHex(5, 2),
-    gridSize: { width: 10, height: 8 },
+    centralObjective: createHex(8, 2),
+    gridSize: { width: 16, height: 12 },
     ...overrides,
   };
 }
@@ -42,7 +42,7 @@ describe('advance directive', () => {
 
     expect(action.type).toBe('move');
     if (action.type === 'move') {
-      // Should move closer to the objective (5,2)
+      // Should move closer to the objective (8,2)
       const startDist = cubeDistance(unit.position, ctx.centralObjective);
       const newDist = cubeDistance(action.targetHex, ctx.centralObjective);
       expect(newDist).toBeLessThan(startDist);
@@ -110,7 +110,7 @@ describe('flank-left directive', () => {
 
     expect(action.type).toBe('move');
     if (action.type === 'move') {
-      // With advance from same position, the direct path heads toward (5,2).
+      // With advance from same position, the direct path heads toward (8,2).
       // Flank-left should bias toward lower q values compared to direct advance.
       const advanceUnit = createUnit('infantry', 'player1', createHex(2, 2), 'advance');
       const advanceAction = executeDirective(advanceUnit, ctx);
@@ -186,7 +186,7 @@ describe('scout directive', () => {
 
 describe('support directive', () => {
   it('follows nearest friendly unit', () => {
-    const supported = createUnit('infantry', 'player1', createHex(5, 2), 'advance');
+    const supported = createUnit('infantry', 'player1', createHex(8, 2), 'advance');
     const unit = createUnit('infantry', 'player1', createHex(1, 1), 'support');
     const ctx = makeContext({ friendlyUnits: [unit, supported] });
 
@@ -202,7 +202,7 @@ describe('support directive', () => {
   });
 
   it('attacks enemy in range while following', () => {
-    const supported = createUnit('infantry', 'player1', createHex(5, 2), 'advance');
+    const supported = createUnit('infantry', 'player1', createHex(8, 2), 'advance');
     const unit = createUnit('infantry', 'player1', createHex(3, 1), 'support');
     const enemy = createUnit('infantry', 'player2', createHex(4, 1), 'advance');
     const ctx = makeContext({

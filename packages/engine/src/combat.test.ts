@@ -56,6 +56,28 @@ describe('calculateDamage', () => {
     expect(damage).toBe(5);
   });
 
+  it('hold directive gives +1 effective DEF', () => {
+    // Tank vs infantry on forest: normally DEF=2, terrainDef=0.25
+    // Without hold: base=6.0, final=max(1, floor(6 - 2*0.25))=5
+    // With hold: effectiveDef=3, final=max(1, floor(6 - 3*0.25))=max(1,5)=5
+    // Let's use plains (defMod=0) to see the difference clearly:
+    // Without hold: base=6, final=max(1,floor(6 - 2*0))=6
+    // With hold: base=6, final=max(1,floor(6 - 3*0))=6 — still 6 on plains since terrainDef=0
+    // Use forest: without hold = 5, with hold: max(1, floor(6 - 3*0.25)) = max(1,5)=5
+    // Use city (defMod=0.3): without hold = max(1,floor(6-2*0.3))=max(1,5)=5
+    //                         with hold = max(1,floor(6-3*0.3))=max(1,5)=5
+    // Use mountain (defMod=0.4): without hold = max(1,floor(6-2*0.4))=max(1,5)=5
+    //                             with hold = max(1,floor(6-3*0.4))=max(1,4)=4
+    const attacker = makeUnit({ type: 'tank', owner: 'player1', position: origin });
+    const defenderNoHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, directive: 'advance' });
+    const defenderHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, directive: 'hold' });
+
+    const damageNoHold = calculateDamage(attacker, defenderNoHold, 'mountain', () => 1.0);
+    const damageHold = calculateDamage(attacker, defenderHold, 'mountain', () => 1.0);
+
+    expect(damageHold).toBeLessThan(damageNoHold);
+  });
+
   it('low roll (0.85) produces less damage than high roll (1.15)', () => {
     const attacker = makeUnit({ type: 'tank', owner: 'player1', position: origin });
     const defender = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent });

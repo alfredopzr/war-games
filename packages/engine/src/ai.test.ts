@@ -39,7 +39,7 @@ describe('aiBuildPhase', () => {
 });
 
 describe('aiBattlePhase', () => {
-  it('returns 0-3 commands', () => {
+  it('returns 0-4 commands', () => {
     const game = createGame(42);
     // Place some units for both sides
     const p1Zone = game.map.player1Deployment;
@@ -50,7 +50,7 @@ describe('aiBattlePhase', () => {
     // Switch to player2's turn context (commandPool starts fresh for current player)
     game.round.currentPlayer = 'player2';
     const commands = aiBattlePhase(game, 'player2');
-    expect(commands.length).toBeLessThanOrEqual(3);
+    expect(commands.length).toBeLessThanOrEqual(4);
     expect(commands.length).toBeGreaterThanOrEqual(0);
   });
 

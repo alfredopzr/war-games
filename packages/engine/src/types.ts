@@ -142,6 +142,7 @@ export interface GameState {
   map: GameMap;
   maxRounds: number;
   winner: PlayerId | null;
+  cityOwnership: Map<string, PlayerId | null>;
 }
 
 // -----------------------------------------------------------------------------

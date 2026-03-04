@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactElement } from 'react';
-import { canIssueCommand, CP_PER_ROUND } from '@hexwar/engine';
+import { canIssueCommand, CP_PER_ROUND, cubeDistance, canAttack, getAllHexes, hexToKey, UNIT_STATS } from '@hexwar/engine';
 import type { DirectiveType, CommandPool } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
@@ -44,13 +44,55 @@ export function CommandMenu(): ReactElement | null {
   }, [selectedUnit, addPendingCommand, selectUnit]);
 
   const handleMoveMode = useCallback((): void => {
-    setCommandMode(commandMode === 'move' ? 'none' : 'move');
-    setShowDirectives(false);
+    if (commandMode === 'move') {
+      setCommandMode('none');
+      useGameStore.getState().clearHighlightedHexes();
+    } else {
+      setCommandMode('move');
+      setShowDirectives(false);
+      // Compute move range highlights
+      const store = useGameStore.getState();
+      if (store.selectedUnit && store.gameState) {
+        const unit = store.selectedUnit;
+        const stats = UNIT_STATS[unit.type];
+        const allHexes = getAllHexes(store.gameState.map.gridSize);
+        const allUnits = [...store.gameState.players.player1.units, ...store.gameState.players.player2.units];
+        const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
+        const reachable = new Set<string>();
+        for (const hex of allHexes) {
+          const key = hexToKey(hex);
+          const dist = cubeDistance(unit.position, hex);
+          if (dist > 0 && dist <= stats.moveRange && !occupiedKeys.has(key) && store.gameState.map.terrain.has(key)) {
+            reachable.add(key);
+          }
+        }
+        store.setHighlightedHexes(reachable, 'move');
+      }
+    }
   }, [commandMode, setCommandMode]);
 
   const handleAttackMode = useCallback((): void => {
-    setCommandMode(commandMode === 'attack' ? 'none' : 'attack');
-    setShowDirectives(false);
+    if (commandMode === 'attack') {
+      setCommandMode('none');
+      useGameStore.getState().clearHighlightedHexes();
+    } else {
+      setCommandMode('attack');
+      setShowDirectives(false);
+      // Compute attack range highlights
+      const store = useGameStore.getState();
+      if (store.selectedUnit && store.gameState) {
+        const unit = store.selectedUnit;
+        const enemyPlayer = unit.owner === 'player1' ? 'player2' : 'player1';
+        const enemies = store.gameState.players[enemyPlayer].units;
+        const targetKeys = new Set<string>();
+        for (const enemy of enemies) {
+          if (canAttack(unit, enemy)) {
+            targetKeys.add(hexToKey(enemy.position));
+          }
+        }
+        store.setHighlightedHexes(targetKeys, 'attack');
+      }
+    }
   }, [commandMode, setCommandMode]);
 
   const handleRedirectToggle = useCallback((): void => {

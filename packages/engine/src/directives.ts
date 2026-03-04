@@ -66,7 +66,7 @@ function executeFlank(
   // We pick a point that's laterally offset from the objective so the unit
   // arcs around instead of going straight.
   const objective = context.centralObjective;
-  const offsets = side === 'left' ? [-3, -2, -1] : [3, 2, 1];
+  const offsets = side === 'left' ? [-5, -4, -3] : [5, 4, 3];
 
   let intermediateTarget: CubeCoord = objective;
   for (const offset of offsets) {
@@ -188,6 +188,7 @@ function moveToward(
     context.terrain,
     unit.type,
     occupied,
+    unit.directive,
   );
 
   if (!path || path.length <= 1) {
@@ -322,6 +323,7 @@ function scoutExplore(unit: Unit, context: DirectiveContext): UnitAction {
     context.terrain,
     unit.type,
     occupied,
+    unit.directive,
   );
 
   if (!path || path.length <= 1) {

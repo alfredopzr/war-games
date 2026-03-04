@@ -28,9 +28,12 @@ export function calculateDamage(
   const typeMultiplier = getTypeAdvantage(attacker.type, defender.type);
   const terrainDef = getDefenseModifier(defenderTerrain);
 
+  // Hold directive grants +1 DEF
+  const effectiveDef = defenderStats.def + (defender.directive === 'hold' ? 1 : 0);
+
   const randomFactor = randomFn();
   const baseDamage = attackerStats.atk * typeMultiplier * randomFactor;
-  const finalDamage = Math.max(1, Math.floor(baseDamage - defenderStats.def * terrainDef));
+  const finalDamage = Math.max(1, Math.floor(baseDamage - effectiveDef * terrainDef));
 
   return finalDamage;
 }

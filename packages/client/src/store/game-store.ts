@@ -2,7 +2,15 @@ import { create } from 'zustand';
 import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
 import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, Command, PlayerId } from '@hexwar/engine';
 
+export interface BattleLogEntry {
+  turn: number;
+  player: PlayerId;
+  type: 'kill' | 'capture' | 'recapture' | 'damage';
+  message: string;
+}
+
 type CommandMode = 'none' | 'move' | 'attack';
+type HighlightMode = 'move' | 'attack' | 'none';
 
 interface IncomeBreakdown {
   income: number;
@@ -38,6 +46,10 @@ interface GameStore {
   visibleHexes: Set<string>;
   lastKnownEnemies: Map<string, { type: UnitType; position: CubeCoord }>;
 
+  // Range highlights
+  highlightedHexes: Set<string>;
+  highlightMode: HighlightMode;
+
   // Pending commands for current turn
   pendingCommands: Command[];
 
@@ -50,6 +62,12 @@ interface GameStore {
 
   // Surviving units from previous round (cannot be removed during build)
   survivingUnitIds: Set<string>;
+
+  // Battle log
+  battleLog: BattleLogEntry[];
+
+  // Toast messages
+  toastMessage: string | null;
 
   // Turn transition / round result / game over overlays
   showTransition: boolean;
@@ -64,6 +82,8 @@ interface GameStore {
   setHoveredHex: (hex: CubeCoord | null) => void;
   setVisibleHexes: (hexes: Set<string>) => void;
   setCommandMode: (mode: CommandMode) => void;
+  setHighlightedHexes: (hexes: Set<string>, mode: HighlightMode) => void;
+  clearHighlightedHexes: () => void;
   enterPlacementMode: (type: UnitType) => void;
   exitPlacementMode: () => void;
   setUnitDirective: (unitId: string, directive: DirectiveType) => void;
@@ -77,6 +97,9 @@ interface GameStore {
   startBuildTimer: () => void;
   stopBuildTimer: () => void;
   confirmBuild: () => void;
+  addBattleLogEntries: (entries: BattleLogEntry[]) => void;
+  clearBattleLog: () => void;
+  showToast: (msg: string) => void;
   showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown) => void;
   continueToNextRound: () => void;
   resetGame: () => void;
@@ -92,11 +115,15 @@ export const useGameStore = create<GameStore>((set) => ({
   placementMode: null,
   visibleHexes: new Set<string>(),
   lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
+  highlightedHexes: new Set<string>(),
+  highlightMode: 'none',
   pendingCommands: [],
   damagedUnits: new Map<string, number>(),
-  buildTimeRemaining: 90,
+  battleLog: [],
+  buildTimeRemaining: 120,
   buildTimerInterval: null,
   survivingUnitIds: new Set<string>(),
+  toastMessage: null,
   showTransition: false,
   showRoundResult: false,
   roundResult: null,
@@ -106,13 +133,24 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setGameState: (state: GameState): void => set({ gameState: state }),
 
-  selectUnit: (unit: Unit | null): void => set({ selectedUnit: unit, commandMode: 'none' }),
+  selectUnit: (unit: Unit | null): void => set({
+    selectedUnit: unit,
+    commandMode: 'none',
+    highlightedHexes: new Set<string>(),
+    highlightMode: 'none',
+  }),
 
   setHoveredHex: (hex: CubeCoord | null): void => set({ hoveredHex: hex }),
 
   setVisibleHexes: (hexes: Set<string>): void => set({ visibleHexes: hexes }),
 
   setCommandMode: (mode: CommandMode): void => set({ commandMode: mode }),
+
+  setHighlightedHexes: (hexes: Set<string>, mode: HighlightMode): void =>
+    set({ highlightedHexes: hexes, highlightMode: mode }),
+
+  clearHighlightedHexes: (): void =>
+    set({ highlightedHexes: new Set<string>(), highlightMode: 'none' }),
 
   enterPlacementMode: (type: UnitType): void =>
     set({ placementMode: type, selectedUnit: null }),
@@ -211,7 +249,7 @@ export const useGameStore = create<GameStore>((set) => ({
       }
     }, 1000);
 
-    set({ buildTimeRemaining: 90, buildTimerInterval: interval });
+    set({ buildTimeRemaining: 120, buildTimerInterval: interval });
   },
 
   stopBuildTimer: (): void => {
@@ -253,7 +291,7 @@ export const useGameStore = create<GameStore>((set) => ({
       // Go straight to battle as player1 — no P2 transition needed
       useGameStore.setState({
         buildTimerInterval: null,
-        buildTimeRemaining: 90,
+        buildTimeRemaining: 120,
         gameState: { ...store.gameState },
         selectedUnit: null,
         placementMode: null,
@@ -265,7 +303,7 @@ export const useGameStore = create<GameStore>((set) => ({
       // Hot-seat: P1 builds first, then show transition for P2
       useGameStore.setState({
         buildTimerInterval: null,
-        buildTimeRemaining: 90,
+        buildTimeRemaining: 120,
         showTransition: true,
         gameState: { ...store.gameState },
         selectedUnit: null,
@@ -277,7 +315,7 @@ export const useGameStore = create<GameStore>((set) => ({
       // Show transition to hand control to P1 for the first battle turn
       useGameStore.setState({
         buildTimerInterval: null,
-        buildTimeRemaining: 90,
+        buildTimeRemaining: 120,
         gameState: { ...store.gameState },
         selectedUnit: null,
         placementMode: null,
@@ -285,6 +323,18 @@ export const useGameStore = create<GameStore>((set) => ({
         survivingUnitIds: new Set<string>(),
       });
     }
+  },
+
+  addBattleLogEntries: (entries: BattleLogEntry[]): void =>
+    set((prev) => ({ battleLog: [...entries, ...prev.battleLog].slice(0, 50) })),
+
+  clearBattleLog: (): void => set({ battleLog: [] }),
+
+  showToast: (msg: string): void => {
+    set({ toastMessage: msg });
+    setTimeout(() => {
+      useGameStore.setState({ toastMessage: null });
+    }, 1500);
   },
 
   showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown): void =>
@@ -347,11 +397,15 @@ export const useGameStore = create<GameStore>((set) => ({
       placementMode: null,
       visibleHexes: new Set<string>(),
       lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
+      highlightedHexes: new Set<string>(),
+      highlightMode: 'none',
       pendingCommands: [],
       damagedUnits: new Map<string, number>(),
-      buildTimeRemaining: 90,
+      battleLog: [],
+      buildTimeRemaining: 120,
       buildTimerInterval: null,
       survivingUnitIds: new Set<string>(),
+      toastMessage: null,
       showTransition: false,
       showRoundResult: false,
       roundResult: null,

@@ -3,9 +3,9 @@ import { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND } from '
 import type { Command, CommandPool } from './types';
 
 describe('createCommandPool', () => {
-  it('starts with 3 CP', () => {
+  it('starts with 4 CP', () => {
     const pool = createCommandPool();
-    expect(pool.remaining).toBe(3);
+    expect(pool.remaining).toBe(4);
   });
 
   it('commandedUnitIds is empty Set', () => {
@@ -20,7 +20,7 @@ describe('spendCommand', () => {
     const pool = createCommandPool();
     const command: Command = { type: 'retreat', unitId: 'u1' };
     const next = spendCommand(pool, command);
-    expect(next.remaining).toBe(2);
+    expect(next.remaining).toBe(3);
   });
 
   it('adds unitId to commandedUnitIds', () => {
@@ -35,9 +35,10 @@ describe('spendCommand', () => {
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u1' });
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u2' });
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u3' });
+    pool = spendCommand(pool, { type: 'retreat', unitId: 'u4' });
 
     expect(() =>
-      spendCommand(pool, { type: 'retreat', unitId: 'u4' }),
+      spendCommand(pool, { type: 'retreat', unitId: 'u5' }),
     ).toThrow('No command points remaining');
   });
 
@@ -56,7 +57,7 @@ describe('spendCommand', () => {
     const next = spendCommand(pool, command);
 
     expect(next).not.toBe(pool);
-    expect(pool.remaining).toBe(3);
+    expect(pool.remaining).toBe(4);
     expect(pool.commandedUnitIds.size).toBe(0);
   });
 });
@@ -78,6 +79,7 @@ describe('canIssueCommand', () => {
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u1' });
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u2' });
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u3' });
-    expect(canIssueCommand(pool, 'u4')).toBe(false);
+    pool = spendCommand(pool, { type: 'retreat', unitId: 'u4' });
+    expect(canIssueCommand(pool, 'u5')).toBe(false);
   });
 });

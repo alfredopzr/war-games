@@ -51,8 +51,8 @@ describe('Full game simulation', () => {
     const game = createGame(42);
     expect(game.phase).toBe('build');
     expect(game.round.roundNumber).toBe(1);
-    expect(game.players.player1.resources).toBe(500);
-    expect(game.players.player2.resources).toBe(500);
+    expect(game.players.player1.resources).toBe(800);
+    expect(game.players.player2.resources).toBe(800);
 
     // Validate generated map
     const mapValidation = validateMap(game.map);
@@ -171,14 +171,14 @@ describe('Full game simulation', () => {
     const game = createGame(7);
 
     // Record starting resources
-    expect(game.players.player1.resources).toBe(500);
+    expect(game.players.player1.resources).toBe(800);
 
     // Place one cheap unit
     placeUnit(game, 'player1', 'infantry', game.map.player1Deployment[0]);
     placeUnit(game, 'player2', 'infantry', game.map.player2Deployment[0]);
 
     const resourcesAfterBuy = game.players.player1.resources;
-    expect(resourcesAfterBuy).toBe(400); // 500 - 100
+    expect(resourcesAfterBuy).toBe(700); // 800 - 100
 
     startBattlePhase(game);
 
