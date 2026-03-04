@@ -243,6 +243,7 @@ io.on('connection', (socket) => {
       const disconnected = room.disconnectedPlayers.get(playerId);
       if (disconnected) {
         disconnected.forfeitTimer = setTimeout(() => {
+          if (room.phase !== 'playing') return;
           socket.to(room.id).emit('forfeit', {
             type: 'forfeit',
             winner: enemyId,
@@ -250,7 +251,6 @@ io.on('connection', (socket) => {
           });
           clearAllTimers(room);
           room.phase = 'finished';
-          deleteRoom(room.id);
         }, 30000);
       }
     } else if (room.phase === 'waiting') {
