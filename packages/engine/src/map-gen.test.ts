@@ -4,14 +4,14 @@ import { hexToKey, createHex } from './hex';
 import { generateMap, validateMap } from './map-gen';
 
 describe('generateMap', () => {
-  it('generates 192 hexes for a 16x12 grid', () => {
+  it('generates 280 hexes for a 20x14 grid', () => {
     const map = generateMap(42);
-    expect(map.terrain.size).toBe(192);
+    expect(map.terrain.size).toBe(280);
   });
 
-  it('has gridSize 16x12', () => {
+  it('has gridSize 20x14', () => {
     const map = generateMap(42);
-    expect(map.gridSize).toEqual({ width: 16, height: 12 });
+    expect(map.gridSize).toEqual({ width: 20, height: 14 });
   });
 
   it('central hex is always city terrain', () => {
@@ -20,17 +20,16 @@ describe('generateMap', () => {
     expect(map.terrain.get(centralKey)).toBe('city');
   });
 
-  it('central hex is at q=8, r=2', () => {
+  it('central hex is at q=10, r=2', () => {
     const map = generateMap(42);
-    expect(map.centralObjective).toEqual(createHex(8, 2));
+    expect(map.centralObjective).toEqual(createHex(10, 2));
   });
 
-  it('has 6-8 city hexes total', () => {
+  it('has exactly 7 city hexes (1 central + 6 sectored)', () => {
     for (const seed of [1, 42, 100, 999, 12345]) {
       const map = generateMap(seed);
       const cityCount = [...map.terrain.values()].filter((t) => t === 'city').length;
-      expect(cityCount).toBeGreaterThanOrEqual(6);
-      expect(cityCount).toBeLessThanOrEqual(8);
+      expect(cityCount).toBe(7);
     }
   });
 
@@ -82,14 +81,50 @@ describe('generateMap', () => {
     expect(differences).toBeGreaterThan(0);
   });
 
-  it('player1Deployment has 48 hexes (16 cols x 3 rows)', () => {
+  it('player1Deployment has 60 hexes (20 cols x 3 rows)', () => {
     const map = generateMap(42);
-    expect(map.player1Deployment.length).toBe(48);
+    expect(map.player1Deployment.length).toBe(60);
   });
 
-  it('player2Deployment has 48 hexes (16 cols x 3 rows)', () => {
+  it('player2Deployment has 60 hexes (20 cols x 3 rows)', () => {
     const map = generateMap(42);
-    expect(map.player2Deployment.length).toBe(48);
+    expect(map.player2Deployment.length).toBe(60);
+  });
+
+  it('cities are spread across both halves of neutral zone', () => {
+    for (const seed of [1, 42, 100, 999]) {
+      const map = generateMap(seed);
+      const cityKeys = new Set(
+        [...map.terrain.entries()]
+          .filter(([, t]) => t === 'city')
+          .map(([k]) => k),
+      );
+      const deployKeys = new Set([
+        ...map.player1Deployment.map(hexToKey),
+        ...map.player2Deployment.map(hexToKey),
+      ]);
+      const sideCities = [...cityKeys].filter((k) => k !== hexToKey(map.centralObjective) && !deployKeys.has(k));
+      expect(sideCities.length).toBe(6);
+    }
+  });
+
+  it('no two cities are within 2 hexes of each other', () => {
+    const map = generateMap(42);
+    const cityCoords = [...map.terrain.entries()]
+      .filter(([, t]) => t === 'city')
+      .map(([k]) => {
+        const [q, r, s] = k.split(',').map(Number);
+        return { q: q!, r: r!, s: s! };
+      });
+
+    for (let i = 0; i < cityCoords.length; i++) {
+      for (let j = i + 1; j < cityCoords.length; j++) {
+        const a = cityCoords[i]!;
+        const b = cityCoords[j]!;
+        const dist = Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.s - b.s));
+        expect(dist).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 });
 
