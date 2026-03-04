@@ -6,10 +6,15 @@ import {
 } from '@hexwar/engine';
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
 import { Application, Graphics } from 'pixi.js';
-import { HEX_SIZE, TERRAIN_COLORS, PLAYER_COLORS } from './renderer/constants';
+import { HEX_SIZE, PLAYER_COLORS } from './renderer/constants';
 import { hexToPixel, screenToHex } from './renderer/hex-render';
+import { renderTerrain } from './renderer/terrain-renderer';
+import { renderFog } from './renderer/fog-renderer';
+import { renderDeployZones } from './renderer/deploy-renderer';
+import { renderSelectionHighlights } from './renderer/selection-renderer';
+import { renderMinimap } from './renderer/minimap';
 import { initPixiApp, destroyPixiApp } from './renderer/pixi-app';
-import { setupLayers, terrainLayer, deployZoneLayer, fogLayer, unitLayer } from './renderer/layers';
+import { setupLayers, deployZoneLayer, unitLayer } from './renderer/layers';
 import { setupCameraControls, setMapBounds, centerCameraOnMap } from './renderer/camera-controller';
 import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
@@ -62,21 +67,6 @@ function getEnemyPlayer(player: PlayerId): PlayerId {
   return player === 'player1' ? 'player2' : 'player1';
 }
 
-/** Draw a single flat-top hexagon into a PIXI.Graphics. */
-function drawHexGraphics(g: Graphics, cx: number, cy: number, size: number, fillColor: number, alpha: number, strokeColor?: number, strokeWidth?: number): void {
-  const points: number[] = [];
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 180) * (60 * i);
-    points.push(cx + size * Math.cos(angle));
-    points.push(cy + size * Math.sin(angle));
-  }
-  g.poly(points, true);
-  g.fill({ color: fillColor, alpha });
-  if (strokeColor !== undefined && strokeWidth !== undefined) {
-    g.stroke({ color: strokeColor, width: strokeWidth });
-  }
-}
-
 /** Parse CSS hex color string to numeric value. */
 function parseColor(hex: string): number {
   return parseInt(hex.replace('#', ''), 16);
@@ -92,120 +82,27 @@ function renderScene(state: GameState): void {
   const selectedUnit = store.selectedUnit;
   const isBuildPhase = state.phase === 'build';
 
-  // Clear layers
-  terrainLayer.removeChildren();
-  deployZoneLayer.removeChildren();
-  fogLayer.removeChildren();
+  // Clear unit layer (terrain/fog/deploy cleared by their own modules)
   unitLayer.removeChildren();
 
-  // Build deployment zone lookups for build phase
-  const friendlyDeployKeys = new Set<string>();
-  const enemyDeployKeys = new Set<string>();
+  // Terrain + objective + city borders
+  renderTerrain(state);
+
+  // Deploy zones (build phase only)
   if (isBuildPhase) {
-    const friendlyZone = currentPlayerView === 'player1'
-      ? state.map.player1Deployment
-      : state.map.player2Deployment;
-    const enemyZone = currentPlayerView === 'player1'
-      ? state.map.player2Deployment
-      : state.map.player1Deployment;
-    for (const h of friendlyZone) {
-      friendlyDeployKeys.add(hexToKey(h));
-    }
-    for (const h of enemyZone) {
-      enemyDeployKeys.add(hexToKey(h));
-    }
+    renderDeployZones(state, currentPlayerView);
+  } else {
+    deployZoneLayer.removeChildren();
   }
 
-  // Draw terrain hexes
-  const terrainGraphics = new Graphics();
-  const sortedHexes = [...allHexes].sort((a, b) => a.r - b.r);
-  for (const hex of sortedHexes) {
-    const { x, y } = hexToPixel(hex, HEX_SIZE);
-    const hexKey = hexToKey(hex);
-    const terrain = state.map.terrain.get(hexKey) ?? 'plains';
-    const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
-    const fillNum = parseColor(fill);
-
-    drawHexGraphics(terrainGraphics, x, y, HEX_SIZE, fillNum, 1, 0x1a1a2e, 1);
-  }
-  terrainLayer.addChild(terrainGraphics);
-
-  // Objective hex glow
-  const objGraphics = new Graphics();
-  const objPixel = hexToPixel(state.map.centralObjective, HEX_SIZE);
-  drawHexGraphics(objGraphics, objPixel.x, objPixel.y, HEX_SIZE, 0xc88a20, 0.6);
-  drawHexGraphics(objGraphics, objPixel.x, objPixel.y, HEX_SIZE + 2, 0x000000, 0, 0xc88a20, 2);
-  terrainLayer.addChild(objGraphics);
-
-  // City ownership borders
-  if (state.cityOwnership) {
-    const cityGraphics = new Graphics();
-    for (const hex of allHexes) {
-      const key = hexToKey(hex);
-      const owner = state.cityOwnership.get(key);
-      if (owner) {
-        const { x, y } = hexToPixel(hex, HEX_SIZE);
-        const ownerColor = parseColor(PLAYER_COLORS[owner].light);
-        drawHexGraphics(cityGraphics, x, y, HEX_SIZE, 0x000000, 0, ownerColor, 3);
-      }
-    }
-    terrainLayer.addChild(cityGraphics);
-  }
-
-  // Deploy zones
-  if (isBuildPhase) {
-    const deployGraphics = new Graphics();
-    for (const hex of allHexes) {
-      const hexKey = hexToKey(hex);
-      const { x, y } = hexToPixel(hex, HEX_SIZE);
-
-      if (friendlyDeployKeys.has(hexKey)) {
-        const tint = currentPlayerView === 'player1' ? 0x1e5ab4 : 0xb41e1e;
-        const stroke = currentPlayerView === 'player1' ? 0x50a0ff : 0xff5050;
-        drawHexGraphics(deployGraphics, x, y, HEX_SIZE, tint, 0.45, stroke, 2.5);
-      } else if (enemyDeployKeys.has(hexKey)) {
-        const tint = currentPlayerView === 'player1' ? 0x8c1e1e : 0x1e46a0;
-        const stroke = currentPlayerView === 'player1' ? 0xc83c3c : 0x3c78dc;
-        drawHexGraphics(deployGraphics, x, y, HEX_SIZE, tint, 0.35, stroke, 1.5);
-      }
-    }
-    deployZoneLayer.addChild(deployGraphics);
-  }
-
-  // Highlights (move/attack range)
-  const currentHighlights = store.highlightedHexes;
-  const currentHighlightMode = store.highlightMode;
-  if (currentHighlights.size > 0 && currentHighlightMode !== 'none') {
-    const hlGraphics = new Graphics();
-    const hlFill = currentHighlightMode === 'move' ? 0x64c8ff : 0xff5050;
-    const hlStroke = currentHighlightMode === 'move' ? 0x64c8ff : 0xff5050;
-    const hlAlpha = currentHighlightMode === 'move' ? 0.25 : 0.3;
-    for (const hex of allHexes) {
-      const key = hexToKey(hex);
-      if (currentHighlights.has(key)) {
-        const { x, y } = hexToPixel(hex, HEX_SIZE);
-        drawHexGraphics(hlGraphics, x, y, HEX_SIZE, hlFill, hlAlpha, hlStroke, 2);
-      }
-    }
-    terrainLayer.addChild(hlGraphics);
-  }
-
-  // Hovered hex
-  const currentHovered = store.hoveredHex;
-  if (currentHovered) {
-    const hoverGraphics = new Graphics();
-    const { x, y } = hexToPixel(currentHovered, HEX_SIZE);
-    drawHexGraphics(hoverGraphics, x, y, HEX_SIZE, 0x000000, 0, 0xffffff, 2);
-    terrainLayer.addChild(hoverGraphics);
-  }
-
-  // Selected unit highlight
-  if (selectedUnit) {
-    const selGraphics = new Graphics();
-    const { x, y } = hexToPixel(selectedUnit.position, HEX_SIZE);
-    drawHexGraphics(selGraphics, x, y, HEX_SIZE, 0x000000, 0, 0xffdd44, 3);
-    terrainLayer.addChild(selGraphics);
-  }
+  // Selection highlights, hovered hex, move/attack range (rendered on uiLayer)
+  renderSelectionHighlights(
+    selectedUnit,
+    store.hoveredHex,
+    store.highlightedHexes,
+    store.highlightMode,
+    allHexes,
+  );
 
   // Units
   const drawUnitCircle = (g: Graphics, unit: Unit, cx: number, cy: number): void => {
@@ -261,15 +158,7 @@ function renderScene(state: GameState): void {
     unitLayer.addChild(ghostGraphics);
 
     // Fog overlay on non-visible hexes
-    const fogGraphics = new Graphics();
-    for (const hex of allHexes) {
-      const key = hexToKey(hex);
-      if (!visibleHexes.has(key)) {
-        const { x, y } = hexToPixel(hex, HEX_SIZE);
-        drawHexGraphics(fogGraphics, x, y, HEX_SIZE, 0x000000, 0.6);
-      }
-    }
-    fogLayer.addChild(fogGraphics);
+    renderFog(allHexes, visibleHexes);
   }
 }
 
@@ -363,6 +252,9 @@ export function App(): ReactElement {
     }
 
     renderScene(gameState);
+
+    // Minimap
+    renderMinimap(gameState, useGameStore.getState().visibleHexes, app.stage, app);
   }, [gameState, selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies]);
 
   // Click handler
