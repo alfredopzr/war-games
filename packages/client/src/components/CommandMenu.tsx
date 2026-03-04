@@ -4,7 +4,7 @@ import type { DirectiveType, CommandPool } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
 const DIRECTIVES: readonly DirectiveType[] = [
-  'advance', 'hold', 'flank-left', 'flank-right', 'scout', 'support',
+  'advance', 'hold', 'flank-left', 'flank-right', 'scout', 'support', 'hunt', 'capture',
 ] as const;
 
 function directiveLabel(d: DirectiveType): string {
@@ -15,6 +15,8 @@ function directiveLabel(d: DirectiveType): string {
     case 'flank-right': return 'Flank R';
     case 'scout': return 'Scout';
     case 'support': return 'Support';
+    case 'hunt': return 'Hunt';
+    case 'capture': return 'Capture';
   }
 }
 
@@ -38,6 +40,12 @@ export function CommandMenu(): ReactElement | null {
 
   const handleRedirect = useCallback((directive: DirectiveType): void => {
     if (!selectedUnit) return;
+    if (directive === 'hunt' || directive === 'capture') {
+      const store = useGameStore.getState();
+      store.setTargetSelectionMode(true, directive);
+      setShowDirectives(false);
+      return;
+    }
     addPendingCommand({ type: 'redirect', unitId: selectedUnit.id, newDirective: directive });
     setShowDirectives(false);
     selectUnit(null);
