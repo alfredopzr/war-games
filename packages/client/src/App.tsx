@@ -285,33 +285,32 @@ export function App(): ReactElement {
         const cy = y + oy;
 
         if (isBuildPhase) {
+          // Render terrain tile for all hexes, then tint deployment zones
+          const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
+          drawHex(ctx, cx, cy, HEX_SIZE, fill, 'transparent', 0);
+          if (tilesReady) {
+            const img = getTileImage(terrain);
+            if (img) drawHexTile(ctx, img, cx, cy, HEX_SIZE);
+          }
+
           if (friendlyDeployKeys.has(hexKey)) {
-            // Own deployment zone: solid player color, no terrain tile
-            const fill = currentPlayerView === 'player1'
-              ? 'rgba(30, 90, 180, 0.9)'
-              : 'rgba(180, 30, 30, 0.9)';
+            // Own deployment zone: blue/red tint + bright border
+            const tint = currentPlayerView === 'player1'
+              ? 'rgba(30, 90, 180, 0.45)'
+              : 'rgba(180, 30, 30, 0.45)';
             const stroke = currentPlayerView === 'player1'
               ? 'rgba(80, 160, 255, 1.0)'
               : 'rgba(255, 80, 80, 1.0)';
-            drawHex(ctx, cx, cy, HEX_SIZE, fill, stroke, 2.5);
+            drawHex(ctx, cx, cy, HEX_SIZE, tint, stroke, 2.5);
           } else if (enemyDeployKeys.has(hexKey)) {
-            // Enemy deployment zone: dimmer opposite color, no terrain tile
-            const fill = currentPlayerView === 'player1'
-              ? 'rgba(140, 30, 30, 0.7)'
-              : 'rgba(30, 70, 160, 0.7)';
+            // Enemy deployment zone: dim opposing tint + faint border
+            const tint = currentPlayerView === 'player1'
+              ? 'rgba(140, 30, 30, 0.35)'
+              : 'rgba(30, 70, 160, 0.35)';
             const stroke = currentPlayerView === 'player1'
-              ? 'rgba(200, 60, 60, 0.8)'
-              : 'rgba(60, 120, 220, 0.8)';
-            drawHex(ctx, cx, cy, HEX_SIZE, fill, stroke, 1.5);
-          } else {
-            // Non-deployment hex: terrain tile + dark overlay to de-emphasise
-            const fill = TERRAIN_COLORS[terrain] ?? '#5a9a50';
-            drawHex(ctx, cx, cy, HEX_SIZE, fill, 'transparent', 0);
-            if (tilesReady) {
-              const img = getTileImage(terrain);
-              if (img) drawHexTile(ctx, img, cx, cy, HEX_SIZE);
-            }
-            drawHex(ctx, cx, cy, HEX_SIZE, 'rgba(0, 0, 0, 0.4)', 'transparent', 0);
+              ? 'rgba(200, 60, 60, 0.7)'
+              : 'rgba(60, 120, 220, 0.7)';
+            drawHex(ctx, cx, cy, HEX_SIZE, tint, stroke, 1.5);
           }
         } else {
           // Normal phase: solid base then tile (base fills transparent tile corners)
