@@ -2,7 +2,12 @@
 
 ## Overview
 
-HexWar is a hex-based tactical strategy game. See `DESIGN.md` for the full game design document.
+HexWar is a hex-based tactical strategy game. See `docs/DESIGN.md` for the full game design document.
+
+## Documentation
+
+- All design docs, reference materials, and non-code markdown files belong in `docs/`.
+- Only `CLAUDE.md` and `README.md` stay in the project root.
 
 ## Monorepo Structure
 

@@ -469,7 +469,7 @@ export function handleSubmitCommands(
     startTurnTimer(room, () => handleTurnTimeout(room, io));
   } else {
     // Round ended
-    scoreRound(room.gameState, roundEnd.winner);
+    room.gameState = scoreRound(room.gameState, roundEnd.winner);
 
     if (room.gameState.phase === 'game-over') {
       log('info', 'game', `Game over in room ${room.id}, winner: ${room.gameState.winner}, turns: ${room.turnLog.length}`);

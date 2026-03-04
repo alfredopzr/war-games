@@ -3,10 +3,10 @@
 // =============================================================================
 
 import { Router } from 'express';
-import type { Request, Response } from 'express';
+import type { Request, Response, Router as RouterType } from 'express';
 import { getAll, getLogs, subscribe, unsubscribe } from './logger';
 
-const router = Router();
+const router: RouterType = Router();
 
 function authMiddleware(req: Request, res: Response, next: () => void): void {
   const token = req.query.token as string | undefined;
