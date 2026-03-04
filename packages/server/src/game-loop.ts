@@ -39,6 +39,7 @@ import {
   clearBuildTimer,
   clearTurnTimer,
 } from './timers';
+import { log } from './logger';
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -168,6 +169,7 @@ export function startGame(room: Room, io: Server): void {
   const state = createGame(seed);
   room.gameState = state;
   room.phase = 'playing';
+  log('info', 'game', `Game started in room ${room.id}`);
 
   for (const [playerId, player] of room.players) {
     const filtered = filterStateForPlayer(state, playerId);
@@ -289,6 +291,7 @@ export function handleConfirmBuild(
   if (!room.gameState) return;
 
   room.buildConfirmed.add(playerId);
+  log('info', 'game', `Player confirmed build in room ${room.id}`);
 
   // Emit 'build-confirmed' to the OTHER player
   const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
@@ -312,6 +315,7 @@ function transitionToBattle(room: Room, io: Server): void {
   clearBuildTimer(room);
   startBattlePhase(room.gameState);
   room.buildConfirmed.clear();
+  log('info', 'game', `Battle phase started in room ${room.id}`);
 
   emitFilteredState(io, room, 'battle-start');
   startTurnTimer(room, () => handleTurnTimeout(room, io));
@@ -409,6 +413,7 @@ export function handleSubmitCommands(
   }
 
   clearTurnTimer(room);
+  log('info', 'game', `Player submitted ${commands.length} commands in room ${room.id}`);
 
   // Validate commands against current state — filter out stale/invalid ones
   const validCommands = filterValidCommands(room.gameState, commands, playerId);
@@ -420,6 +425,11 @@ export function handleSubmitCommands(
   executeTurn(room.gameState, validCommands);
 
   const events = generateBattleEvents(prevUnits, prevCities, room.gameState, playerId);
+
+  for (const event of events) {
+    log('info', 'game', event.message);
+  }
+
   const roundEnd = checkRoundEnd(room.gameState);
 
   if (!roundEnd.roundOver) {
@@ -438,12 +448,14 @@ export function handleSubmitCommands(
     scoreRound(room.gameState, roundEnd.winner);
 
     if ((room.gameState.phase as string) === 'game-over') {
+      log('info', 'game', `Game over in room ${room.id}, winner: ${room.gameState.winner}`);
       emitFilteredStatePerPlayer(io, room, 'game-over', () => ({
         winner: room.gameState!.winner,
       }));
       room.phase = 'finished';
     } else {
       // Next round — back to build phase
+      log('info', 'game', `Round ended in room ${room.id}, winner: ${roundEnd.winner}`);
       for (const [pid, player] of room.players) {
         const filtered = filterStateForPlayer(room.gameState, pid);
         io.to(player.socketId).emit('round-end', {
@@ -466,6 +478,7 @@ export function handleSubmitCommands(
 
 function handleBuildTimeout(room: Room, io: Server): void {
   if (!room.gameState) return;
+  log('warn', 'game', `Build timeout in room ${room.id}`);
 
   // Auto-confirm for any player who hasn't confirmed yet
   for (const [playerId] of room.players) {
@@ -482,6 +495,7 @@ function handleBuildTimeout(room: Room, io: Server): void {
 
 function handleTurnTimeout(room: Room, io: Server): void {
   if (!room.gameState) return;
+  log('warn', 'game', `Turn timeout in room ${room.id}`);
 
   const currentPlayer = room.gameState.round.currentPlayer;
   handleSubmitCommands(room, currentPlayer, [], io);

@@ -30,6 +30,8 @@ import {
   handleConfirmBuild,
   handleSubmitCommands,
 } from './game-loop';
+import { log } from './logger';
+import { logViewerRouter } from './log-viewer';
 
 import type { PlayerId, DirectiveTarget } from '@hexwar/engine';
 
@@ -49,6 +51,8 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use(logViewerRouter);
+
 app.use(express.static(clientDist));
 
 app.get('{*path}', (_req, res) => {
@@ -60,6 +64,7 @@ io.on('connection', (socket) => {
     const room = createRoom();
     const { playerId, reconnectToken } = joinRoom(room.id, socket.id);
     socket.join(room.id);
+    log('info', 'game', `Room created: ${room.id}`);
     socket.emit('room-created', {
       type: 'room-created',
       roomId: room.id,
@@ -72,6 +77,7 @@ io.on('connection', (socket) => {
     try {
       const { room, playerId, reconnectToken } = joinRoom(roomId, socket.id);
       socket.join(roomId);
+      log('info', 'game', `Player joined room ${roomId}`);
       socket.emit('room-joined', {
         type: 'room-joined',
         roomId,
@@ -84,6 +90,7 @@ io.on('connection', (socket) => {
         startGame(room, io);
       }
     } catch (err) {
+      log('warn', 'game', `Error joining room ${roomId}: ${(err as Error).message}`);
       socket.emit('room-error', {
         type: 'room-error',
         message: (err as Error).message,
@@ -97,7 +104,10 @@ io.on('connection', (socket) => {
     const { room, playerId } = found;
     socket.leave(room.id);
 
-    if (room.phase === 'playing') {
+    const forfeit = room.phase === 'playing';
+    log('info', 'game', `Player left room ${room.id} (forfeit: ${forfeit})`);
+
+    if (forfeit) {
       const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
       socket.to(room.id).emit('forfeit', {
         type: 'forfeit',
@@ -127,6 +137,7 @@ io.on('connection', (socket) => {
           data.target as DirectiveTarget | undefined,
         );
       } catch (err) {
+        log('warn', 'game', `Error in room: ${(err as Error).message}`);
         socket.emit('room-error', {
           type: 'room-error',
           message: (err as Error).message,
@@ -141,6 +152,7 @@ io.on('connection', (socket) => {
     try {
       handleRemoveUnit(found.room, found.playerId, data.unitId, io);
     } catch (err) {
+      log('warn', 'game', `Error in room ${found.room.id}: ${(err as Error).message}`);
       socket.emit('room-error', {
         type: 'room-error',
         message: (err as Error).message,
@@ -161,6 +173,7 @@ io.on('connection', (socket) => {
         data.target as DirectiveTarget | undefined,
       );
     } catch (err) {
+      log('warn', 'game', `Error in room ${found.room.id}: ${(err as Error).message}`);
       socket.emit('room-error', {
         type: 'room-error',
         message: (err as Error).message,
@@ -204,6 +217,7 @@ io.on('connection', (socket) => {
           socket.id,
         );
         socket.join(room.id);
+        log('info', 'game', `Player reconnected to room ${room.id}`);
 
         if (room.gameState) {
           const filtered = filterStateForPlayer(room.gameState, playerId);
@@ -218,6 +232,7 @@ io.on('connection', (socket) => {
           type: 'opponent-reconnected',
         });
       } catch (err) {
+        log('warn', 'game', `Reconnect failed for room ${data.roomId}: ${(err as Error).message}`);
         socket.emit('room-error', {
           type: 'room-error',
           message: (err as Error).message,
@@ -230,6 +245,7 @@ io.on('connection', (socket) => {
     const found = getRoomBySocket(socket.id);
     if (!found) return;
     const { room, playerId } = found;
+    log('info', 'game', `Player disconnected from room ${room.id}`);
 
     if (room.phase === 'playing') {
       handleDisconnect(room.id, playerId);
@@ -260,7 +276,7 @@ io.on('connection', (socket) => {
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  log('info', 'server', `Server running on port ${PORT}`);
 });
 
 export { io, httpServer };
