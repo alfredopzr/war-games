@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import {
   executeTurn, checkRoundEnd, scoreRound,
   CP_PER_ROUND, UNIT_STATS,
@@ -203,7 +203,18 @@ export function BattleHUD(): ReactElement | null {
   const selectUnit = useGameStore((s) => s.selectUnit);
   const waitingForServer = useGameStore((s) => s.waitingForServer);
   const myPlayerId = useGameStore((s) => s.myPlayerId);
+  const buildTimeRemaining = useGameStore((s) => s.buildTimeRemaining);
+  const startBuildTimer = useGameStore((s) => s.startBuildTimer);
+  const confirmBuild = useGameStore((s) => s.confirmBuild);
+  const buildTimerInterval = useGameStore((s) => s.buildTimerInterval);
   const [aiThinking, setAiThinking] = useState(false);
+
+  // Start build timer when build phase begins and no interval is running
+  useEffect(() => {
+    if (gameState?.phase === 'build' && !buildTimerInterval) {
+      startBuildTimer();
+    }
+  }, [gameState?.phase, buildTimerInterval, startBuildTimer]);
 
   const handleEndTurn = useCallback((): void => {
     if (aiThinking) return;
@@ -320,6 +331,15 @@ export function BattleHUD(): ReactElement | null {
     && (gameMode !== 'online' || myPlayerId === round.currentPlayer);
 
   if (isBuildPhase) {
+    const timerColorClass = buildTimeRemaining <= 10
+      ? 'hud-timer-critical'
+      : buildTimeRemaining <= 30
+        ? 'hud-timer-warning'
+        : 'hud-timer-normal';
+    const m = Math.floor(buildTimeRemaining / 60);
+    const s = buildTimeRemaining % 60;
+    const timerText = `${m}:${s.toString().padStart(2, '0')}`;
+
     return (
       <div className="battle-hud">
         <div className="turn-info">
@@ -342,6 +362,10 @@ export function BattleHUD(): ReactElement | null {
           <span className="round-info">
             Wins: P1 {gameState.players.player1.roundsWon} | P2 {gameState.players.player2.roundsWon}
           </span>
+          <span className={`hud-timer ${timerColorClass}`}>{timerText}</span>
+          <button className="hud-ready-btn" onClick={confirmBuild} type="button">
+            Ready
+          </button>
         </div>
       </div>
     );

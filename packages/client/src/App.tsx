@@ -17,7 +17,6 @@ import { UnitInfoPanel } from './components/UnitInfoPanel';
 import { UnitShop } from './components/UnitShop';
 import { DirectiveSelector } from './components/DirectiveSelector';
 import { BattleHUD } from './components/BattleHUD';
-import { BuildTimer } from './components/BuildTimer';
 import { ResourceBar } from './components/ResourceBar';
 import { CommandMenu } from './components/CommandMenu';
 import { TurnTransition } from './components/TurnTransition';
@@ -697,7 +696,6 @@ export function App(): ReactElement {
       {gameState && (
         <>
           <BattleHUD />
-          <BuildTimer />
           <ResourceBar />
           <UnitShop />
           <DirectiveSelector />
