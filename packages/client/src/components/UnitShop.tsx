@@ -45,8 +45,7 @@ function UnitCard({
         <span>ATK {stats.atk}</span>
         <span>DEF {stats.def}</span>
         <span>Move {stats.moveRange}</span>
-        <span>Range {stats.minAttackRange}-{stats.attackRange}</span>
-        <span>Vision {stats.visionRange}</span>
+        <span>Rng {stats.minAttackRange}-{stats.attackRange}</span>
       </div>
     </div>
   );
@@ -78,25 +77,31 @@ export function UnitShop(): ReactElement | null {
   const playerColor = currentPlayerView === 'player1' ? 'blue' : 'red';
 
   return (
-    <div className="unit-shop">
-      <h3>DEPLOY UNITS</h3>
-      <div className="resources">{resources}g</div>
-      <div className="shop-help-tip">
-        Select a unit below, then click a <strong>{playerColor}-highlighted</strong> hex on the <strong>{playerSide}</strong> of the map to place it. The <strong>enemy</strong> deploys on the opposite side. Right-click a placed unit to remove it. Click a placed unit to assign a directive.
+    <>
+      <div className="unit-shop">
+        <div className="unit-shop-header">
+          <h3>DEPLOY UNITS</h3>
+          <div className="resources">{resources}g</div>
+        </div>
+        <div className="unit-shop-cards">
+          {UNIT_TYPES.map((type) => {
+            const stats = UNIT_STATS[type];
+            return (
+              <UnitCard
+                key={type}
+                type={type}
+                stats={stats}
+                canAfford={resources >= stats.cost}
+                isActive={placementMode === type}
+                onSelect={handleSelect}
+              />
+            );
+          })}
+        </div>
       </div>
-      {UNIT_TYPES.map((type) => {
-        const stats = UNIT_STATS[type];
-        return (
-          <UnitCard
-            key={type}
-            type={type}
-            stats={stats}
-            canAfford={resources >= stats.cost}
-            isActive={placementMode === type}
-            onSelect={handleSelect}
-          />
-        );
-      })}
-    </div>
+      <div className="shop-help-tip">
+        Select a unit, then click a <strong>{playerColor}-highlighted</strong> hex on the <strong>{playerSide}</strong> of the map to place it. Right-click a placed unit to remove it. Click a placed unit to assign a directive.
+      </div>
+    </>
   );
 }

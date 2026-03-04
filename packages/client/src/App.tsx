@@ -17,13 +17,12 @@ import { updateEffects } from './renderer/effects-renderer';
 import { renderMinimap } from './renderer/minimap';
 import { initPixiApp, destroyPixiApp } from './renderer/pixi-app';
 import { setupLayers, deployZoneLayer } from './renderer/layers';
-import { setupCameraControls, setMapBounds, centerCameraOnMap } from './renderer/camera-controller';
+import { setupCameraControls, setMapBounds, centerCameraOnMap, wasDrag } from './renderer/camera-controller';
 import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
-import { UnitShop } from './components/UnitShop';
 import { DirectiveSelector } from './components/DirectiveSelector';
 import { BattleHUD } from './components/BattleHUD';
-import { ResourceBar } from './components/ResourceBar';
+import { BottomPanel } from './components/BottomPanel';
 import { CommandMenu } from './components/CommandMenu';
 import { TurnTransition } from './components/TurnTransition';
 import { RoundResult } from './components/RoundResult';
@@ -31,7 +30,6 @@ import { GameOverScreen } from './components/GameOverScreen';
 import { StartMenu } from './components/StartMenu';
 import { TerrainLegend } from './components/TerrainLegend';
 import { BattleHelp } from './components/BattleHelp';
-import { BattleLog } from './components/BattleLog';
 import { Toast } from './components/Toast';
 import { OnlineStatus } from './components/OnlineStatus';
 
@@ -212,6 +210,9 @@ export function App(): ReactElement {
   // Click handler
   const handleClick = useCallback(
     (e: MouseEvent): void => {
+      // Skip click if the user was dragging to pan
+      if (wasDrag()) return;
+
       const app = appRef.current;
       if (!app || !gameState) return;
 
@@ -368,6 +369,10 @@ export function App(): ReactElement {
   // Right-click handler — remove placed unit during build phase
   const handleContextMenu = useCallback(
     (e: MouseEvent): void => {
+      if (wasDrag()) {
+        e.preventDefault();
+        return;
+      }
       if (!gameState || gameState.phase !== 'build') return;
       if (useGameStore.getState().isReplayPlaying) return;
       const app = appRef.current;
@@ -430,21 +435,21 @@ export function App(): ReactElement {
   return (
     <>
       <StartMenu />
-      <div ref={pixiContainerRef} className="game-canvas" />
-      {gameState && (
-        <>
-          <BattleHUD />
-          <ResourceBar />
-          <UnitShop />
-          <DirectiveSelector />
-          <UnitInfoPanel />
-          <CommandMenu />
-          <TerrainLegend />
-          <BattleHelp />
-          <BattleLog />
-          <OnlineStatus />
-        </>
-      )}
+      <div className="game-layout">
+        {gameState && <BattleHUD />}
+        <div ref={pixiContainerRef} className="game-canvas" />
+        {gameState && (
+          <>
+            <BottomPanel />
+            <DirectiveSelector />
+            <UnitInfoPanel />
+            <CommandMenu />
+            <TerrainLegend />
+            <BattleHelp />
+            <OnlineStatus />
+          </>
+        )}
+      </div>
       <Toast />
       {showTransition && <TurnTransition />}
       {showRoundResult && <RoundResult />}
