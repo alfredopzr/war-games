@@ -25,6 +25,27 @@ export function pixelToHex(px: number, py: number, hexSize: number): CubeCoord {
   return { q: rq, r: rr, s: rs };
 }
 
+/**
+ * Draw a Kenney hexagon-pack tile image centered on a hex.
+ * Tiles are 120x140px; we scale by (size * 2) / 120 so the tile width
+ * matches the hex diameter. City tiles get a small upward Y offset to
+ * align the isometric building base with the hex center.
+ */
+export function drawHexTile(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  centerX: number,
+  centerY: number,
+  size: number,
+  isCityTile = false,
+): void {
+  const scale = (size * 2) / 120;
+  const w = 120 * scale;
+  const h = 140 * scale;
+  const yOffset = isCityTile ? -size * 0.15 : 0;
+  ctx.drawImage(img, centerX - w / 2, centerY - h / 2 + yOffset, w, h);
+}
+
 /** Draw a single flat-top hexagon. */
 export function drawHex(
   ctx: CanvasRenderingContext2D,

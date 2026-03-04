@@ -61,6 +61,19 @@
   font-size: 16px;
 }
 
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: monospace;
+  font-size: 18px;
+  z-index: 9999;
+}
+
 .game-canvas {
   display: block;
 }

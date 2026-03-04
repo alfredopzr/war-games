@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, type ReactElement } from 'react';
+import { useRef, useEffect, useCallback, useState, type ReactElement } from 'react';
 import {
   placeUnit,
   getAllHexes, hexToKey, calculateVisibility,
@@ -6,7 +6,8 @@ import {
 } from '@hexwar/engine';
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
 import { HEX_SIZE, TERRAIN_COLORS, TERRAIN_BORDER_COLORS, PLAYER_COLORS } from './renderer/constants';
-import { hexToPixel, pixelToHex, drawHex } from './renderer/hex-render';
+import { hexToPixel, pixelToHex, drawHex, drawHexTile } from './renderer/hex-render';
+import { loadAllTiles, getTileImage, tilesReady } from './renderer/asset-loader';
 import { drawUnit } from './renderer/unit-render';
 import { drawObjective } from './renderer/objective-render';
 import { drawFog, drawGhostMarker } from './renderer/fog-render';
@@ -197,6 +198,11 @@ export function App(): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boundsRef = useRef<{ minX: number; minY: number; width: number; height: number } | null>(null);
   const animFrameRef = useRef<number>(0);
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
+
+  useEffect(() => {
+    loadAllTiles().then(() => setAssetsLoaded(true)).catch(() => setAssetsLoaded(true));
+  }, []);
 
   const gameState = useGameStore((s) => s.gameState);
   const selectedUnit = useGameStore((s) => s.selectedUnit);
@@ -269,13 +275,25 @@ export function App(): ReactElement {
         }
       }
 
-      // Draw terrain hexes
-      for (const hex of allHexes) {
+      // Draw terrain hexes — sorted by r (top to bottom) for correct isometric overlap
+      const sortedHexes = [...allHexes].sort((a, b) => a.r - b.r);
+      for (const hex of sortedHexes) {
         const { x, y } = hexToPixel(hex, HEX_SIZE);
         const terrain = state.map.terrain.get(hexToKey(hex)) ?? 'plains';
-        const fill = TERRAIN_COLORS[terrain] ?? '#4a7c59';
-        const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#3d6b4c';
-        drawHex(ctx, x + ox, y + oy, HEX_SIZE, fill, stroke, 1.5);
+        if (tilesReady) {
+          const img = getTileImage(terrain, hex);
+          if (img) {
+            drawHexTile(ctx, img, x + ox, y + oy, HEX_SIZE, terrain === 'city');
+          } else {
+            const fill = TERRAIN_COLORS[terrain] ?? '#4a7c59';
+            const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#3d6b4c';
+            drawHex(ctx, x + ox, y + oy, HEX_SIZE, fill, stroke, 1.5);
+          }
+        } else {
+          const fill = TERRAIN_COLORS[terrain] ?? '#4a7c59';
+          const stroke = TERRAIN_BORDER_COLORS[terrain] ?? '#3d6b4c';
+          drawHex(ctx, x + ox, y + oy, HEX_SIZE, fill, stroke, 1.5);
+        }
 
         // During build phase: highlight both deployment zones, dim the rest
         if (isBuildPhase) {
@@ -632,6 +650,9 @@ export function App(): ReactElement {
 
   return (
     <>
+      {!assetsLoaded && (
+        <div className="loading-screen">Loading assets...</div>
+      )}
       <StartMenu />
       <canvas ref={canvasRef} className="game-canvas" />
       {gameState && (
