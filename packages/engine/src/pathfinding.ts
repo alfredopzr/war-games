@@ -5,6 +5,7 @@
 import type { CubeCoord, TerrainType, UnitType, DirectiveType } from './types';
 import { hexNeighbors, hexToKey, cubeDistance } from './hex';
 import { getMoveCost } from './terrain';
+import { MinHeap } from './min-heap';
 
 // -----------------------------------------------------------------------------
 // Internal Types
@@ -48,8 +49,9 @@ export function findPath(
     return [start];
   }
 
-  const openSet = new Map<string, PathNode>();
+  const heap = new MinHeap<PathNode>((a, b) => a.f - b.f);
   const closedSet = new Set<string>();
+  const bestG = new Map<string, number>();
 
   const startNode: PathNode = {
     coord: start,
@@ -57,27 +59,21 @@ export function findPath(
     f: cubeDistance(start, end),
     parent: null,
   };
-  openSet.set(startKey, startNode);
+  heap.push(startNode);
+  bestG.set(startKey, 0);
 
-  while (openSet.size > 0) {
-    // Pick the node with the lowest f score
-    let current: PathNode | null = null;
-    let currentKey = '';
-    for (const [key, node] of openSet) {
-      if (current === null || node.f < current.f) {
-        current = node;
-        currentKey = key;
-      }
-    }
+  while (heap.size > 0) {
+    const current = heap.pop()!;
+    const currentKey = hexToKey(current.coord);
 
-    if (current === null) break;
+    // Lazy deletion: skip stale entries
+    if (closedSet.has(currentKey)) continue;
 
     // Reached the goal — reconstruct path
     if (currentKey === endKey) {
       return reconstructPath(current);
     }
 
-    openSet.delete(currentKey);
     closedSet.add(currentKey);
 
     // Expand neighbors
@@ -100,17 +96,17 @@ export function findPath(
       if (neighborKey !== endKey && occupiedHexes.has(neighborKey)) continue;
 
       const tentativeG = current.g + moveCost;
-      const existing = openSet.get(neighborKey);
+      const prevG = bestG.get(neighborKey);
 
-      if (existing !== undefined && tentativeG >= existing.g) continue;
+      if (prevG !== undefined && tentativeG >= prevG) continue;
 
-      const newNode: PathNode = {
+      bestG.set(neighborKey, tentativeG);
+      heap.push({
         coord: neighbor,
         g: tentativeG,
         f: tentativeG + cubeDistance(neighbor, end),
         parent: current,
-      };
-      openSet.set(neighborKey, newNode);
+      });
     }
   }
 

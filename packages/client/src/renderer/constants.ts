@@ -1,29 +1,4 @@
-export const HEX_SIZE = 32; // pixels from center to corner (flat-top)
-export const GRID_WIDTH = 16;
-export const GRID_HEIGHT = 12;
-
-/** Y-axis compression factor for isometric (2.5D) look. */
-export const ISO_Y_SCALE = 0.55;
-
-/** Pixels of vertical offset per elevation level. */
-export const ELEVATION_PX = 12;
-
-export const TERRAIN_COLORS: Record<string, string> = {
-  plains: '#5a9a50',
-  forest: '#2d6030',
-  mountain: '#7a7a7a',
-  city: '#a09070',
-};
-
-export const TERRAIN_BORDER_COLORS: Record<string, string> = {
-  plains: '#4a8840',
-  forest: '#204a24',
-  mountain: '#606060',
-  city: '#887860',
-};
-
-export const GRID_LINE_COLOR = '#2a2a24';
-export const FOG_COLOR = 'rgba(0, 0, 0, 0.6)';
+import type { PlayerId, UnitType } from '@hexwar/engine';
 
 export const ASH_EMBER_TERRAIN: Record<string, number> = {
   plains: 0x6A6A58,
@@ -45,4 +20,34 @@ export const UNIT_LABELS: Record<string, string> = {
   tank: 'T',
   artillery: 'A',
   recon: 'R',
+};
+
+// ---------------------------------------------------------------------------
+// 3D Model System
+// ---------------------------------------------------------------------------
+
+export type Faction = 'engineer' | 'caravaner';
+
+export const PLAYER_FACTION: Record<PlayerId, Faction> = {
+  player1: 'engineer',
+  player2: 'caravaner',
+};
+
+interface ModelEntry {
+  readonly glbPath: string;
+}
+
+export const MODEL_MANIFEST: Record<Faction, Record<UnitType, ModelEntry>> = {
+  engineer: {
+    infantry:  { glbPath: '/models/infantry_engineer.glb' },
+    tank:      { glbPath: '/models/tank_engineer.glb' },
+    artillery: { glbPath: '/models/artillery_engineer.glb' },
+    recon:     { glbPath: '/models/scout_engineer.glb' },
+  },
+  caravaner: {
+    infantry:  { glbPath: '/models/infantry_caravaner.glb' },
+    tank:      { glbPath: '/models/tank_caravaner.glb' },
+    artillery: { glbPath: '/models/artillery_caravaner.glb' },
+    recon:     { glbPath: '/models/scout_caravaner.glb' },
+  },
 };

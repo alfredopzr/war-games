@@ -1,81 +1,55 @@
-import type { Application, Container } from 'pixi.js';
+import type { GridSize } from '@hexwar/engine';
+import { getThreeContext, fitCameraToMap, resizeThreeRenderers } from './three-scene';
 
-/* ── Types ────────────────────────────────────────────────────────── */
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
 
-interface MapBounds {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
+let gridSize: GridSize | null = null;
+let elevationMap: Map<string, number> | null = null;
 
-/* ── State ────────────────────────────────────────────────────────── */
-
-let mapBounds: MapBounds | null = null;
-
-/** World-space padding around the map edges. */
-const PADDING = 20;
-
-/* ── Public helpers ───────────────────────────────────────────────── */
-
-export function setMapBounds(bounds: MapBounds): void {
-  mapBounds = bounds;
-}
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /** Always returns false — no drag interaction with a static camera. */
 export function wasDrag(): boolean {
   return false;
 }
 
-/**
- * Compute zoom and position so the full map fits in the viewport,
- * then apply to stage.
- */
-export function fitCameraToMap(stage: Container, app: Application, bounds: MapBounds): void {
-  // Force PixiJS to sync canvas size with its resizeTo container
-  app.resize();
-
-  const mapW = bounds.maxX - bounds.minX + PADDING * 2;
-  const mapH = bounds.maxY - bounds.minY + PADDING * 2;
-
-  const screenW = app.screen.width;
-  const screenH = app.screen.height;
-
-  const zoom = Math.min(screenW / mapW, screenH / mapH);
-
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerY = (bounds.minY + bounds.maxY) / 2;
-
-  stage.scale.set(zoom);
-  stage.position.x = screenW / 2 - centerX * zoom;
-  stage.position.y = screenH / 2 - centerY * zoom;
+/** Store map parameters so resize can refit the camera. */
+export function setMapParams(grid: GridSize, elev: Map<string, number>): void {
+  gridSize = grid;
+  elevationMap = elev;
 }
 
-/* ── Setup ────────────────────────────────────────────────────────── */
+/** Refit camera to current map. Call after map data is available. */
+export function refitCamera(): void {
+  if (gridSize && elevationMap) {
+    fitCameraToMap(gridSize, elevationMap);
+  }
+}
 
 /**
  * Attach a ResizeObserver so the camera re-fits on viewport resize.
- * Returns a cleanup function.
+ * Also resizes the Three.js renderers. Returns a cleanup function.
  */
-export function setupStaticCamera(app: Application, stage: Container): () => void {
-  const canvas = app.canvas as HTMLCanvasElement;
-  const container = canvas.parentElement;
+export function setupStaticCamera(container: HTMLElement): () => void {
   let rafId = 0;
 
   const observer = new ResizeObserver(() => {
-    // Wait one frame so PixiJS (resizeTo: container) updates app.screen first
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
-      if (mapBounds) {
-        fitCameraToMap(stage, app, mapBounds);
-      }
+      const ctx = getThreeContext();
+      if (!ctx) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      resizeThreeRenderers(w, h);
+      refitCamera();
     });
   });
 
-  // Observe the container, not the canvas — PixiJS controls the canvas size
-  if (container) {
-    observer.observe(container);
-  }
+  observer.observe(container);
 
   return () => {
     cancelAnimationFrame(rafId);
