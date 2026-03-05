@@ -1412,6 +1412,40 @@ One unique structure for the central objective hex.
 
 ---
 
+## Hex Modifier Props
+
+Props placed on hexes with modifier overlays (river, lake, bridge, highway). These sit on top of the re-colored hex surface.
+
+### Bridge Span
+**File**: `prop_bridge_span.glb`
+**Subject**: Short section of unfinished concrete bridge deck — two thick support piers rising from below, flat driving surface across the top with rebar stubs where guardrails were meant to go. One lane wide. The pour stopped mid-span — rough concrete edge on one side shows the formwork was never removed. Construction cones still sitting on the deck. A bridge to nowhere that happens to cross a river.
+**Colors**: Raw concrete grey `#8A8880`, rust-brown rebar stubs, dark grey `#505058` support piers, faded orange cones.
+**Placement**: 1 per bridge hex, centered. Oriented perpendicular to river flow direction.
+**Animation**: None (static).
+
+### Highway Guardrail
+**File**: `prop_road_guardrail.glb`
+**Subject**: Bent W-beam highway guardrail on wooden posts — a short section, 3-4 posts long. One post snapped off at the base, the rail section drooping and twisted at that end. Reflector tabs still attached but dulled. A chunk of highway safety infrastructure left standing on an unfinished road.
+**Colors**: Dull galvanized silver `#A0A098` rail, dark wood `#4A3828` posts, faded red-orange reflector tabs.
+**Placement**: 0-1 per highway hex, offset to hex edge.
+**Animation**: None (static).
+
+### Water Reeds
+**File**: `prop_water_reeds.glb`
+**Subject**: Clump of cattails and marsh reeds growing from shallow water — 4-6 tall stalks with characteristic brown seed heads at the top, thinner green-brown reeds around the base. Slightly wind-bent. Nature reclaiming the edges of stagnant water.
+**Colors**: Olive-brown stalks `#5A5838`, dark brown `#4A3020` seed heads, murky green-brown base.
+**Placement**: 0-2 per river or lake hex, offset toward hex edges.
+**Animation**: None (static).
+
+### Waterlogged Debris
+**File**: `prop_water_debris.glb`
+**Subject**: Half-submerged construction waste in still water — a tire lying flat with water filling the center, a wooden plank floating at an angle, a bent piece of corrugated sheet metal sticking out. The kind of garbage that accumulates in urban waterways. Partially visible above a flat water plane.
+**Colors**: Black rubber tire, grey-brown plank, rust-orange corrugated metal, dark water base `#2A3040`.
+**Placement**: 0-1 per river or lake hex.
+**Animation**: None (static).
+
+---
+
 # HUD Icons (2D Pixel Art)
 
 4 icons for the shop/unit info panel. **Not 3D** — flat PNGs, tinted at runtime via `sprite.tint`.
@@ -1490,7 +1524,7 @@ assets/models/units/scout_current.glb
 assets/models/units/artillery_current.glb
 ```
 
-## World Prop GLBs (25 files, mostly static)
+## World Prop GLBs (29 files, mostly static)
 ```
 assets/models/props/prop_dead_grass.glb
 assets/models/props/prop_road_stripe.glb
@@ -1518,6 +1552,10 @@ assets/models/props/prop_scaffolding.glb
 assets/models/props/prop_dumpster.glb
 assets/models/props/prop_crane_arm.glb
 assets/models/props/prop_command_tower.glb
+assets/models/props/prop_bridge_span.glb
+assets/models/props/prop_road_guardrail.glb
+assets/models/props/prop_water_reeds.glb
+assets/models/props/prop_water_debris.glb
 ```
 
 ## 2D Assets (6 files)
@@ -1539,3 +1577,14 @@ assets/effects/explosion.png
 | Mountain | 1 rock peak (A, B, or C) | 0-1 (boulders, retaining wall) | 1-2 |
 | City | 1 building (tall or low) | 1-2 (utility pole, barrier, debris, scaffolding, dumpster, crane arm) | 2-3 |
 | Objective | 1 command tower | — | 1 |
+
+### Modifier Overlay Props
+
+Modifier props are placed **instead of** terrain props on hexes with a modifier. The hex surface color changes too (handled by terrain-renderer).
+
+| Modifier | Props | Surface color |
+|----------|-------|---------------|
+| River | 0-2 water reeds, 0-1 waterlogged debris | Dark water `#2A3040` |
+| Lake | 0-2 water reeds, 0-1 waterlogged debris | Dark water `#2A3040` |
+| Bridge | 1 bridge span | Terrain color (unchanged) |
+| Highway | 0-1 road guardrail (terrain detail props still allowed at reduced rate) | Asphalt dark `#3A3A38` |
