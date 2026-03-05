@@ -5,18 +5,20 @@ import {
   canAttack, cubeDistance, UNIT_STATS,
 } from '@hexwar/engine';
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
-import { Application } from 'pixi.js';
-import { HEX_SIZE } from './renderer/constants';
-import { hexToPixel, screenToHex, setMapFlip } from './renderer/hex-render';
+import { screenToHex } from './renderer/click-handler';
 import { renderTerrain } from './renderer/terrain-renderer';
 import { renderFog } from './renderer/fog-renderer';
 import { renderDeployZones } from './renderer/deploy-renderer';
 import { renderSelectionHighlights } from './renderer/selection-renderer';
 import { renderUnits } from './renderer/unit-renderer';
 import { updateEffects } from './renderer/effects-renderer';
-import { initPixiApp, destroyPixiApp } from './renderer/pixi-app';
-import { setupLayers, deployZoneLayer } from './renderer/layers';
-import { setupStaticCamera, setMapBounds, fitCameraToMap, wasDrag } from './renderer/camera-controller';
+import { setupStaticCamera, setMapParams, wasDrag } from './renderer/camera-controller';
+import {
+  createThreeContext, setMapFlip, startRenderLoop, stopRenderLoop,
+  disposeThreeContext, fitCameraToMap,
+} from './renderer/three-scene';
+import { preloadFactionModels } from './renderer/model-loader';
+import { syncUnitModels, advanceAnimations, clearAllUnitModels } from './renderer/unit-model';
 import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
 import { DirectiveSelector } from './components/DirectiveSelector';
@@ -32,26 +34,6 @@ import { BattleHelp } from './components/BattleHelp';
 import { Toast } from './components/Toast';
 import { OnlineStatus } from './components/OnlineStatus';
 
-function computeGridBounds(
-  hexes: CubeCoord[],
-  hexSize: number,
-): { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number } {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-
-  for (const hex of hexes) {
-    const { x, y } = hexToPixel(hex, hexSize);
-    minX = Math.min(minX, x - hexSize);
-    maxX = Math.max(maxX, x + hexSize);
-    minY = Math.min(minY, y - hexSize);
-    maxY = Math.max(maxY, y + hexSize);
-  }
-
-  return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
-}
-
 function findUnitAtHex(state: GameState, hex: CubeCoord): Unit | null {
   const key = hexToKey(hex);
   const allUnits = [...state.players.player1.units, ...state.players.player2.units];
@@ -66,27 +48,22 @@ function getEnemyPlayer(player: PlayerId): PlayerId {
   return player === 'player1' ? 'player2' : 'player1';
 }
 
-/** Render the full scene into PixiJS layers. */
+/** Render the full scene into Three.js. */
 function renderScene(state: GameState): void {
-  const allHexes = getAllHexes(state.map.gridSize);
   const store = useGameStore.getState();
   const currentPlayerView = store.currentPlayerView;
   const visibleHexes = store.visibleHexes;
   const lastKnownEnemies = store.lastKnownEnemies;
   const selectedUnit = store.selectedUnit;
   const isBuildPhase = state.phase === 'build';
+  const allHexes = getAllHexes(state.map.gridSize);
 
-  // Terrain + objective + city borders
   renderTerrain(state);
 
-  // Deploy zones (build phase only)
   if (isBuildPhase) {
     renderDeployZones(state, currentPlayerView);
-  } else {
-    deployZoneLayer.removeChildren();
   }
 
-  // Selection highlights, hovered hex, move/attack range (rendered on uiLayer)
   renderSelectionHighlights(
     selectedUnit,
     store.hoveredHex,
@@ -96,19 +73,17 @@ function renderScene(state: GameState): void {
     state.map.elevation,
   );
 
-  // Units (rendered on unitLayer with HP bars, directive indicators, damage flash)
   renderUnits(state, currentPlayerView, visibleHexes, lastKnownEnemies);
 
-  // Fog overlay on non-visible hexes (battle phase only)
   if (!isBuildPhase) {
     renderFog(allHexes, visibleHexes, state.map.elevation);
   }
 }
 
 export function App(): ReactElement {
-  const pixiContainerRef = useRef<HTMLDivElement>(null);
-  const appRef = useRef<Application | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const cleanupCameraRef = useRef<(() => void) | null>(null);
+  const modelsLoadedRef = useRef(false);
 
   const gameState = useGameStore((s) => s.gameState);
   const selectedUnit = useGameStore((s) => s.selectedUnit);
@@ -148,67 +123,71 @@ export function App(): ReactElement {
     useGameStore.setState({ lastKnownEnemies: updated });
   }, [gameState, currentPlayerView, gameMode, myPlayerId, setVisibleHexes]);
 
-  // Initialize PixiJS app
+  // Initialize Three.js
   useEffect(() => {
-    const container = pixiContainerRef.current;
+    const container = containerRef.current;
     if (!container) return;
 
-    let cancelled = false;
+    createThreeContext(container);
 
-    initPixiApp(container).then((app) => {
-      if (cancelled) {
-        destroyPixiApp();
-        return;
-      }
-      appRef.current = app;
-      setupLayers(app);
-      app.ticker.add((ticker) => updateEffects(ticker.deltaTime));
-      const cleanup = setupStaticCamera(app, app.stage);
-      cleanupCameraRef.current = cleanup;
+    const cleanupCamera = setupStaticCamera(container);
+    cleanupCameraRef.current = cleanupCamera;
+
+    startRenderLoop((deltaSec) => {
+      advanceAnimations(deltaSec);
+      updateEffects(deltaSec);
     });
 
     return () => {
-      cancelled = true;
       if (cleanupCameraRef.current) {
         cleanupCameraRef.current();
         cleanupCameraRef.current = null;
       }
-      destroyPixiApp();
-      appRef.current = null;
+      stopRenderLoop();
+      clearAllUnitModels();
+      disposeThreeContext();
     };
   }, []);
 
   // Render scene when game state changes
   useEffect(() => {
-    const app = appRef.current;
-    if (!app || !gameState) return;
+    if (!gameState) return;
 
-    // Set map flip before computing bounds (affects hexToPixel output)
+    // Set map flip before rendering
     setMapFlip(currentPlayerView === 'player1');
 
-    const allHexes = getAllHexes(gameState.map.gridSize);
-    const bounds = computeGridBounds(allHexes, HEX_SIZE);
-    setMapBounds({ minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY });
-
-    // Static camera: always fit to viewport
-    fitCameraToMap(app.stage, app, bounds);
+    // Store map params for camera fitting
+    setMapParams(gameState.map.gridSize, gameState.map.elevation);
+    fitCameraToMap(gameState.map.gridSize, gameState.map.elevation);
 
     renderScene(gameState);
+
+    // Preload 3D models on first state arrival
+    if (!modelsLoadedRef.current) {
+      modelsLoadedRef.current = true;
+      Promise.all([
+        preloadFactionModels('engineer'),
+        preloadFactionModels('caravaner'),
+      ]).then(() => {
+        syncUnitModels(gameState, currentPlayerView, useGameStore.getState().visibleHexes);
+      });
+    }
+
+    syncUnitModels(gameState, currentPlayerView, useGameStore.getState().visibleHexes);
   }, [gameState, selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies]);
 
   // Click handler
   const handleClick = useCallback(
     (e: MouseEvent): void => {
-      // Skip click if the user was dragging to pan
       if (wasDrag()) return;
-
-      const app = appRef.current;
-      if (!app || !gameState) return;
-
-      // Block input during turn replay
+      if (!gameState) return;
       if (useGameStore.getState().isReplayPlaying) return;
 
-      const hex = screenToHex(e.offsetX, e.offsetY, HEX_SIZE, app.stage);
+      const canvas = containerRef.current;
+      if (!canvas) return;
+      const hex = screenToHex(e.offsetX, e.offsetY, canvas.clientWidth, canvas.clientHeight);
+      if (!hex) return;
+
       const store = useGameStore.getState();
 
       // Build phase: target selection for hunt/capture directives
@@ -364,10 +343,12 @@ export function App(): ReactElement {
       }
       if (!gameState || gameState.phase !== 'build') return;
       if (useGameStore.getState().isReplayPlaying) return;
-      const app = appRef.current;
-      if (!app) return;
+      const canvas = containerRef.current;
+      if (!canvas) return;
 
-      const hex = screenToHex(e.offsetX, e.offsetY, HEX_SIZE, app.stage);
+      const hex = screenToHex(e.offsetX, e.offsetY, canvas.clientWidth, canvas.clientHeight);
+      if (!hex) return;
+
       const unit = findUnitAtHex(gameState, hex);
       if (unit && unit.owner === currentPlayerView) {
         e.preventDefault();
@@ -389,10 +370,10 @@ export function App(): ReactElement {
   const handleMouseMove = useCallback(
     (e: MouseEvent): void => {
       if (!gameState) return;
-      const app = appRef.current;
-      if (!app) return;
+      const canvas = containerRef.current;
+      if (!canvas) return;
 
-      const hex = screenToHex(e.offsetX, e.offsetY, HEX_SIZE, app.stage);
+      const hex = screenToHex(e.offsetX, e.offsetY, canvas.clientWidth, canvas.clientHeight);
       setHoveredHex(hex);
     },
     [gameState, setHoveredHex],
@@ -403,9 +384,9 @@ export function App(): ReactElement {
     setHoveredHex(null);
   }, [setHoveredHex]);
 
-  // Attach click/hover handlers to the PixiJS container
+  // Attach click/hover handlers to the container
   useEffect(() => {
-    const container = pixiContainerRef.current;
+    const container = containerRef.current;
     if (!container || !gameState) return;
 
     container.addEventListener('click', handleClick);
@@ -426,7 +407,7 @@ export function App(): ReactElement {
       <StartMenu />
       <div className="game-layout">
         {gameState && <BattleHUD />}
-        <div ref={pixiContainerRef} className="game-canvas" />
+        <div ref={containerRef} className="game-canvas" />
         {gameState && (
           <>
             <BottomPanel />
