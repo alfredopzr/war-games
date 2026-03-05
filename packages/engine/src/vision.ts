@@ -5,6 +5,7 @@
 import type { Unit, TerrainType } from './types';
 import { cubeDistance, hexToKey, hexLineDraw } from './hex';
 import { TERRAIN } from './terrain';
+import { getVisionBonus } from './terrain';
 import { UNIT_STATS } from './units';
 
 // -----------------------------------------------------------------------------
@@ -15,24 +16,26 @@ import { UNIT_STATS } from './units';
  * Compute the set of visible hex keys for a group of friendly units.
  *
  * For each unit:
- *  - Effective vision = base vision range + terrain vision modifier at unit position
+ *  - Effective vision = base vision range + floor(sqrt(elevation))
  *  - For each hex in terrainMap within effective range, perform LoS check:
  *    - Draw hex line from unit to target
- *    - If any INTERMEDIATE hex (not start, not end) has blocksLoS terrain,
- *      the target is NOT visible
+ *    - If any INTERMEDIATE hex blocks the sight line (its elevation
+ *      exceeds the interpolated sight-line height AND its terrain
+ *      blocks LoS), the target is NOT visible
  *    - The blocking hex itself IS visible
  */
 export function calculateVisibility(
   friendlyUnits: Unit[],
   terrainMap: Map<string, TerrainType>,
+  elevationMap: Map<string, number>,
 ): Set<string> {
   const visible = new Set<string>();
 
   for (const unit of friendlyUnits) {
     const unitKey = hexToKey(unit.position);
-    const unitTerrain = terrainMap.get(unitKey);
-    const visionMod = unitTerrain ? TERRAIN[unitTerrain].visionModifier : 0;
-    const effectiveVision = UNIT_STATS[unit.type].visionRange + visionMod;
+    const unitElev = elevationMap.get(unitKey) ?? 0;
+    const visionBonus = getVisionBonus(unitElev);
+    const effectiveVision = UNIT_STATS[unit.type].visionRange + visionBonus;
 
     // The unit always sees its own hex
     visible.add(unitKey);
@@ -51,11 +54,20 @@ export function calculateVisibility(
       const line = hexLineDraw(unit.position, targetCoord);
       let blocked = false;
 
+      const elevA = unitElev;
+      const elevB = elevationMap.get(key) ?? 0;
+      const totalSteps = line.length - 1;
+
       // Intermediate hexes = everything except first (start) and last (end)
       for (let i = 1; i < line.length - 1; i++) {
         const intermediateKey = hexToKey(line[i]!);
         const intermediateTerrain = terrainMap.get(intermediateKey);
-        if (intermediateTerrain && TERRAIN[intermediateTerrain].blocksLoS) {
+        const intermediateElev = elevationMap.get(intermediateKey) ?? 0;
+
+        // Interpolated sight-line height at this step
+        const sightHeight = elevA + (elevB - elevA) * (i / totalSteps);
+
+        if (intermediateElev >= sightHeight && intermediateTerrain && TERRAIN[intermediateTerrain].blocksLoS) {
           // The blocking hex itself is visible, but target is not
           visible.add(intermediateKey);
           blocked = true;
@@ -86,6 +98,7 @@ export function isUnitVisible(
   target: Unit,
   observingUnits: Unit[],
   terrainMap: Map<string, TerrainType>,
+  elevationMap: Map<string, number>,
 ): boolean {
   const targetKey = hexToKey(target.position);
   const targetTerrain = terrainMap.get(targetKey);
@@ -98,6 +111,6 @@ export function isUnitVisible(
   }
 
   // Otherwise check if target hex is in the combined visibility set
-  const visibleSet = calculateVisibility(observingUnits, terrainMap);
+  const visibleSet = calculateVisibility(observingUnits, terrainMap, elevationMap);
   return visibleSet.has(targetKey);
 }

@@ -87,6 +87,26 @@ export function getAllHexes(grid: GridSize): CubeCoord[] {
 }
 
 // -----------------------------------------------------------------------------
+// Hex Region Enumeration
+// -----------------------------------------------------------------------------
+
+/**
+ * Return all hexes within cube-distance `radius` of `center`.
+ * Count: 3 * radius * (radius + 1) + 1 (e.g. 91 for radius 5).
+ */
+export function hexesInRadius(center: CubeCoord, radius: number): CubeCoord[] {
+  const results: CubeCoord[] = [];
+  for (let q = -radius; q <= radius; q++) {
+    const rMin = Math.max(-radius, -q - radius);
+    const rMax = Math.min(radius, -q + radius);
+    for (let r = rMin; r <= rMax; r++) {
+      results.push(createHex(center.q + q, center.r + r));
+    }
+  }
+  return results;
+}
+
+// -----------------------------------------------------------------------------
 // Rounding & Line Drawing
 // -----------------------------------------------------------------------------
 

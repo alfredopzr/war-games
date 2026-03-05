@@ -36,15 +36,24 @@ export interface TerrainDefinition {
   readonly type: TerrainType;
   readonly moveCost: number;
   readonly defenseModifier: number;
-  readonly visionModifier: number;
   readonly blocksLoS: boolean;
   readonly infantryOnly: boolean;
 }
+
+export interface MegaHexInfo {
+  readonly center: CubeCoord;
+  readonly terrain: TerrainType;
+  readonly peakHex: CubeCoord;    // meaningful for mountain only
+  readonly peakHeight: number;     // meaningful for mountain only
+}
+
+export type HexModifier = 'highway' | 'river' | 'bridge' | 'lake';
 
 export interface HexTile {
   readonly coord: CubeCoord;
   readonly terrain: TerrainType;
   readonly elevation: number;
+  readonly modifier?: HexModifier;
 }
 
 // -----------------------------------------------------------------------------
@@ -141,10 +150,15 @@ export interface RoundState {
 export interface GameMap {
   readonly terrain: Map<string, TerrainType>;
   readonly elevation: Map<string, number>;
+  readonly modifiers: Map<string, HexModifier>;
+  readonly megaHexes: Map<string, string>;
+  readonly megaHexInfo: Map<string, MegaHexInfo>;
   readonly centralObjective: CubeCoord;
   readonly player1Deployment: CubeCoord[];
   readonly player2Deployment: CubeCoord[];
   readonly gridSize: GridSize;
+  readonly mapRadius: number;
+  readonly seed: number;
 }
 
 export interface GameState {
@@ -198,7 +212,6 @@ export interface DirectiveContext {
   enemyUnits: Unit[];
   terrain: Map<string, TerrainType>;
   centralObjective: CubeCoord;
-  gridSize: GridSize;
   cities: Map<string, PlayerId | null>;
 }
 
