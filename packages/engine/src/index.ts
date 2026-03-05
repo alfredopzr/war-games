@@ -54,9 +54,6 @@ export {
 // Map generation
 export { generateMap, validateMap } from './map-gen';
 
-// Noise
-export { createNoiseGenerator } from './noise';
-
 // RNG
 export { mulberry32 } from './rng';
 
@@ -82,7 +79,7 @@ export type { AiBuildAction } from './ai';
 // World coordinates
 export {
   hexToWorld, worldToHex, hexWorldVertices,
-  WORLD_HEX_SIZE, WORLD_ELEV_STEP,
+  WORLD_HEX_SIZE,
 } from './world';
 export type { WorldCoord } from './world';
 

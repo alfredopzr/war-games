@@ -83,7 +83,6 @@ const PADDING = 1.0; // world units of padding around the map
  */
 export function fitCameraToMap(
   gridSize: GridSize,
-  elevationMap: Map<string, number>,
 ): void {
   if (!ctx) return;
 
@@ -91,17 +90,13 @@ export function fitCameraToMap(
   const hexes = getAllHexes(gridSize);
   let minX = Infinity, maxX = -Infinity;
   let minZ = Infinity, maxZ = -Infinity;
-  let maxY = 0;
 
   for (const hex of hexes) {
-    const key = `${hex.q},${hex.r}`;
-    const elev = elevationMap.get(key) ?? 0;
-    const w = hexToWorld(hex, elev);
+    const w = hexToWorld(hex);
     minX = Math.min(minX, w.x);
     maxX = Math.max(maxX, w.x);
     minZ = Math.min(minZ, w.z);
     maxZ = Math.max(maxZ, w.z);
-    maxY = Math.max(maxY, w.y);
   }
 
   // Expand by hex radius + padding
@@ -112,7 +107,7 @@ export function fitCameraToMap(
 
   const centerX = (minX + maxX) / 2;
   const centerZ = (minZ + maxZ) / 2;
-  const centerY = maxY / 2;
+  const centerY = 0;
 
   // scene.scale.z flips the board for player perspective — camera must follow
   const vizCenterZ = centerZ * ctx.scene.scale.z;
@@ -133,7 +128,7 @@ export function fitCameraToMap(
   const worldWidth = maxX - minX;
   // The Z extent gets foreshortened by the tilt angle
   const worldDepth = maxZ - minZ;
-  const projectedDepth = worldDepth * Math.cos(CAMERA_TILT_RAD) + maxY * Math.sin(CAMERA_TILT_RAD);
+  const projectedDepth = worldDepth * Math.cos(CAMERA_TILT_RAD);
 
   const screenW = ctx.renderer.domElement.clientWidth;
   const screenH = ctx.renderer.domElement.clientHeight;

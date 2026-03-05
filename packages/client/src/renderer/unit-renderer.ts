@@ -43,14 +43,11 @@ export function renderUnits(
     return;
   }
 
-  const elevationMap = state.map.elevation;
-
   for (const [, ghost] of lastKnownEnemies) {
     const ghostKey = hexToKey(ghost.position);
     if (visibleHexes.has(ghostKey)) continue;
 
-    const elev = elevationMap.get(ghostKey) ?? 0;
-    const world = hexToWorld(ghost.position, elev);
+    const world = hexToWorld(ghost.position);
 
     // Grey translucent circle
     const circleGeo = new THREE.CircleGeometry(0.35, 16);

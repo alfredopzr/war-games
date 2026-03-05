@@ -13,7 +13,6 @@ let fogGroup: THREE.Group | null = null;
 export function renderFog(
   allHexes: CubeCoord[],
   visibleHexes: Set<string>,
-  elevationMap: Map<string, number>,
   exploredHexes?: Set<string>,
 ): void {
   const ctx = getThreeContext();
@@ -39,11 +38,10 @@ export function renderFog(
     const key = hexToKey(hex);
     if (visibleHexes.has(key)) continue;
 
-    const elev = elevationMap.get(key) ?? 0;
-    const center = hexToWorld(hex, elev);
+    const center = hexToWorld(hex);
     const alpha = (exploredHexes && exploredHexes.has(key)) ? 0.5 : 0.85;
 
-    const verts = hexWorldVertices(hex, elev);
+    const verts = hexWorldVertices(hex);
     const shape = new THREE.Shape();
     shape.moveTo(verts[0]!.x, verts[0]!.z);
     for (let i = 1; i < 6; i++) {

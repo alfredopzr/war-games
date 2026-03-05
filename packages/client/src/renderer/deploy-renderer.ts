@@ -70,9 +70,8 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
 
     if (fillColor === null) continue;
 
-    const elev = state.map.elevation.get(hexKey) ?? 0;
-    const center = hexToWorld(hex, elev);
-    const verts = hexWorldVertices(hex, elev);
+    const center = hexToWorld(hex);
+    const verts = hexWorldVertices(hex);
 
     // Fill
     const shape = new THREE.Shape();

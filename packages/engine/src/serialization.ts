@@ -41,7 +41,6 @@ interface SerializableRoundState {
 
 interface SerializableGameMap {
   readonly terrain: Record<string, TerrainType>;
-  readonly elevation: Record<string, number>;
   readonly centralObjective: CubeCoord;
   readonly player1Deployment: CubeCoord[];
   readonly player2Deployment: CubeCoord[];
@@ -87,13 +86,8 @@ function serializeGameMap(map: GameMap): SerializableGameMap {
   for (const [key, value] of map.terrain) {
     terrain[key] = value;
   }
-  const elevation: Record<string, number> = {};
-  for (const [key, value] of map.elevation) {
-    elevation[key] = value;
-  }
   return {
     terrain,
-    elevation,
     centralObjective: map.centralObjective,
     player1Deployment: map.player1Deployment,
     player2Deployment: map.player2Deployment,
@@ -173,18 +167,8 @@ function deserializeGameMap(data: SerializableGameMap): GameMap {
       terrain.set(key, value);
     }
   }
-  const elevation = new Map<string, number>();
-  if (data.elevation) {
-    for (const key of Object.keys(data.elevation)) {
-      const value = data.elevation[key];
-      if (value !== undefined) {
-        elevation.set(key, value);
-      }
-    }
-  }
   return {
     terrain,
-    elevation,
     centralObjective: data.centralObjective,
     player1Deployment: data.player1Deployment,
     player2Deployment: data.player2Deployment,

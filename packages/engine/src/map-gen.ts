@@ -1,14 +1,13 @@
 // =============================================================================
-// HexWar — Map Generation (Noise-Based)
+// HexWar — Map Generation (Simple Pattern-Based)
 // =============================================================================
 
 import type { GameMap, MapValidation, TerrainType, GridSize, CubeCoord } from './types';
 import { createHex, hexToKey, getAllHexes, cubeDistance } from './hex';
-import { createNoiseGenerator } from './noise';
 import { mulberry32 } from './rng';
 
 // -----------------------------------------------------------------------------
-// Coordinate Helpers
+// Grid Constants
 // -----------------------------------------------------------------------------
 
 const GRID: GridSize = { width: 20, height: 14 };
@@ -28,36 +27,15 @@ function mirrorOffsetRow(row: number): number {
 }
 
 // -----------------------------------------------------------------------------
-// Noise → Terrain/Elevation mapping
+// City Placement
 // -----------------------------------------------------------------------------
 
-const TERRAIN_FREQ = 0.18;
-const ELEVATION_FREQ = 0.14;
-
-function noiseToTerrain(value: number): TerrainType {
-  if (value < -0.2) return 'plains';
-  if (value < 0.3) return 'forest';
-  return 'mountain';
-}
-
-function noiseToElevation(value: number): number {
-  // Map [-1, 1] to [0, 3]
-  const raw = (value + 1) / 2 * 4;
-  return Math.max(0, Math.min(3, Math.floor(raw)));
-}
-
-// -----------------------------------------------------------------------------
-// City Placement Helpers
-// -----------------------------------------------------------------------------
-
-function placeSectoredCities(
+function placeCities(
   terrain: Map<string, TerrainType>,
-  elevation: Map<string, number>,
   centralObjective: CubeCoord,
   rng: () => number,
 ): void {
   terrain.set(hexToKey(centralObjective), 'city');
-  elevation.set(hexToKey(centralObjective), 0);
 
   const placedCities: CubeCoord[] = [centralObjective];
 
@@ -71,7 +49,6 @@ function placeSectoredCities(
 
   for (const sector of sectors) {
     const candidates: CubeCoord[] = [];
-    const fallbackCandidates: CubeCoord[] = [];
     for (let col = sector.colMin; col <= sector.colMax; col++) {
       for (const row of neutralTopRows) {
         const hex = offsetToHex(col, row);
@@ -84,29 +61,19 @@ function placeSectoredCities(
         if (cubeDistance(hex, mirrored) < 3) continue;
         const mirrorTooClose = placedCities.some((c) => cubeDistance(mirrored, c) < 3);
         if (mirrorTooClose) continue;
-        // Prefer low elevation for cities, but allow fallback
-        const elev = elevation.get(key) ?? 0;
-        if (elev <= 1) {
-          candidates.push(hex);
-        } else {
-          fallbackCandidates.push(hex);
-        }
+        candidates.push(hex);
       }
     }
 
-    const pool = candidates.length > 0 ? candidates : fallbackCandidates;
-    if (pool.length === 0) continue;
+    if (candidates.length === 0) continue;
 
-    const idx = Math.floor(rng() * pool.length);
-    const chosen = pool[idx]!;
+    const idx = Math.floor(rng() * candidates.length);
+    const chosen = candidates[idx]!;
     const mirrorRow = mirrorOffsetRow(cubeToOffsetRow(chosen));
     const mirrored = offsetToHex(chosen.q, mirrorRow);
 
     terrain.set(hexToKey(chosen), 'city');
     terrain.set(hexToKey(mirrored), 'city');
-    // Cities get low elevation
-    elevation.set(hexToKey(chosen), Math.min(1, elevation.get(hexToKey(chosen)) ?? 0));
-    elevation.set(hexToKey(mirrored), Math.min(1, elevation.get(hexToKey(mirrored)) ?? 0));
     placedCities.push(chosen, mirrored);
   }
 }
@@ -118,24 +85,16 @@ function placeSectoredCities(
 export function generateMap(seed?: number): GameMap {
   const rng = mulberry32(seed ?? Date.now());
 
-  // Derive sub-seeds from the PRNG so noise layers are independent
-  const terrainSeed = Math.floor(rng() * 0x7fffffff);
-  const elevationSeed = Math.floor(rng() * 0x7fffffff);
-  const terrainNoise = createNoiseGenerator(terrainSeed);
-  const elevationNoise = createNoiseGenerator(elevationSeed);
-
   const terrain = new Map<string, TerrainType>();
-  const elevation = new Map<string, number>();
   const player1Deployment: CubeCoord[] = [];
   const player2Deployment: CubeCoord[] = [];
   const centralObjective = createHex(10, 2); // offset (10, 7) = center of 20x14
 
   // Zone layout (offset rows):
-  // Rows 0-2:  Player 1 deployment (60 hexes)
-  // Rows 3-10: Neutral zone
+  // Rows 0-2:   Player 1 deployment (plains only)
+  // Rows 3-10:  Neutral zone (plains + scattered features)
   // Rows 11-13: Player 2 deployment (mirror of 0-2)
 
-  // Top half: rows 0-6, mirror to rows 13-7
   for (let col = 0; col < GRID.width; col++) {
     for (let row = 0; row <= 6; row++) {
       const topHex = offsetToHex(col, row);
@@ -146,39 +105,32 @@ export function generateMap(seed?: number): GameMap {
       const isDeployment = row < 3;
 
       if (isDeployment) {
-        // Deployment zones: plains/forest only, flat elevation
-        const tn = terrainNoise(col * TERRAIN_FREQ, row * TERRAIN_FREQ);
-        const t: TerrainType = tn > 0.1 ? 'forest' : 'plains';
-        terrain.set(topKey, t);
-        terrain.set(bottomKey, t);
-        elevation.set(topKey, 0);
-        elevation.set(bottomKey, 0);
+        terrain.set(topKey, 'plains');
+        terrain.set(bottomKey, 'plains');
         player1Deployment.push(topHex);
         player2Deployment.push(bottomHex);
       } else {
-        // Neutral zone: noise-based terrain and elevation
-        const tn = terrainNoise(col * TERRAIN_FREQ, row * TERRAIN_FREQ);
-        const en = elevationNoise(col * ELEVATION_FREQ, row * ELEVATION_FREQ);
-        const t = noiseToTerrain(tn);
-        let elev = noiseToElevation(en);
-
-        // Mountains always elevated
-        if (t === 'mountain' && elev < 2) elev = 2;
-
+        // Neutral zone: simple random terrain
+        const roll = rng();
+        let t: TerrainType;
+        if (roll < 0.55) {
+          t = 'plains';
+        } else if (roll < 0.85) {
+          t = 'forest';
+        } else {
+          t = 'mountain';
+        }
         terrain.set(topKey, t);
         terrain.set(bottomKey, t);
-        elevation.set(topKey, elev);
-        elevation.set(bottomKey, elev);
       }
     }
   }
 
-  // Place sectored cities (overwrites terrain to 'city', clamps elevation)
-  placeSectoredCities(terrain, elevation, centralObjective, rng);
+  // Place cities (overwrites terrain to 'city')
+  placeCities(terrain, centralObjective, rng);
 
   return {
     terrain,
-    elevation,
     centralObjective,
     player1Deployment,
     player2Deployment,
@@ -193,18 +145,10 @@ export function generateMap(seed?: number): GameMap {
 export function validateMap(map: GameMap): MapValidation {
   const errors: string[] = [];
 
-  // Check grid size
   const expectedHexes = map.gridSize.width * map.gridSize.height;
   if (map.terrain.size !== expectedHexes) {
     errors.push(
       `Expected ${expectedHexes} hexes, got ${map.terrain.size}`,
-    );
-  }
-
-  // Check elevation map has same count
-  if (map.elevation.size !== expectedHexes) {
-    errors.push(
-      `Expected ${expectedHexes} elevation entries, got ${map.elevation.size}`,
     );
   }
 
@@ -220,51 +164,19 @@ export function validateMap(map: GameMap): MapValidation {
     errors.push(`Expected 7 cities, got ${cityCount}`);
   }
 
-  // Check deployment zones: only plains and forest, elevation 0
-  const allowedDeployment = new Set<TerrainType>(['plains', 'forest']);
+  // Check deployment zones: only plains
   for (const coord of map.player1Deployment) {
-    const key = hexToKey(coord);
-    const t = map.terrain.get(key);
-    if (t !== undefined && !allowedDeployment.has(t)) {
+    const t = map.terrain.get(hexToKey(coord));
+    if (t !== undefined && t !== 'plains') {
       errors.push(`Player1 deployment has invalid terrain: ${t}`);
-      break;
-    }
-    const elev = map.elevation.get(key);
-    if (elev !== undefined && elev !== 0) {
-      errors.push(`Player1 deployment has non-zero elevation: ${elev}`);
       break;
     }
   }
   for (const coord of map.player2Deployment) {
-    const key = hexToKey(coord);
-    const t = map.terrain.get(key);
-    if (t !== undefined && !allowedDeployment.has(t)) {
+    const t = map.terrain.get(hexToKey(coord));
+    if (t !== undefined && t !== 'plains') {
       errors.push(`Player2 deployment has invalid terrain: ${t}`);
       break;
-    }
-    const elev = map.elevation.get(key);
-    if (elev !== undefined && elev !== 0) {
-      errors.push(`Player2 deployment has non-zero elevation: ${elev}`);
-      break;
-    }
-  }
-
-  // Check elevation values in [0, 3]
-  for (const [key, elev] of map.elevation) {
-    if (elev < 0 || elev > 3 || !Number.isInteger(elev)) {
-      errors.push(`Elevation at ${key} is invalid: ${elev}`);
-      break;
-    }
-  }
-
-  // Check city elevation <= 2 (prefer ≤1 but fallback allows higher)
-  for (const [key, t] of map.terrain) {
-    if (t === 'city') {
-      const elev = map.elevation.get(key) ?? 0;
-      if (elev > 2) {
-        errors.push(`City at ${key} has elevation ${elev}, expected <= 2`);
-        break;
-      }
     }
   }
 
@@ -282,16 +194,6 @@ export function validateMap(map: GameMap): MapValidation {
     if (t1 !== t2 && t1 !== 'city' && t2 !== 'city') {
       isSymmetric = false;
       break;
-    }
-
-    // Elevation symmetry (excluding cities)
-    if (isSymmetric && t1 !== 'city' && t2 !== 'city') {
-      const e1 = map.elevation.get(hexToKey(hex));
-      const e2 = map.elevation.get(hexToKey(mirrorHex));
-      if (e1 !== e2) {
-        isSymmetric = false;
-        break;
-      }
     }
   }
 

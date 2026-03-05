@@ -16,9 +16,9 @@ describe('hexToWorld', () => {
     expect(w.z).toBeCloseTo(WORLD_HEX_SIZE * Math.sqrt(3) / 2 * 2);
   });
 
-  it('applies elevation to y', () => {
-    const w = hexToWorld(createHex(0, 0), 3);
-    expect(w.y).toBe(1.5); // 3 * 0.5
+  it('y is always 0 (flat grid)', () => {
+    const w = hexToWorld(createHex(3, -2));
+    expect(w.y).toBe(0);
   });
 });
 
@@ -38,7 +38,6 @@ describe('worldToHex', () => {
 
   it('snaps near-center positions to the correct hex', () => {
     const w = hexToWorld(createHex(3, -1));
-    // Small offset should still round to same hex
     const back = worldToHex(w.x + 0.1, w.z - 0.1);
     expect(back.q).toBe(3);
     expect(back.r).toBe(-1);
@@ -62,11 +61,10 @@ describe('hexWorldVertices', () => {
     }
   });
 
-  it('vertices at elevation match the hex elevation', () => {
-    const verts = hexWorldVertices(createHex(1, 2), 2);
-    const expectedY = 2 * 0.5; // WORLD_ELEV_STEP
+  it('all vertices have y=0', () => {
+    const verts = hexWorldVertices(createHex(1, 2));
     for (const v of verts) {
-      expect(v.y).toBe(expectedY);
+      expect(v.y).toBe(0);
     }
   });
 });

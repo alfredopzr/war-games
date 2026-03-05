@@ -1,5 +1,5 @@
 import type { CubeCoord, PlayerId } from '@hexwar/engine';
-import { hexToKey, hexToWorld } from '@hexwar/engine';
+import { hexToWorld } from '@hexwar/engine';
 import {
   spawnAttackTracer,
   spawnDamageNumber,
@@ -87,12 +87,10 @@ export function isReplayActive(): boolean {
   return replayActive;
 }
 
-export function startReplay(events: TurnEvent[], elevationMap: Map<string, number>, onComplete: () => void): void {
+export function startReplay(events: TurnEvent[], onComplete: () => void): void {
   replayActive = true;
   replayOnComplete = onComplete;
   replayTimers = [];
-
-  const elev = (coord: CubeCoord): number => elevationMap.get(hexToKey(coord)) ?? 0;
 
   let delay = 0;
 
@@ -103,8 +101,8 @@ export function startReplay(events: TurnEvent[], elevationMap: Map<string, numbe
       case 'move': {
         const timer = setTimeout(() => {
           playUnitAnimation(event.unitId, 'move');
-          const from = hexToWorld(event.from, elev(event.from));
-          const to = hexToWorld(event.to, elev(event.to));
+          const from = hexToWorld(event.from);
+          const to = hexToWorld(event.to);
           spawnAttackTracer(from.x, from.y, from.z, to.x, to.y, to.z);
         }, currentDelay);
         replayTimers.push(timer);
@@ -114,8 +112,8 @@ export function startReplay(events: TurnEvent[], elevationMap: Map<string, numbe
       case 'attack': {
         const timer = setTimeout(() => {
           playUnitAnimation(event.defenderId, 'hit');
-          const attPos = hexToWorld(event.attackerPos, elev(event.attackerPos));
-          const defPos = hexToWorld(event.defenderPos, elev(event.defenderPos));
+          const attPos = hexToWorld(event.attackerPos);
+          const defPos = hexToWorld(event.defenderPos);
           spawnAttackTracer(attPos.x, attPos.y, attPos.z, defPos.x, defPos.y, defPos.z);
           spawnDamageNumber(defPos.x, defPos.y, defPos.z, event.damage);
         }, currentDelay);
@@ -126,7 +124,7 @@ export function startReplay(events: TurnEvent[], elevationMap: Map<string, numbe
       case 'kill': {
         const timer = setTimeout(() => {
           playUnitAnimation(event.unitId, 'death');
-          const pos = hexToWorld(event.position, elev(event.position));
+          const pos = hexToWorld(event.position);
           spawnDeathMarker(pos.x, pos.y, pos.z);
         }, currentDelay);
         replayTimers.push(timer);
@@ -135,7 +133,7 @@ export function startReplay(events: TurnEvent[], elevationMap: Map<string, numbe
       }
       case 'capture': {
         const timer = setTimeout(() => {
-          const pos = hexToWorld(event.cityHex, elev(event.cityHex));
+          const pos = hexToWorld(event.cityHex);
           spawnDamageNumber(pos.x, pos.y + 0.3, pos.z, 0);
         }, currentDelay);
         replayTimers.push(timer);

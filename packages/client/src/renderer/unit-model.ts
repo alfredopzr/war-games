@@ -65,7 +65,6 @@ const UNIT_SCALE: Record<string, number> = {
 function createUnitModel(
   unit: Unit,
   faction: Faction,
-  elevationMap: Map<string, number>,
 ): UnitModel3D | null {
   const ctx = getThreeContext();
   if (!ctx) return null;
@@ -90,8 +89,7 @@ function createUnitModel(
   clone.rotation.y = unit.owner === 'player1' ? Math.PI : 0;
 
   // Position using engine world coordinates
-  const elev = elevationMap.get(hexToKey(unit.position)) ?? 0;
-  const world = hexToWorld(unit.position, elev);
+  const world = hexToWorld(unit.position);
   clone.position.set(world.x, world.y, world.z);
 
   // Animation mixer + clips
@@ -212,7 +210,6 @@ export function syncUnitModels(
   currentPlayerView: PlayerId,
   visibleHexes: Set<string>,
 ): void {
-  const elevationMap = state.map.elevation;
   const isBuildPhase = state.phase === 'build';
 
   const activeUnitIds = new Set<string>();
@@ -231,8 +228,7 @@ export function syncUnitModels(
 
       if (existing) {
         // Update position using engine world coordinates
-        const elev = elevationMap.get(key) ?? 0;
-        const world = hexToWorld(unit.position, elev);
+        const world = hexToWorld(unit.position);
         existing.object.position.set(world.x, world.y, world.z);
 
         // Update HP bar
@@ -245,7 +241,7 @@ export function syncUnitModels(
         existing.directiveEl.textContent = DIRECTIVE_ICONS[unit.directive] ?? '';
       } else {
         const faction = PLAYER_FACTION[unit.owner];
-        createUnitModel(unit, faction, elevationMap);
+        createUnitModel(unit, faction);
       }
     }
   }

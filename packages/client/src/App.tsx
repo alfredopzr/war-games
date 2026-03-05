@@ -70,13 +70,12 @@ function renderScene(state: GameState): void {
     store.highlightedHexes,
     store.highlightMode,
     allHexes,
-    state.map.elevation,
   );
 
   renderUnits(state, currentPlayerView, visibleHexes, lastKnownEnemies);
 
   if (!isBuildPhase) {
-    renderFog(allHexes, visibleHexes, state.map.elevation);
+    renderFog(allHexes, visibleHexes);
   }
 }
 
@@ -157,8 +156,8 @@ export function App(): ReactElement {
     setMapFlip(currentPlayerView === 'player1');
 
     // Store map params for camera fitting
-    setMapParams(gameState.map.gridSize, gameState.map.elevation);
-    fitCameraToMap(gameState.map.gridSize, gameState.map.elevation);
+    setMapParams(gameState.map.gridSize);
+    fitCameraToMap(gameState.map.gridSize);
 
     renderScene(gameState);
 
