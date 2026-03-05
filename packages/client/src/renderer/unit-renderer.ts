@@ -62,6 +62,7 @@ export function renderUnits(
         transparent: true,
         opacity: 0.4,
         depthWrite: false,
+        side: THREE.DoubleSide,
       }),
     );
     circleMesh.position.set(world.x, world.y + 0.02, world.z);

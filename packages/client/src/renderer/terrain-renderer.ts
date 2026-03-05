@@ -91,13 +91,13 @@ export function renderTerrain(state: GameState): void {
     const shape = createHexShape(hex, elev);
     const geo = new THREE.ShapeGeometry(shape);
     // ShapeGeometry is in XY — rotate to XZ (lie flat)
-    geo.rotateX(-Math.PI / 2);
-    // ShapeGeometry built with world XZ coords, but after rotateX it maps:
+    geo.rotateX(Math.PI / 2);
+    // ShapeGeometry built with world XZ coords, rotateX(+π/2) maps:
     // shape X → mesh X, shape Y → mesh Z, mesh Y = 0
     // We need to set Y to the elevation height
     const topMesh = new THREE.Mesh(
       geo,
-      new THREE.MeshBasicMaterial({ color: fill }),
+      new THREE.MeshBasicMaterial({ color: fill, side: THREE.DoubleSide }),
     );
     topMesh.position.y = center.y;
     // Reset XZ since geometry already has world coords baked in
@@ -133,7 +133,7 @@ export function renderTerrain(state: GameState): void {
 
         const sideMesh = new THREE.Mesh(
           sideGeo,
-          new THREE.MeshBasicMaterial({ color: sideColor }),
+          new THREE.MeshBasicMaterial({ color: sideColor, side: THREE.DoubleSide }),
         );
         terrainGroup.add(sideMesh);
       }
@@ -151,7 +151,7 @@ export function renderTerrain(state: GameState): void {
   // Translucent fill
   const objShape = createHexShape(state.map.centralObjective, objElev);
   const objGeo = new THREE.ShapeGeometry(objShape);
-  objGeo.rotateX(-Math.PI / 2);
+  objGeo.rotateX(Math.PI / 2);
   const objMesh = new THREE.Mesh(
     objGeo,
     new THREE.MeshBasicMaterial({
@@ -159,6 +159,7 @@ export function renderTerrain(state: GameState): void {
       transparent: true,
       opacity: 0.6,
       depthWrite: false,
+      side: THREE.DoubleSide,
     }),
   );
   objMesh.position.y = hexToWorld(state.map.centralObjective, objElev).y + 0.002;

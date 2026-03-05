@@ -82,7 +82,7 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
     }
     shape.closePath();
     const geo = new THREE.ShapeGeometry(shape);
-    geo.rotateX(-Math.PI / 2);
+    geo.rotateX(Math.PI / 2);
     const mesh = new THREE.Mesh(
       geo,
       new THREE.MeshBasicMaterial({
@@ -90,6 +90,7 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
         transparent: true,
         opacity: fillAlpha,
         depthWrite: false,
+        side: THREE.DoubleSide,
       }),
     );
     mesh.position.y = center.y + 0.003;
