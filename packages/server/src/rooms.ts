@@ -17,6 +17,7 @@ function createEmptyRoom(id: string): Room {
     gameSeed: null,
     forfeited: false,
     buildConfirmed: new Set<PlayerId>(),
+    bufferedCommands: new Map(),
     disconnectedPlayers: new Map(),
     turnLog: [],
     timers: {

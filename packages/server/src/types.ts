@@ -2,7 +2,7 @@
 // HexWar Server — Internal Types
 // =============================================================================
 
-import type { PlayerId, GameState, BattleEvent } from '@hexwar/engine';
+import type { PlayerId, GameState, BattleEvent, Command } from '@hexwar/engine';
 
 export interface ConnectedPlayer {
   socketId: string;
@@ -18,9 +18,12 @@ export interface DisconnectedPlayer {
 
 export interface TurnRecord {
   turnNumber: number;
-  player: PlayerId;
-  commandsSubmitted: number;
-  rngSeed: number;
+  resolutionOrder: [PlayerId, PlayerId];
+  players: {
+    player: PlayerId;
+    commandsSubmitted: number;
+    rngSeed: number;
+  }[];
   events: BattleEvent[];
 }
 
@@ -31,6 +34,7 @@ export interface Room {
   gameSeed: number | null;
   forfeited: boolean;
   buildConfirmed: Set<PlayerId>;
+  bufferedCommands: Map<PlayerId, Command[]>;
   disconnectedPlayers: Map<PlayerId, DisconnectedPlayer>;
   turnLog: TurnRecord[];
   timers: {

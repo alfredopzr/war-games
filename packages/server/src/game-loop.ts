@@ -23,14 +23,12 @@ import {
   createGame,
   placeUnit,
   startBattlePhase,
+  filterValidCommands,
   executeTurn,
   checkRoundEnd,
   scoreRound,
   UNIT_STATS,
   mulberry32,
-  hexToKey,
-  canAttack,
-  cubeDistance,
 } from '@hexwar/engine';
 
 import { filterStateForPlayer } from './state-filter';
@@ -326,65 +324,10 @@ function transitionToBattle(room: Room, io: Server): void {
   startBattlePhase(room.gameState);
   log('info', 'game', `Battle phase started in room ${room.id}`);
   room.buildConfirmed.clear();
-  log('info', 'game', `Battle phase started in room ${room.id}`);
+  room.bufferedCommands.clear();
 
   emitFilteredState(io, room, 'battle-start');
   startTurnTimer(room, () => handleTurnTimeout(room, io));
-}
-
-// -----------------------------------------------------------------------------
-// Command Validation
-// -----------------------------------------------------------------------------
-
-function filterValidCommands(
-  state: GameState,
-  commands: Command[],
-  playerId: PlayerId,
-): Command[] {
-  const friendlyUnits = state.players[playerId].units;
-  const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
-  const enemyUnits = state.players[enemyId].units;
-
-  const allUnits = [...friendlyUnits, ...enemyUnits];
-
-  return commands.filter((cmd) => {
-    // Every command references a unit — check it exists and belongs to player
-    const unit = friendlyUnits.find((u) => u.id === cmd.unitId);
-    if (!unit) return false;
-
-    switch (cmd.type) {
-      case 'direct-move': {
-        const targetKey = hexToKey(cmd.targetHex);
-        // Target hex must exist on the map
-        if (!state.map.terrain.has(targetKey)) return false;
-        // Target hex must be unoccupied
-        const occupied = allUnits.some(
-          (u) => u.id !== unit.id && hexToKey(u.position) === targetKey,
-        );
-        if (occupied) return false;
-        // Must be within move range
-        const stats = UNIT_STATS[unit.type];
-        if (cubeDistance(unit.position, cmd.targetHex) > stats.moveRange) return false;
-        return true;
-      }
-
-      case 'direct-attack': {
-        const target = enemyUnits.find((u) => u.id === cmd.targetUnitId);
-        if (!target) return false;
-        if (!canAttack(unit, target)) return false;
-        return true;
-      }
-
-      case 'redirect':
-        return true;
-
-      case 'retreat':
-        return true;
-
-      default:
-        return false;
-    }
-  });
 }
 
 // -----------------------------------------------------------------------------
@@ -412,61 +355,136 @@ export function handleSubmitCommands(
     return;
   }
 
-  if (room.gameState.round.currentPlayer !== playerId) {
+  if (room.bufferedCommands.has(playerId)) {
     const player = room.players.get(playerId);
     if (player) {
       io.to(player.socketId).emit('room-error', {
         type: 'room-error',
-        message: 'It is not your turn',
+        message: 'Commands already submitted',
       });
     }
     return;
   }
 
-  clearTurnTimer(room);
-  log('info', 'game', `Player submitted ${commands.length} commands in room ${room.id}`);
+  log('info', 'game', `Player ${playerId} submitted ${commands.length} commands in room ${room.id}`);
 
-  // Validate commands against current state — filter out stale/invalid ones
+  // Validate commands against current state — both players validate against same pre-resolution state
   const validCommands = filterValidCommands(room.gameState, commands, playerId);
+  room.bufferedCommands.set(playerId, validCommands);
 
-  // Seeded RNG for deterministic combat resolution
-  const turnSeed = (room.gameSeed! * 31 + room.gameState.round.turnNumber) | 0;
-  const rng = mulberry32(turnSeed);
-  const combatRng = (): number => 0.85 + rng() * 0.3;
-
-  // Snapshot state for event generation
-  const prevUnits = snapshotUnits(room.gameState);
-  const prevCities = snapshotCities(room.gameState);
-
-  executeTurn(room.gameState, validCommands, combatRng);
-
-  const events = generateBattleEvents(prevUnits, prevCities, room.gameState, playerId);
-
-  // Drain engine pendingEvents (capture-damage, capture-death, objective, koth)
-  if (room.gameState.pendingEvents.length > 0) {
-    events.push(...room.gameState.pendingEvents);
-    room.gameState.pendingEvents = [];
+  // Acknowledge submission to the player
+  const player = room.players.get(playerId);
+  if (player) {
+    io.to(player.socketId).emit('commands-received', { type: 'commands-received' });
   }
 
-  for (const event of events) {
+  // Notify opponent
+  const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
+  const enemyPlayer = room.players.get(enemyId);
+  if (enemyPlayer) {
+    io.to(enemyPlayer.socketId).emit('opponent-commands-received', { type: 'opponent-commands-received' });
+  }
+
+  // If both players have submitted, resolve
+  if (room.bufferedCommands.size === 2) {
+    resolveSimultaneousTurn(room, io);
+  }
+}
+
+function resolveSimultaneousTurn(room: Room, io: Server): void {
+  const state = room.gameState!;
+
+  clearTurnTimer(room);
+
+  const originalTurnNumber = state.round.turnNumber;
+
+  // Determine resolution order (randomized, deterministic from seed)
+  const orderSeed = (room.gameSeed! * 31 + originalTurnNumber) | 0;
+  const orderRng = mulberry32(orderSeed);
+  const order: [PlayerId, PlayerId] = orderRng() < 0.5
+    ? ['player1', 'player2']
+    : ['player2', 'player1'];
+
+  // Snapshot state before any resolution
+  const prevUnits = snapshotUnits(state);
+  const prevCities = snapshotCities(state);
+  const turnsHeldBefore = state.round.objective.turnsHeld;
+  const occupierBefore = state.round.objective.occupiedBy;
+
+  // --- Resolve first player ---
+  state.round.currentPlayer = order[0];
+  const turnSeed1 = (room.gameSeed! * 37 + originalTurnNumber) | 0;
+  const combatRng1 = (): number => 0.85 + mulberry32(turnSeed1)() * 0.3;
+
+  executeTurn(state, room.bufferedCommands.get(order[0])!, combatRng1);
+
+  const events1 = generateBattleEvents(prevUnits, prevCities, state, order[0]);
+  if (state.pendingEvents.length > 0) {
+    events1.push(...state.pendingEvents);
+    state.pendingEvents = [];
+  }
+
+  const occupierAfterFirst = state.round.objective.occupiedBy;
+
+  // Check early round end (e.g. elimination after first resolution)
+  const earlyRoundEnd = checkRoundEnd(state);
+  let events2: BattleEvent[] = [];
+  let turnSeed2 = 0;
+
+  if (!earlyRoundEnd.roundOver) {
+    // --- Resolve second player ---
+    // currentPlayer was already switched to order[1] by first executeTurn
+    const midUnits = snapshotUnits(state);
+    const midCities = snapshotCities(state);
+    turnSeed2 = (room.gameSeed! * 37 + state.round.turnNumber) | 0;
+    const combatRng2 = (): number => 0.85 + mulberry32(turnSeed2)() * 0.3;
+
+    executeTurn(state, room.bufferedCommands.get(order[1])!, combatRng2);
+
+    events2 = generateBattleEvents(midUnits, midCities, state, order[1]);
+    if (state.pendingEvents.length > 0) {
+      events2.push(...state.pendingEvents);
+      state.pendingEvents = [];
+    }
+
+    // Fix turnsHeld double increment: if same occupier held across both calls
+    // and turnsHeld went up by more than 1, clamp to +1
+    if (
+      state.round.objective.occupiedBy === occupierAfterFirst &&
+      occupierAfterFirst === occupierBefore &&
+      state.round.objective.turnsHeld > turnsHeldBefore + 1
+    ) {
+      state.round.objective.turnsHeld = turnsHeldBefore + 1;
+    }
+  }
+
+  const allEvents = [...events1, ...events2];
+
+  for (const event of allEvents) {
     log('info', 'game', event.message);
   }
 
+  // Record turn log
   room.turnLog.push({
-    turnNumber: room.gameState.round.turnNumber - 1,
-    player: playerId,
-    commandsSubmitted: commands.length,
-    rngSeed: turnSeed,
-    events,
+    turnNumber: originalTurnNumber,
+    resolutionOrder: order,
+    players: [
+      { player: order[0], commandsSubmitted: room.bufferedCommands.get(order[0])!.length, rngSeed: turnSeed1 },
+      { player: order[1], commandsSubmitted: room.bufferedCommands.get(order[1])!.length, rngSeed: turnSeed2 },
+    ],
+    events: allEvents,
   });
 
-  const roundEnd = checkRoundEnd(room.gameState);
+  room.bufferedCommands.clear();
+
+  // Check final round end (after both resolutions)
+  const roundEnd = earlyRoundEnd.roundOver ? earlyRoundEnd : checkRoundEnd(state);
 
   if (roundEnd.roundOver) {
     const winnerLabel = roundEnd.winner === 'player1' ? 'P1' : roundEnd.winner === 'player2' ? 'P2' : 'No one';
     const reasonLabel = roundEnd.reason === 'king-of-the-hill' ? 'King of the Hill'
       : roundEnd.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
-    events.push({
+    allEvents.push({
       type: 'round-end',
       actingPlayer: roundEnd.winner ?? 'player1',
       message: `${winnerLabel} wins the round (${reasonLabel})`,
@@ -474,23 +492,21 @@ export function handleSubmitCommands(
   }
 
   if (!roundEnd.roundOver) {
-    // Emit turn result and start next turn timer
     for (const [pid, player] of room.players) {
-      const filtered = filterStateForPlayer(room.gameState, pid);
+      const filtered = filterStateForPlayer(state, pid);
       io.to(player.socketId).emit('turn-result', {
         type: 'turn-result',
         state: filtered,
-        events,
+        events: allEvents,
       });
     }
     startTurnTimer(room, () => handleTurnTimeout(room, io));
   } else {
-    // Round ended
-    room.gameState = scoreRound(room.gameState, roundEnd.winner);
+    room.gameState = scoreRound(state, roundEnd.winner);
 
     if (room.gameState.phase === 'game-over') {
       const gameWinnerLabel = room.gameState.winner === 'player1' ? 'P1' : 'P2';
-      events.push({
+      allEvents.push({
         type: 'game-end',
         actingPlayer: room.gameState.winner ?? 'player1',
         message: `${gameWinnerLabel} wins the game!`,
@@ -500,7 +516,6 @@ export function handleSubmitCommands(
         winner: room.gameState!.winner,
       }));
     } else {
-      // Next round — back to build phase
       log('info', 'game', `Round ended in room ${room.id}, winner: ${roundEnd.winner}`);
       for (const [pid, player] of room.players) {
         const filtered = filterStateForPlayer(room.gameState, pid);
@@ -513,6 +528,7 @@ export function handleSubmitCommands(
         });
       }
       room.buildConfirmed.clear();
+      room.bufferedCommands.clear();
       startBuildTimer(room, () => handleBuildTimeout(room, io));
     }
   }
@@ -543,6 +559,10 @@ function handleTurnTimeout(room: Room, io: Server): void {
   if (!room.gameState) return;
   log('warn', 'game', `Turn timeout in room ${room.id}`);
 
-  const currentPlayer = room.gameState.round.currentPlayer;
-  handleSubmitCommands(room, currentPlayer, [], io);
+  // Submit empty commands for any player who hasn't submitted yet
+  for (const playerId of ['player1', 'player2'] as PlayerId[]) {
+    if (!room.bufferedCommands.has(playerId)) {
+      handleSubmitCommands(room, playerId, [], io);
+    }
+  }
 }

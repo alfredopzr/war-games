@@ -497,15 +497,15 @@ describe('Battle Phase', () => {
     return { client1, client2, roomId };
   }
 
-  it('should accept commands from the current player and resolve turn', async () => {
+  it('should resolve when both players submit commands', async () => {
     const { client1, client2 } = await setupBattle();
     try {
-      // Player 1 goes first — submit empty commands
-      // With no units, round may end immediately (elimination), so listen for both
+      // Both players submit — resolution fires when both are received
       const p1Result = waitForAnyEvent(client1, ['turn-result', 'round-end', 'game-over']);
       const p2Result = waitForAnyEvent(client2, ['turn-result', 'round-end', 'game-over']);
 
       client1.emit('submit-commands', { commands: [] });
+      client2.emit('submit-commands', { commands: [] });
       const [r1, r2] = await Promise.all([p1Result, p2Result]);
 
       expect(r1.data).toBeTruthy();
@@ -516,42 +516,43 @@ describe('Battle Phase', () => {
     }
   });
 
-  it('should reject commands from the wrong player', async () => {
+  it('should reject double-submit from same player', async () => {
     const { client1, client2 } = await setupBattle();
     try {
-      // Player 2 tries to submit when it's player 1's turn
-      const error = waitForEvent<{ message: string }>(client2, 'room-error');
-      client2.emit('submit-commands', { commands: [] });
+      // Player 1 submits
+      const ack = waitForEvent(client1, 'commands-received');
+      client1.emit('submit-commands', { commands: [] });
+      await ack;
+
+      // Player 1 tries to submit again
+      const error = waitForEvent<{ message: string }>(client1, 'room-error');
+      client1.emit('submit-commands', { commands: [] });
       const data = await error;
-      expect(data.message).toContain('not your turn');
+      expect(data.message).toContain('already submitted');
     } finally {
       client1.disconnect();
       client2.disconnect();
     }
   });
 
-  it('should alternate turns between players', async () => {
+  it('should resolve simultaneous turns until round or game ends', async () => {
     const { client1, client2 } = await setupBattle();
     try {
-      // With no units placed, the round may end immediately.
-      // Play up to 3 turns or until round/game ends.
-      const players = [client1, client2, client1];
+      // Play up to 3 simultaneous turns or until round/game ends
+      for (let i = 0; i < 3; i++) {
+        const p1Result = waitForAnyEvent(client1, ['turn-result', 'round-end', 'game-over']);
+        const p2Result = waitForAnyEvent(client2, ['turn-result', 'round-end', 'game-over']);
 
-      for (const activeClient of players) {
-        const resultPromise = waitForAnyEvent(activeClient, [
-          'turn-result',
-          'round-end',
-          'game-over',
-        ]);
-        activeClient.emit('submit-commands', { commands: [] });
-        const result = await resultPromise;
+        client1.emit('submit-commands', { commands: [] });
+        client2.emit('submit-commands', { commands: [] });
 
-        if (result.event === 'round-end' || result.event === 'game-over') {
+        const [r1] = await Promise.all([p1Result, p2Result]);
+
+        if (r1.event === 'round-end' || r1.event === 'game-over') {
           break;
         }
       }
 
-      // If we got here without timeout errors, alternation works
       expect(true).toBe(true);
     } finally {
       client1.disconnect();
@@ -722,27 +723,17 @@ describe('Full Game Flow', () => {
       client2.emit('confirm-build');
       await Promise.all([p1Battle, p2Battle]);
 
-      // Play 4 turns (2 per player) with empty commands
+      // Play up to 4 simultaneous turns with empty commands
       for (let i = 0; i < 4; i++) {
-        const activeClient = i % 2 === 0 ? client1 : client2;
+        const p1Result = waitForAnyEvent(client1, ['turn-result', 'round-end', 'game-over']);
+        const p2Result = waitForAnyEvent(client2, ['turn-result', 'round-end', 'game-over']);
 
-        // Listen for turn-result OR round-end on both clients
-        const result = await new Promise<{ event: string }>((resolve) => {
-          let resolved = false;
-          const handle = (event: string) => () => {
-            if (!resolved) {
-              resolved = true;
-              resolve({ event });
-            }
-          };
-          activeClient.once('turn-result', handle('turn-result'));
-          activeClient.once('round-end', handle('round-end'));
-          activeClient.once('game-over', handle('game-over'));
-          activeClient.emit('submit-commands', { commands: [] });
-        });
+        client1.emit('submit-commands', { commands: [] });
+        client2.emit('submit-commands', { commands: [] });
 
-        // If round or game ended, stop early
-        if (result.event === 'round-end' || result.event === 'game-over') {
+        const [r1] = await Promise.all([p1Result, p2Result]);
+
+        if (r1.event === 'round-end' || r1.event === 'game-over') {
           break;
         }
       }

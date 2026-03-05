@@ -18,6 +18,7 @@ function createMockRoom(): Room {
     gameSeed: null,
     forfeited: false,
     buildConfirmed: new Set(),
+    bufferedCommands: new Map(),
     disconnectedPlayers: new Map(),
     turnLog: [],
     timers: { build: null, turn: null },

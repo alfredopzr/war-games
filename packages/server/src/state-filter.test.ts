@@ -104,6 +104,7 @@ describe('filterStateForPlayer — battle phase', () => {
     const visibleKeys = calculateVisibility(
       state.players.player1.units,
       state.map.terrain,
+      state.map.elevation,
     );
 
     const expectedVisibleEnemies = state.players.player2.units.filter((u) =>
@@ -181,10 +182,12 @@ describe('filterStateForPlayer — battle phase', () => {
     const p1VisibleKeys = calculateVisibility(
       state.players.player1.units,
       state.map.terrain,
+      state.map.elevation,
     );
     const p2VisibleKeys = calculateVisibility(
       state.players.player2.units,
       state.map.terrain,
+      state.map.elevation,
     );
 
     const p2UnitsVisibleToP1 = state.players.player2.units.filter((u) =>

@@ -65,6 +65,7 @@ function createTestRoom(): Room {
     gameSeed: null,
     forfeited: false,
     buildConfirmed: new Set<PlayerId>(),
+    bufferedCommands: new Map(),
     disconnectedPlayers: new Map(),
     turnLog: [],
     timers: {
@@ -330,7 +331,7 @@ describe('handleSubmitCommands', () => {
     return { room, io };
   }
 
-  it('executes turn and advances turn number', () => {
+  it('buffers first player without executing', () => {
     const { room, io } = setupBattle();
 
     const turnBefore = room.gameState!.round.turnNumber;
@@ -342,42 +343,74 @@ describe('handleSubmitCommands', () => {
       io as unknown as Parameters<typeof handleSubmitCommands>[3],
     );
 
-    expect(room.gameState!.round.turnNumber).toBe(turnBefore + 1);
+    // Turn should NOT have advanced yet — waiting for player2
+    expect(room.gameState!.round.turnNumber).toBe(turnBefore);
+
+    // Should emit commands-received to player1
+    const acks = io.emitted.filter((e) => e.event === 'commands-received' && e.to === 'socket-p1');
+    expect(acks).toHaveLength(1);
+
+    // Should emit opponent-commands-received to player2
+    const oppAcks = io.emitted.filter((e) => e.event === 'opponent-commands-received' && e.to === 'socket-p2');
+    expect(oppAcks).toHaveLength(1);
   });
 
-  it('emits turn-result to both players', () => {
+  it('resolves when both players submit', () => {
     const { room, io } = setupBattle();
 
-    handleSubmitCommands(
-      room,
-      'player1',
-      [],
-      io as unknown as Parameters<typeof handleSubmitCommands>[3],
-    );
+    const turnBefore = room.gameState!.round.turnNumber;
 
+    handleSubmitCommands(room, 'player1', [], io as unknown as Parameters<typeof handleSubmitCommands>[3]);
+    handleSubmitCommands(room, 'player2', [], io as unknown as Parameters<typeof handleSubmitCommands>[3]);
+
+    // Turn advances by 2 (one executeTurn per player)
+    expect(room.gameState!.round.turnNumber).toBe(turnBefore + 2);
+
+    // Should emit turn-result to both players
     const turnResults = io.emitted.filter((e) => e.event === 'turn-result');
     expect(turnResults).toHaveLength(2);
   });
 
-  it('rejects commands from wrong player', () => {
+  it('rejects double-submit from same player', () => {
     const { room, io } = setupBattle();
 
-    // player2 tries to submit when it's player1's turn
-    handleSubmitCommands(
-      room,
-      'player2',
-      [],
-      io as unknown as Parameters<typeof handleSubmitCommands>[3],
-    );
+    handleSubmitCommands(room, 'player1', [], io as unknown as Parameters<typeof handleSubmitCommands>[3]);
+    io.emitted.length = 0;
 
-    // Should emit room-error to player2
+    // player1 tries to submit again
+    handleSubmitCommands(room, 'player1', [], io as unknown as Parameters<typeof handleSubmitCommands>[3]);
+
     const errors = io.emitted.filter(
-      (e) => e.event === 'room-error' && e.to === 'socket-p2',
+      (e) => e.event === 'room-error' && e.to === 'socket-p1',
     );
     expect(errors).toHaveLength(1);
 
-    // Turn should NOT have advanced
+    // Turn should NOT have advanced (still waiting for player2)
     expect(room.gameState!.round.turnNumber).toBe(1);
+  });
+
+  it('clears buffered commands after resolution', () => {
+    const { room, io } = setupBattle();
+
+    handleSubmitCommands(room, 'player1', [], io as unknown as Parameters<typeof handleSubmitCommands>[3]);
+    handleSubmitCommands(room, 'player2', [], io as unknown as Parameters<typeof handleSubmitCommands>[3]);
+
+    expect(room.bufferedCommands.size).toBe(0);
+  });
+
+  it('timeout fills empty commands for missing players', () => {
+    const { room, io } = setupBattle();
+
+    const turnBefore = room.gameState!.round.turnNumber;
+
+    // Only player1 submits
+    handleSubmitCommands(room, 'player1', [], io as unknown as Parameters<typeof handleSubmitCommands>[3]);
+
+    // Simulate turn timeout (60s)
+    vi.advanceTimersByTime(60_000);
+
+    // Both players resolved — turn advanced by 2
+    expect(room.gameState!.round.turnNumber).toBe(turnBefore + 2);
   });
 });
 

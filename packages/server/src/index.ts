@@ -221,11 +221,14 @@ io.on('connection', (socket) => {
         log('info', 'game', `Player reconnected to room ${room.id}`);
 
         if (room.gameState) {
+          const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
           const filtered = filterStateForPlayer(room.gameState, playerId);
           socket.emit('game-start', {
             type: 'game-start',
             state: filtered,
             playerId,
+            commandsSubmitted: room.bufferedCommands.has(playerId),
+            opponentCommandsSubmitted: room.bufferedCommands.has(enemyId),
           });
         }
 

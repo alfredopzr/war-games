@@ -52,6 +52,7 @@ export function filterStateForPlayer(
     ownUnits,
     enemyUnits,
     state.map.terrain,
+    state.map.elevation,
   );
 
   // Build a new GameState with filtered data (no mutation of original)
@@ -86,6 +87,7 @@ function filterEnemyUnits(
   ownUnits: Unit[],
   enemyUnits: Unit[],
   terrain: Map<string, TerrainType>,
+  elevation: Map<string, number>,
 ): Unit[] {
   // Build phase: blind deployment — no enemy units visible
   if (phase === 'build') {
@@ -93,7 +95,7 @@ function filterEnemyUnits(
   }
 
   // Battle phase: only include enemies on visible hexes
-  const visibleKeys = calculateVisibility(ownUnits, terrain);
+  const visibleKeys = calculateVisibility(ownUnits, terrain, elevation);
 
   return enemyUnits
     .filter((unit) => visibleKeys.has(hexToKey(unit.position)))
@@ -163,9 +165,13 @@ function cloneMap(map: GameMap): GameMap {
   return {
     terrain: new Map(map.terrain),
     elevation: new Map(map.elevation),
+    megaHexes: new Map(map.megaHexes),
+    megaHexInfo: new Map(map.megaHexInfo),
     centralObjective: map.centralObjective,
     player1Deployment: [...map.player1Deployment],
     player2Deployment: [...map.player2Deployment],
     gridSize: map.gridSize,
+    mapRadius: map.mapRadius,
+    seed: map.seed,
   };
 }
