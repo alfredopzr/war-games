@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TERRAIN, getMoveCost, getDefenseModifier, getVisionModifier } from './terrain';
+import { TERRAIN, getMoveCost, getDefenseModifier, getVisionBonus } from './terrain';
 import type { TerrainType, UnitType } from './types';
 
 describe('TERRAIN definitions', () => {
@@ -8,7 +8,6 @@ describe('TERRAIN definitions', () => {
       type: 'plains',
       moveCost: 1,
       defenseModifier: 0,
-      visionModifier: 0,
       blocksLoS: false,
       infantryOnly: false,
     });
@@ -19,7 +18,6 @@ describe('TERRAIN definitions', () => {
       type: 'forest',
       moveCost: 2,
       defenseModifier: 0.25,
-      visionModifier: 0,
       blocksLoS: true,
       infantryOnly: false,
     });
@@ -30,7 +28,6 @@ describe('TERRAIN definitions', () => {
       type: 'mountain',
       moveCost: 3,
       defenseModifier: 0.4,
-      visionModifier: 2,
       blocksLoS: false,
       infantryOnly: true,
     });
@@ -41,7 +38,6 @@ describe('TERRAIN definitions', () => {
       type: 'city',
       moveCost: 1,
       defenseModifier: 0.3,
-      visionModifier: 0,
       blocksLoS: false,
       infantryOnly: false,
     });
@@ -119,20 +115,28 @@ describe('getDefenseModifier', () => {
   });
 });
 
-describe('getVisionModifier', () => {
-  it('mountain gives +2 vision', () => {
-    expect(getVisionModifier('mountain')).toBe(2);
+describe('getVisionBonus', () => {
+  it('elevation 0 gives 0 bonus', () => {
+    expect(getVisionBonus(0)).toBe(0);
   });
 
-  it('plains gives 0 vision', () => {
-    expect(getVisionModifier('plains')).toBe(0);
+  it('elevation 1 gives +1 bonus', () => {
+    expect(getVisionBonus(1)).toBe(1);
   });
 
-  it('forest gives 0 vision', () => {
-    expect(getVisionModifier('forest')).toBe(0);
+  it('elevation 4 gives +2 bonus', () => {
+    expect(getVisionBonus(4)).toBe(2);
   });
 
-  it('city gives 0 vision', () => {
-    expect(getVisionModifier('city')).toBe(0);
+  it('elevation 9 gives +3 bonus', () => {
+    expect(getVisionBonus(9)).toBe(3);
+  });
+
+  it('elevation 16 gives +4 bonus', () => {
+    expect(getVisionBonus(16)).toBe(4);
+  });
+
+  it('elevation 20 gives +4 bonus', () => {
+    expect(getVisionBonus(20)).toBe(4);
   });
 });

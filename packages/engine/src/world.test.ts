@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hexToWorld, worldToHex, hexWorldVertices, WORLD_HEX_SIZE } from './world';
+import { hexToWorld, worldToHex, hexWorldVertices, WORLD_HEX_SIZE, WORLD_ELEV_STEP } from './world';
 import { createHex } from './hex';
 
 describe('hexToWorld', () => {
@@ -18,7 +18,7 @@ describe('hexToWorld', () => {
 
   it('applies elevation to y', () => {
     const w = hexToWorld(createHex(0, 0), 3);
-    expect(w.y).toBe(1.5); // 3 * 0.5
+    expect(w.y).toBeCloseTo(3 * WORLD_ELEV_STEP);
   });
 });
 
@@ -64,7 +64,7 @@ describe('hexWorldVertices', () => {
 
   it('vertices at elevation match the hex elevation', () => {
     const verts = hexWorldVertices(createHex(1, 2), 2);
-    const expectedY = 2 * 0.5; // WORLD_ELEV_STEP
+    const expectedY = 2 * WORLD_ELEV_STEP;
     for (const v of verts) {
       expect(v.y).toBe(expectedY);
     }

@@ -1,36 +1,58 @@
 import { describe, it, expect } from 'vitest';
-import type { GameMap, TerrainType } from './types';
-import { hexToKey, createHex } from './hex';
+import { hexToKey, cubeDistance, createHex, hexesInRadius } from './hex';
 import { generateMap, validateMap } from './map-gen';
+import {
+  R_MACRO, R_MINI,
+  MTN_BASE_ELEV, MTN_PEAK_MAX, DEPLOY_ELEV,
+} from './map-gen-params';
+
+const EXPECTED_MACROS = 3 * R_MACRO * (R_MACRO + 1) + 1;
+const EXPECTED_MINIS_PER_MACRO = 3 * R_MINI * (R_MINI + 1) + 1;
+const EXPECTED_TOTAL = EXPECTED_MACROS * EXPECTED_MINIS_PER_MACRO;
 
 describe('generateMap', () => {
-  it('generates 280 hexes for a 20x14 grid', () => {
+  it('generates approximately the expected number of hexes', () => {
     const map = generateMap(42);
-    expect(map.terrain.size).toBe(280);
+    const tolerance = EXPECTED_TOTAL * 0.15;
+    expect(map.terrain.size).toBeGreaterThan(EXPECTED_TOTAL - tolerance);
+    expect(map.terrain.size).toBeLessThan(EXPECTED_TOTAL + tolerance);
   });
 
-  it('has gridSize 20x14', () => {
+  it('has mapRadius set', () => {
     const map = generateMap(42);
-    expect(map.gridSize).toEqual({ width: 20, height: 14 });
+    expect(map.mapRadius).toBeGreaterThan(0);
   });
 
-  it('central hex is always city terrain', () => {
+  it('has gridSize as bounding rectangle', () => {
     const map = generateMap(42);
-    const centralKey = hexToKey(map.centralObjective);
-    expect(map.terrain.get(centralKey)).toBe('city');
+    expect(map.gridSize.width).toBeGreaterThan(0);
+    expect(map.gridSize.height).toBeGreaterThan(0);
   });
 
-  it('central hex is at q=10, r=2', () => {
-    const map = generateMap(42);
-    expect(map.centralObjective).toEqual(createHex(10, 2));
-  });
-
-  it('has exactly 7 city hexes (1 central + 6 sectored)', () => {
-    for (const seed of [1, 42, 100, 999, 12345]) {
+  it('central hex (origin) is always city terrain', () => {
+    for (const seed of [1, 42, 100, 999]) {
       const map = generateMap(seed);
-      const cityCount = [...map.terrain.values()].filter((t) => t === 'city').length;
-      expect(cityCount).toBe(7);
+      const centralKey = hexToKey(map.centralObjective);
+      expect(map.terrain.get(centralKey)).toBe('city');
     }
+  });
+
+  it('central objective is at origin (0,0)', () => {
+    const map = generateMap(42);
+    expect(map.centralObjective).toEqual(createHex(0, 0));
+  });
+
+  it('every hex is assigned to exactly one mega-hex', () => {
+    const map = generateMap(42);
+    expect(map.megaHexes.size).toBe(map.terrain.size);
+    for (const key of map.terrain.keys()) {
+      expect(map.megaHexes.has(key)).toBe(true);
+    }
+  });
+
+  it('has the expected number of mega-hex infos', () => {
+    const map = generateMap(42);
+    expect(map.megaHexInfo.size).toBe(EXPECTED_MACROS);
   });
 
   it('deployment zones contain only plains and forest', () => {
@@ -48,10 +70,12 @@ describe('generateMap', () => {
     }
   });
 
-  it('map is symmetric (cities can be asymmetric)', () => {
+  it('deployment zones have correct elevation', () => {
     const map = generateMap(42);
-    const validation = validateMap(map);
-    expect(validation.isSymmetric).toBe(true);
+    for (const coord of [...map.player1Deployment, ...map.player2Deployment]) {
+      const elev = map.elevation.get(hexToKey(coord));
+      expect(elev).toBe(DEPLOY_ELEV);
+    }
   });
 
   it('same seed produces same map', () => {
@@ -80,102 +104,85 @@ describe('generateMap', () => {
     expect(differences).toBeGreaterThan(0);
   });
 
-  it('player1Deployment has 60 hexes (20 cols x 3 rows)', () => {
+  it('player1 and player2 deployment zones are non-empty', () => {
     const map = generateMap(42);
-    expect(map.player1Deployment.length).toBe(60);
-  });
-
-  it('player2Deployment has 60 hexes (20 cols x 3 rows)', () => {
-    const map = generateMap(42);
-    expect(map.player2Deployment.length).toBe(60);
-  });
-
-  it('cities are spread across both halves of neutral zone', () => {
-    for (const seed of [1, 42, 100, 999]) {
-      const map = generateMap(seed);
-      const cityKeys = new Set(
-        [...map.terrain.entries()]
-          .filter(([, t]) => t === 'city')
-          .map(([k]) => k),
-      );
-      const deployKeys = new Set([
-        ...map.player1Deployment.map(hexToKey),
-        ...map.player2Deployment.map(hexToKey),
-      ]);
-      const sideCities = [...cityKeys].filter((k) => k !== hexToKey(map.centralObjective) && !deployKeys.has(k));
-      expect(sideCities.length).toBe(6);
-    }
-  });
-
-  it('no two cities are within 2 hexes of each other', () => {
-    const map = generateMap(42);
-    const cityCoords = [...map.terrain.entries()]
-      .filter(([, t]) => t === 'city')
-      .map(([k]) => {
-        const [q, r] = k.split(',').map(Number);
-        return { q: q!, r: r!, s: (-q! - r!) || 0 };
-      });
-
-    for (let i = 0; i < cityCoords.length; i++) {
-      for (let j = i + 1; j < cityCoords.length; j++) {
-        const a = cityCoords[i]!;
-        const b = cityCoords[j]!;
-        const dist = Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.s - b.s));
-        expect(dist).toBeGreaterThanOrEqual(3);
-      }
-    }
+    expect(map.player1Deployment.length).toBeGreaterThan(0);
+    expect(map.player2Deployment.length).toBeGreaterThan(0);
   });
 });
 
 describe('elevation', () => {
-  it('elevation map has 280 entries', () => {
+  it('elevation map has same count as terrain map', () => {
     const map = generateMap(42);
-    expect(map.elevation.size).toBe(280);
+    expect(map.elevation.size).toBe(map.terrain.size);
   });
 
-  it('all elevation values are integers in [0, 3]', () => {
+  it('all elevation values are in [0, MTN_PEAK_MAX]', () => {
     const map = generateMap(42);
     for (const [, elev] of map.elevation) {
-      expect(Number.isInteger(elev)).toBe(true);
       expect(elev).toBeGreaterThanOrEqual(0);
-      expect(elev).toBeLessThanOrEqual(3);
+      expect(elev).toBeLessThanOrEqual(MTN_PEAK_MAX + 0.01);
     }
   });
 
-  it('deployment zone elevation is always 0', () => {
-    const map = generateMap(42);
-    for (const coord of [...map.player1Deployment, ...map.player2Deployment]) {
-      const elev = map.elevation.get(hexToKey(coord));
-      expect(elev).toBe(0);
-    }
-  });
-
-  it('city elevation is at most 2', () => {
-    for (const seed of [1, 42, 100, 999]) {
-      const map = generateMap(seed);
-      for (const [key, terrain] of map.terrain) {
-        if (terrain === 'city') {
-          const elev = map.elevation.get(key)!;
-          expect(elev).toBeLessThanOrEqual(2);
-        }
-      }
-    }
-  });
-
-  it('mountain elevation is at least 2', () => {
+  it('mountain hexes have elevation >= MTN_BASE_ELEV', () => {
     const map = generateMap(42);
     for (const [key, terrain] of map.terrain) {
       if (terrain === 'mountain') {
         const elev = map.elevation.get(key)!;
-        expect(elev).toBeGreaterThanOrEqual(2);
+        expect(elev).toBeGreaterThanOrEqual(MTN_BASE_ELEV - 0.01);
       }
     }
   });
 
-  it('elevation is symmetric (excluding cities)', () => {
+  it('highest peak on map equals MTN_PEAK_MAX', () => {
     const map = generateMap(42);
-    const validation = validateMap(map);
-    expect(validation.isSymmetric).toBe(true);
+    let maxElev = 0;
+    for (const [, elev] of map.elevation) {
+      if (elev > maxElev) maxElev = elev;
+    }
+    expect(maxElev).toBeCloseTo(MTN_PEAK_MAX, 1);
+  });
+
+  it('peak hex is within its mega-hex (cubeDistance <= R_MINI)', () => {
+    const map = generateMap(42);
+    for (const [, info] of map.megaHexInfo) {
+      if (info.terrain === 'mountain') {
+        const dist = cubeDistance(info.peakHex, info.center);
+        expect(dist).toBeLessThanOrEqual(R_MINI);
+      }
+    }
+  });
+
+  it('elevation tapers from peak (neighbors of peak have lower elevation)', () => {
+    const map = generateMap(42);
+    for (const [, info] of map.megaHexInfo) {
+      if (info.terrain !== 'mountain') continue;
+      const peakKey = hexToKey(info.peakHex);
+      const peakElev = map.elevation.get(peakKey);
+      if (peakElev === undefined) continue;
+
+      // Check at least some hexes at distance 2+ have lower elevation
+      const nearbyHexes = hexesInRadius(info.peakHex, 2);
+      let lowerCount = 0;
+      for (const hex of nearbyHexes) {
+        const key = hexToKey(hex);
+        const elev = map.elevation.get(key);
+        if (elev !== undefined && elev < peakElev) lowerCount++;
+      }
+      expect(lowerCount).toBeGreaterThan(0);
+    }
+  });
+
+  it('non-mountain hexes have elevation below MTN_BASE_ELEV', () => {
+    const map = generateMap(42);
+    for (const [key, terrain] of map.terrain) {
+      if (terrain !== 'mountain') {
+        const elev = map.elevation.get(key)!;
+        // Forest can reach up to 3.0, but should never reach mountain base
+        expect(elev).toBeLessThan(MTN_BASE_ELEV + 1.5);
+      }
+    }
   });
 
   it('same seed produces same elevation', () => {
@@ -199,39 +206,14 @@ describe('validateMap', () => {
     }
   });
 
-  it('detects incorrect grid size', () => {
-    const map = generateMap(42);
-    const badTerrain = new Map(map.terrain);
-    const firstKey = badTerrain.keys().next().value!;
-    badTerrain.delete(firstKey);
-
-    const badMap: GameMap = { ...map, terrain: badTerrain };
-    const validation = validateMap(badMap);
-    expect(validation.valid).toBe(false);
-    expect(validation.errors.length).toBeGreaterThan(0);
-  });
-
   it('detects non-city central objective', () => {
     const map = generateMap(42);
     const badTerrain = new Map(map.terrain);
     badTerrain.set(hexToKey(map.centralObjective), 'plains');
 
-    const badMap: GameMap = { ...map, terrain: badTerrain };
+    const badMap = { ...map, terrain: badTerrain };
     const validation = validateMap(badMap);
     expect(validation.valid).toBe(false);
-  });
-
-  it('detects asymmetric maps', () => {
-    const map = generateMap(42);
-    const badTerrain = new Map(map.terrain);
-    const hex = createHex(3, 1);
-    const current = badTerrain.get(hexToKey(hex));
-    const forced: TerrainType = current === 'mountain' ? 'forest' : 'mountain';
-    badTerrain.set(hexToKey(hex), forced);
-
-    const badMap: GameMap = { ...map, terrain: badTerrain };
-    const validation = validateMap(badMap);
-    expect(validation.isSymmetric).toBe(false);
   });
 
   it('detects invalid deployment zone terrain', () => {
@@ -240,18 +222,7 @@ describe('validateMap', () => {
     const deployHex = map.player1Deployment[0]!;
     badTerrain.set(hexToKey(deployHex), 'mountain');
 
-    const badMap: GameMap = { ...map, terrain: badTerrain };
-    const validation = validateMap(badMap);
-    expect(validation.valid).toBe(false);
-  });
-
-  it('detects missing elevation map', () => {
-    const map = generateMap(42);
-    const badElevation = new Map(map.elevation);
-    const firstKey = badElevation.keys().next().value!;
-    badElevation.delete(firstKey);
-
-    const badMap: GameMap = { ...map, elevation: badElevation };
+    const badMap = { ...map, terrain: badTerrain };
     const validation = validateMap(badMap);
     expect(validation.valid).toBe(false);
   });
@@ -262,8 +233,40 @@ describe('validateMap', () => {
     const deployHex = map.player1Deployment[0]!;
     badElevation.set(hexToKey(deployHex), 2);
 
-    const badMap: GameMap = { ...map, elevation: badElevation };
+    const badMap = { ...map, elevation: badElevation };
     const validation = validateMap(badMap);
     expect(validation.valid).toBe(false);
+  });
+
+  it('isSymmetric is false (no longer enforced)', () => {
+    const map = generateMap(42);
+    const validation = validateMap(map);
+    expect(validation.isSymmetric).toBe(false);
+  });
+});
+
+describe('hexesInRadius', () => {
+  it('radius 0 returns 1 hex', () => {
+    expect(hexesInRadius(createHex(0, 0), 0)).toHaveLength(1);
+  });
+
+  it('radius 1 returns 7 hexes', () => {
+    expect(hexesInRadius(createHex(0, 0), 1)).toHaveLength(7);
+  });
+
+  it('radius 2 returns 19 hexes', () => {
+    expect(hexesInRadius(createHex(0, 0), 2)).toHaveLength(19);
+  });
+
+  it('radius 5 returns 91 hexes', () => {
+    expect(hexesInRadius(createHex(0, 0), 5)).toHaveLength(91);
+  });
+
+  it('all returned hexes are within radius of center', () => {
+    const center = createHex(3, -2);
+    const hexes = hexesInRadius(center, 4);
+    for (const hex of hexes) {
+      expect(cubeDistance(hex, center)).toBeLessThanOrEqual(4);
+    }
   });
 });

@@ -20,6 +20,14 @@ function makePlainsTerrain(width = 16, height = 12): Map<string, TerrainType> {
   return terrain;
 }
 
+function makeFlatElevation(terrain: Map<string, TerrainType>, elev = 0): Map<string, number> {
+  const elevation = new Map<string, number>();
+  for (const key of terrain.keys()) {
+    elevation.set(key, elev);
+  }
+  return elevation;
+}
+
 beforeEach(() => {
   resetUnitIdCounter();
 });
@@ -31,8 +39,9 @@ beforeEach(() => {
 describe('calculateVisibility', () => {
   it('infantry (vision 3) sees hexes within range 3 but not range 4', () => {
     const terrain = makePlainsTerrain();
+    const elevation = makeFlatElevation(terrain);
     const unit = createUnit('infantry', 'player1', createHex(3, 0));
-    const visible = calculateVisibility([unit], terrain);
+    const visible = calculateVisibility([unit], terrain, elevation);
 
     // Hex at distance 3 should be visible
     const hexDist3 = createHex(6, -3); // cubeDistance from (3,0) = 3
@@ -47,8 +56,9 @@ describe('calculateVisibility', () => {
 
   it('recon (vision 6) sees farther than infantry', () => {
     const terrain = makePlainsTerrain(20, 14);
+    const elevation = makeFlatElevation(terrain);
     const recon = createUnit('recon', 'player1', createHex(5, -2));
-    const visible = calculateVisibility([recon], terrain);
+    const visible = calculateVisibility([recon], terrain, elevation);
 
     // Hex at distance 6 should be visible
     const hexDist6 = createHex(5, 4); // cubeDistance from (5,-2) = 6
@@ -63,11 +73,12 @@ describe('calculateVisibility', () => {
 
   it('forest blocks LoS: observer sees forest but not hex behind it', () => {
     const terrain = makePlainsTerrain();
+    const elevation = makeFlatElevation(terrain);
     // Place forest at (4,0)
     terrain.set(hexToKey(createHex(4, 0)), 'forest');
 
     const observer = createUnit('recon', 'player1', createHex(3, 0));
-    const visible = calculateVisibility([observer], terrain);
+    const visible = calculateVisibility([observer], terrain, elevation);
 
     // The forest hex itself should be visible
     expect(visible.has(hexToKey(createHex(4, 0)))).toBe(true);
@@ -76,34 +87,35 @@ describe('calculateVisibility', () => {
     expect(visible.has(hexToKey(createHex(5, 0)))).toBe(false);
   });
 
-  it('mountain grants +2 vision: infantry on mountain sees range 5', () => {
+  it('elevation grants vision bonus: infantry at elev 4 sees range 5', () => {
     const terrain = makePlainsTerrain(16, 12);
+    const elevation = makeFlatElevation(terrain);
     const mountPos = createHex(3, 0);
-    terrain.set(hexToKey(mountPos), 'mountain');
+    // Set elevation at unit position to 4 (floor(sqrt(4)) = 2 bonus)
+    elevation.set(hexToKey(mountPos), 4);
 
     const unit = createUnit('infantry', 'player1', mountPos);
-    const visible = calculateVisibility([unit], terrain);
+    const visible = calculateVisibility([unit], terrain, elevation);
 
-    // Infantry base vision = 3, mountain +2 = 5
-    // Hex at distance 5 should be visible
-    const hexDist5 = createHex(8, -3); // cubeDistance from (3,0) = max(5,3,2) = 5
+    // Infantry base vision = 3, elevation bonus +2 = 5
+    const hexDist5 = createHex(8, -3);
     expect(cubeDistance(unit.position, hexDist5)).toBe(5);
     expect(visible.has(hexToKey(hexDist5))).toBe(true);
 
     // Hex at distance 6 should NOT be visible
-    const hexDist6 = createHex(9, -4); // cubeDistance from (3,0) = max(6,4,2) = 6
+    const hexDist6 = createHex(9, -4);
     expect(cubeDistance(unit.position, hexDist6)).toBe(6);
     expect(visible.has(hexToKey(hexDist6))).toBe(false);
   });
 
   it('multiple units combine their visibility', () => {
     const terrain = makePlainsTerrain();
+    const elevation = makeFlatElevation(terrain);
     const unit1 = createUnit('infantry', 'player1', createHex(1, 0));
     const unit2 = createUnit('infantry', 'player1', createHex(8, 0));
-    const visible = calculateVisibility([unit1, unit2], terrain);
+    const visible = calculateVisibility([unit1, unit2], terrain, elevation);
 
     // unit1 at (1,0) sees (1,0) area, unit2 at (8,0) sees (8,0) area
-    // Each should contribute their own visible hexes
     expect(visible.has(hexToKey(createHex(1, 0)))).toBe(true);
     expect(visible.has(hexToKey(createHex(8, 0)))).toBe(true);
     expect(visible.has(hexToKey(createHex(1, 2)))).toBe(true); // dist 2 from unit1
@@ -118,6 +130,7 @@ describe('calculateVisibility', () => {
 describe('isUnitVisible', () => {
   it('unit in forest is visible when observer is adjacent (distance 1)', () => {
     const terrain = makePlainsTerrain();
+    const elevation = makeFlatElevation(terrain);
     const forestPos = createHex(4, 0);
     terrain.set(hexToKey(forestPos), 'forest');
 
@@ -125,11 +138,12 @@ describe('isUnitVisible', () => {
     const observer = createUnit('infantry', 'player1', createHex(3, 0)); // dist 1
 
     expect(cubeDistance(observer.position, target.position)).toBe(1);
-    expect(isUnitVisible(target, [observer], terrain)).toBe(true);
+    expect(isUnitVisible(target, [observer], terrain, elevation)).toBe(true);
   });
 
   it('unit in forest is NOT visible from distance 2+ even with vision range', () => {
     const terrain = makePlainsTerrain();
+    const elevation = makeFlatElevation(terrain);
     const forestPos = createHex(4, 0);
     terrain.set(hexToKey(forestPos), 'forest');
 
@@ -137,14 +151,15 @@ describe('isUnitVisible', () => {
     const observer = createUnit('recon', 'player1', createHex(2, 0)); // dist 2
 
     expect(cubeDistance(observer.position, target.position)).toBe(2);
-    expect(isUnitVisible(target, [observer], terrain)).toBe(false);
+    expect(isUnitVisible(target, [observer], terrain, elevation)).toBe(false);
   });
 
   it('unit on plains is visible if hex is in vision set', () => {
     const terrain = makePlainsTerrain();
+    const elevation = makeFlatElevation(terrain);
     const target = createUnit('infantry', 'player2', createHex(4, 0));
     const observer = createUnit('recon', 'player1', createHex(2, 0)); // dist 2, recon vision 5
 
-    expect(isUnitVisible(target, [observer], terrain)).toBe(true);
+    expect(isUnitVisible(target, [observer], terrain, elevation)).toBe(true);
   });
 });
