@@ -114,6 +114,9 @@ export function fitCameraToMap(
   const centerZ = (minZ + maxZ) / 2;
   const centerY = maxY / 2;
 
+  // scene.scale.z flips the board for player perspective — camera must follow
+  const vizCenterZ = centerZ * ctx.scene.scale.z;
+
   // Camera distance along its look direction (arbitrary, ortho doesn't care)
   const dist = 50;
   // Camera offset: tilted from vertical by CAMERA_TILT_RAD
@@ -121,9 +124,9 @@ export function fitCameraToMap(
   ctx.camera.position.set(
     centerX,
     centerY + dist * Math.cos(CAMERA_TILT_RAD),
-    centerZ + dist * Math.sin(CAMERA_TILT_RAD),
+    vizCenterZ + dist * Math.sin(CAMERA_TILT_RAD),
   );
-  ctx.camera.lookAt(centerX, centerY, centerZ);
+  ctx.camera.lookAt(centerX, centerY, vizCenterZ);
 
   // Compute frustum to fit the map
   // Project map corners onto the camera's view plane

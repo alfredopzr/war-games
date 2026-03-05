@@ -52,7 +52,7 @@ export function renderFog(
     shape.closePath();
 
     const geo = new THREE.ShapeGeometry(shape);
-    geo.rotateX(-Math.PI / 2);
+    geo.rotateX(Math.PI / 2);
 
     const mesh = new THREE.Mesh(
       geo,
@@ -61,6 +61,7 @@ export function renderFog(
         transparent: true,
         opacity: alpha,
         depthWrite: false,
+        side: THREE.DoubleSide,
       }),
     );
     mesh.position.y = center.y + 0.01;
