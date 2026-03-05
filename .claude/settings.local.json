@@ -4,7 +4,11 @@
       "Bash(/c/Users/pablo/miniconda3/python:*)",
       "Bash(pnpm exec:*)",
       "Bash(netstat:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(npx vitest:*)",
+      "Bash(pnpm test:*)",
+      "Bash(node:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }

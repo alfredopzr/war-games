@@ -98,7 +98,7 @@ The renderer reads game state from the store and creates/updates Three.js object
 | `unit-model.ts` | `gameState.players[].units` (Map of units with position, type, hp, directive, owner) | Does `syncUnitModels()` handle: unit creation (new unit placed), unit removal (unit killed), unit movement (position changed), HP change, directive change? All five mutation types? |
 | `fog-renderer.ts` | `store.visibleHexes`, `store.lastKnownEnemies` | Two fog levels (never-seen 0.85, explored 0.5) — does the store actually provide enough state to distinguish these? Or is one level fabricated? |
 | `effects-renderer.ts` | Turn events (from `turn-result`) | Attack tracers, damage numbers, death markers — are these spawned from actual event data, or inferred from state diff? If inferred, can the inference miss events? |
-| `replay-sequencer.ts` | Before/after state snapshots | `diffTurnEvents()` generates events by comparing snapshots. This is reconstruction, not source consumption. Does it reconstruct events the engine actually produced? Can it fabricate events that didn't happen? Can it miss events that did? |
+| `replay-sequencer.ts` | Turn events or state snapshots (determine which) | Does it consume engine events directly, or reconstruct them from state diffs? See §4 for why this matters. |
 | `deploy-renderer.ts` | Phase, deployment zone bounds | Does it read zone bounds from engine or hardcode them? |
 | `selection-renderer.ts` | Store selection state + engine range calculations | Does it call engine `getHexesInRange()` or reimplement range logic? |
 | `unit-renderer.ts` | `store.lastKnownEnemies` (ghost markers for unseen enemies) | What populates `lastKnownEnemies`? When are ghosts cleared — on reveal, on round end, on game end? |
@@ -160,16 +160,15 @@ The `[MATH_AUDIT]` logging spec (GAME_MATH_ENGINE.md §AI vs AI Logging Spec) de
 
 ## 4. Replay Sequencer — Special Case
 
-`replay-sequencer.ts` deserves its own section because it is not a direct consumer of engine events — it **reconstructs** events by diffing state snapshots.
+The replay sequencer requires special attention because of a fundamental architectural question: **does it consume engine events, or does it reconstruct events from state diffs?**
 
-This is architecturally significant. The engine produces events. But the client never sees them directly in the current architecture. Instead:
+These are different things with different fidelity properties.
 
-1. Server runs `executeTurn()` → produces events + new state
-2. Server sends `turn-result` with `{ state, events }` to client
-3. `NetworkManager` routes events to `addBattleLogEntries()` for the battle log
-4. But the **renderer** uses `diffTurnEvents()` which compares old state vs new state to infer what happened
+**If the sequencer consumes engine events directly:**
+- Fidelity depends on completeness (does it handle all event types?) and sequencing (does it play them in emission order?)
 
-This means the renderer's event list is **reconstructed, not received**. Two fidelity risks:
+**If the sequencer reconstructs events by diffing before/after state:**
+- It is fabricating a parallel event stream. Three fidelity risks emerge:
 
 | Risk | Description |
 |------|-------------|
@@ -177,9 +176,9 @@ This means the renderer's event list is **reconstructed, not received**. Two fid
 | **Omission** | Diff misses an event that did happen (e.g., unit took damage and healed in same turn — diff sees no HP change, generates no events) |
 | **Ordering** | Diff generates events in an order that doesn't match engine resolution order (e.g., kill before attack) |
 
-**Audit question:** Does the client use the `events` array from `turn-result` for animation, or only for the battle log? If only for battle log, the reveal animation is entirely reconstructed — a major fidelity gap.
+**The auditor must determine which model is in use.** Trace the data: where does the sequencer get its event list? From the `events` array in `turn-result`, or from comparing state snapshots?
 
-This is flagged in GAME_MATH_ENGINE.md §N3 as load-bearing infrastructure. The event log is supposed to drive the reveal animation. If the current client doesn't consume it for animation, that's a structural fidelity gap, not a bug.
+GAME_MATH_ENGINE.md §N3 specifies that the event log is load-bearing infrastructure for reveal animation, debugging, and replay. The auditor must check whether this spec is satisfied by the actual consumption path.
 
 ---
 
@@ -198,14 +197,12 @@ GAME_MATH_ENGINE.md §4.3 defines the mapping from combat timeline phases to vis
 
 **Fidelity audit per mapping:**
 
-For each row: does the renderer have a visual representation for this event type? Is it triggered by the actual event, or by a state diff?
+For each row, the auditor must determine:
+1. Does the renderer have a visual representation for this event type?
+2. Is it triggered by the actual engine event, or by a state diff?
+3. If the engine event type doesn't exist yet (planned but unimplemented), note it as SPEC_GAP — not a fidelity failure.
 
-Current renderer capabilities (from reading the files):
-- `effects-renderer.ts` supports: damage-number, attack-tracer, death-marker
-- `unit-model.ts` supports animations: idle, move, attack, hit, death
-- `replay-sequencer.ts` event types: move, attack, kill, capture
-
-**Missing from replay sequencer event types vs engine event log:** INTERCEPT, COUNTER, MELEE, HEAL, REVEAL. These are either not yet implemented in the engine or not yet consumed by the client.
+Compare the event types the renderer handles against the event types the engine spec defines. Any mismatch in either direction (renderer handles events not in spec, spec defines events renderer ignores) is a finding.
 
 ---
 
