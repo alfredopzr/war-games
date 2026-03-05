@@ -1253,6 +1253,40 @@
   border-left-color: #a08a40;
 }
 
+.battle-log-entry.log-capture-damage {
+  border-left-color: #c08a40;
+}
+
+.battle-log-entry.log-capture-death {
+  border-left-color: #9a4a3a;
+}
+
+.battle-log-entry.log-objective-change {
+  border-left-color: #4a8a8a;
+}
+
+.battle-log-entry.log-koth-progress {
+  border-left-color: #c0a040;
+}
+
+.battle-log-entry.log-round-end {
+  border-left-color: #e8e4d8;
+  font-weight: bold;
+}
+
+.battle-log-entry.log-round-end .log-msg {
+  color: #e8e4d8;
+}
+
+.battle-log-entry.log-game-end {
+  border-left-color: #a08a40;
+  font-weight: bold;
+}
+
+.battle-log-entry.log-game-end .log-msg {
+  color: #a08a40;
+}
+
 .log-turn {
   color: #7a7868;
   flex-shrink: 0;
@@ -1261,6 +1295,63 @@
 
 .log-msg {
   color: #c8c4b8;
+}
+
+/* Win Condition Panel */
+
+.win-condition-panel {
+  flex: 0 0 220px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid #3a3830;
+}
+
+.wc-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid #3a3830;
+  color: #e8e4d8;
+  font-weight: bold;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+
+.wc-entries {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wc-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wc-label {
+  color: #7a7868;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.wc-value {
+  color: #c8c4b8;
+}
+
+.wc-entry.wc-met .wc-label {
+  color: #6a7a5a;
+}
+
+.wc-entry.wc-met .wc-value {
+  color: #8aaa6a;
 }
 
 /* Toast */

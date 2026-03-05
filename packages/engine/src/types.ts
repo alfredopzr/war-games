@@ -155,6 +155,7 @@ export interface GameState {
   maxRounds: number;
   winner: PlayerId | null;
   cityOwnership: Map<string, PlayerId | null>;
+  pendingEvents: BattleEvent[];
 }
 
 // -----------------------------------------------------------------------------
@@ -219,8 +220,14 @@ export interface ResolvedTarget {
 // Battle Events
 // -----------------------------------------------------------------------------
 
+export type BattleEventType =
+  | 'kill' | 'damage' | 'capture' | 'recapture'
+  | 'capture-damage' | 'capture-death'
+  | 'objective-change' | 'koth-progress'
+  | 'round-end' | 'game-end';
+
 export interface BattleEvent {
-  readonly type: 'kill' | 'damage' | 'capture' | 'recapture';
+  readonly type: BattleEventType;
   readonly actingPlayer: PlayerId;
   readonly message: string;
 }

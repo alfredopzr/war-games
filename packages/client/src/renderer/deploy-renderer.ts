@@ -33,7 +33,6 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
 
   for (const hex of allHexes) {
     const hexKey = hexToKey(hex);
-    // Deploy zones always have elevation 0
     const { x, y } = hexToPixel(hex, HEX_SIZE);
     const pts = hexPoints(x, y, HEX_SIZE);
 

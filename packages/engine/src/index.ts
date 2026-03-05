@@ -11,7 +11,7 @@ export type {
   GamePhase, ObjectiveState, PlayerState, RoundState, GameState, GameMap,
   IncomeParams, MapValidation, RoundEndResult, DirectiveContext, ResolvedTarget,
   // Network protocol
-  BattleEvent,
+  BattleEvent, BattleEventType,
   ClientCreateRoom, ClientJoinRoom, ClientLeaveRoom, ClientReconnect,
   ClientPlaceUnit, ClientRemoveUnit, ClientSetDirective,
   ClientConfirmBuild, ClientSubmitCommands, ClientMessage,

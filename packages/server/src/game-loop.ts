@@ -442,6 +442,12 @@ export function handleSubmitCommands(
 
   const events = generateBattleEvents(prevUnits, prevCities, room.gameState, playerId);
 
+  // Drain engine pendingEvents (capture-damage, capture-death, objective, koth)
+  if (room.gameState.pendingEvents.length > 0) {
+    events.push(...room.gameState.pendingEvents);
+    room.gameState.pendingEvents = [];
+  }
+
   for (const event of events) {
     log('info', 'game', event.message);
   }
@@ -455,6 +461,17 @@ export function handleSubmitCommands(
   });
 
   const roundEnd = checkRoundEnd(room.gameState);
+
+  if (roundEnd.roundOver) {
+    const winnerLabel = roundEnd.winner === 'player1' ? 'P1' : roundEnd.winner === 'player2' ? 'P2' : 'No one';
+    const reasonLabel = roundEnd.reason === 'king-of-the-hill' ? 'King of the Hill'
+      : roundEnd.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
+    events.push({
+      type: 'round-end',
+      actingPlayer: roundEnd.winner ?? 'player1',
+      message: `${winnerLabel} wins the round (${reasonLabel})`,
+    });
+  }
 
   if (!roundEnd.roundOver) {
     // Emit turn result and start next turn timer
@@ -472,6 +489,12 @@ export function handleSubmitCommands(
     room.gameState = scoreRound(room.gameState, roundEnd.winner);
 
     if (room.gameState.phase === 'game-over') {
+      const gameWinnerLabel = room.gameState.winner === 'player1' ? 'P1' : 'P2';
+      events.push({
+        type: 'game-end',
+        actingPlayer: room.gameState.winner ?? 'player1',
+        message: `${gameWinnerLabel} wins the game!`,
+      });
       log('info', 'game', `Game over in room ${room.id}, winner: ${room.gameState.winner}, turns: ${room.turnLog.length}`);
       emitFilteredStatePerPlayer(io, room, 'game-over', () => ({
         winner: room.gameState!.winner,

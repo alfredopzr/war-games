@@ -9,7 +9,10 @@ export type LobbyState = 'menu' | 'creating' | 'waiting' | 'joining' | null;
 export interface BattleLogEntry {
   turn: number;
   player: PlayerId;
-  type: 'kill' | 'capture' | 'recapture' | 'damage';
+  type: 'kill' | 'capture' | 'recapture' | 'damage'
+    | 'capture-damage' | 'capture-death'
+    | 'objective-change' | 'koth-progress'
+    | 'round-end' | 'game-end';
   message: string;
 }
 

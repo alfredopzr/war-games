@@ -163,8 +163,21 @@ function executeAiTurn(gameState: GameState): void {
     }
   }
 
+  const turnNum = gameState.round.turnNumber;
   const aiCommands = aiBattlePhase(gameState, 'player2');
   executeTurn(gameState, aiCommands);
+
+  // Drain engine pendingEvents into battle log
+  if (gameState.pendingEvents.length > 0) {
+    const aiLogEntries: BattleLogEntry[] = gameState.pendingEvents.map((evt) => ({
+      turn: turnNum,
+      player: evt.actingPlayer,
+      type: evt.type,
+      message: evt.message,
+    }));
+    useGameStore.getState().addBattleLogEntries(aiLogEntries);
+    gameState.pendingEvents = [];
+  }
 
   // Flash damaged units
   const store = useGameStore.getState();
@@ -182,9 +195,30 @@ function executeAiTurn(gameState: GameState): void {
   // Check if round ended after AI turn
   const result = checkRoundEnd(gameState);
   if (result.roundOver) {
+    const winnerLabel = result.winner === 'player1' ? 'P1' : result.winner === 'player2' ? 'P2' : 'No one';
+    const reasonLabel = result.reason === 'king-of-the-hill' ? 'King of the Hill'
+      : result.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
+    store.addBattleLogEntries([{
+      turn: turnNum,
+      player: result.winner ?? 'player1',
+      type: 'round-end',
+      message: `${winnerLabel} wins the round (${reasonLabel})`,
+    }]);
+
     const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
     const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
     scoreRound(gameState, result.winner);
+
+    if (gameState.phase === 'game-over' && gameState.winner) {
+      const gameWinnerLabel = gameState.winner === 'player1' ? 'P1' : 'P2';
+      store.addBattleLogEntries([{
+        turn: turnNum,
+        player: gameState.winner,
+        type: 'game-end',
+        message: `${gameWinnerLabel} wins the game!`,
+      }]);
+    }
+
     store.setGameState({ ...gameState });
     store.showRoundResultScreen(result.winner, result.reason ?? 'unknown', p1Breakdown, p2Breakdown);
     return;
@@ -280,6 +314,18 @@ export function BattleHUD(): ReactElement | null {
       actingPlayer,
       turnNum,
     );
+    // Drain engine pendingEvents (capture-damage, capture-death, objective, koth)
+    if (gameState.pendingEvents.length > 0) {
+      for (const evt of gameState.pendingEvents) {
+        logEntries.push({
+          turn: turnNum,
+          player: evt.actingPlayer,
+          type: evt.type,
+          message: evt.message,
+        });
+      }
+      gameState.pendingEvents = [];
+    }
     if (logEntries.length > 0) {
       useGameStore.getState().addBattleLogEntries(logEntries);
     }
@@ -310,10 +356,31 @@ export function BattleHUD(): ReactElement | null {
     const finishPostTurn = (): void => {
       const result = checkRoundEnd(gameState);
       if (result.roundOver) {
+        const winnerLabel = result.winner === 'player1' ? 'P1' : result.winner === 'player2' ? 'P2' : 'No one';
+        const reasonLabel = result.reason === 'king-of-the-hill' ? 'King of the Hill'
+          : result.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
+        useGameStore.getState().addBattleLogEntries([{
+          turn: gameState.round.turnNumber,
+          player: result.winner ?? 'player1',
+          type: 'round-end',
+          message: `${winnerLabel} wins the round (${reasonLabel})`,
+        }]);
+
         const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
         const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
 
         scoreRound(gameState, result.winner);
+
+        // Check if game is over after scoring
+        if (gameState.phase === 'game-over' && gameState.winner) {
+          const gameWinnerLabel = gameState.winner === 'player1' ? 'P1' : 'P2';
+          useGameStore.getState().addBattleLogEntries([{
+            turn: gameState.round.turnNumber,
+            player: gameState.winner,
+            type: 'game-end',
+            message: `${gameWinnerLabel} wins the game!`,
+          }]);
+        }
 
         clearPendingCommands();
         selectUnit(null);

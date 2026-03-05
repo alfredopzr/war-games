@@ -232,5 +232,6 @@ export function deserializeGameState(data: SerializableGameState): GameState {
     maxRounds: data.maxRounds,
     winner: data.winner,
     cityOwnership,
+    pendingEvents: [],
   };
 }

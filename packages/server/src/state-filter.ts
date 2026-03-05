@@ -71,6 +71,7 @@ export function filterStateForPlayer(
     maxRounds: state.maxRounds,
     winner: state.winner,
     cityOwnership: new Map(state.cityOwnership),
+    pendingEvents: [],
   };
 
   return serializeGameState(filtered);

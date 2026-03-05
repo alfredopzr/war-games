@@ -14,10 +14,9 @@ import { renderDeployZones } from './renderer/deploy-renderer';
 import { renderSelectionHighlights } from './renderer/selection-renderer';
 import { renderUnits } from './renderer/unit-renderer';
 import { updateEffects } from './renderer/effects-renderer';
-import { renderMinimap } from './renderer/minimap';
 import { initPixiApp, destroyPixiApp } from './renderer/pixi-app';
 import { setupLayers, deployZoneLayer } from './renderer/layers';
-import { setupCameraControls, setMapBounds, centerCameraOnMap, wasDrag } from './renderer/camera-controller';
+import { setupStaticCamera, setMapBounds, fitCameraToMap, wasDrag } from './renderer/camera-controller';
 import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
 import { DirectiveSelector } from './components/DirectiveSelector';
@@ -110,8 +109,6 @@ export function App(): ReactElement {
   const pixiContainerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const cleanupCameraRef = useRef<(() => void) | null>(null);
-  const cameraCenteredRef = useRef(false);
-  const lastPlayerViewRef = useRef<PlayerId | null>(null);
 
   const gameState = useGameStore((s) => s.gameState);
   const selectedUnit = useGameStore((s) => s.selectedUnit);
@@ -166,7 +163,7 @@ export function App(): ReactElement {
       appRef.current = app;
       setupLayers(app);
       app.ticker.add((ticker) => updateEffects(ticker.deltaTime));
-      const cleanup = setupCameraControls(app, app.stage);
+      const cleanup = setupStaticCamera(app, app.stage);
       cleanupCameraRef.current = cleanup;
     });
 
@@ -178,7 +175,6 @@ export function App(): ReactElement {
       }
       destroyPixiApp();
       appRef.current = null;
-      cameraCenteredRef.current = false;
     };
   }, []);
 
@@ -194,17 +190,10 @@ export function App(): ReactElement {
     const bounds = computeGridBounds(allHexes, HEX_SIZE);
     setMapBounds({ minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY });
 
-    // Center camera on first render or when player view changes
-    if (!cameraCenteredRef.current || lastPlayerViewRef.current !== currentPlayerView) {
-      centerCameraOnMap(app.stage, app, bounds);
-      cameraCenteredRef.current = true;
-      lastPlayerViewRef.current = currentPlayerView;
-    }
+    // Static camera: always fit to viewport
+    fitCameraToMap(app.stage, app, bounds);
 
     renderScene(gameState);
-
-    // Minimap
-    renderMinimap(gameState, useGameStore.getState().visibleHexes, app.stage, app);
   }, [gameState, selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies]);
 
   // Click handler

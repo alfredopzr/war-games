@@ -72,6 +72,7 @@ export function createGame(seed?: number): GameState {
     maxRounds: 3,
     winner: null,
     cityOwnership,
+    pendingEvents: [],
   };
 }
 
@@ -159,6 +160,9 @@ export function executeTurn(
   if (state.phase !== 'battle') {
     throw new Error('Can only execute turns during battle phase');
   }
+
+  // Clear pending events from previous turn
+  state.pendingEvents = [];
 
   const currentPlayer = state.round.currentPlayer;
   const enemyPlayer: PlayerId = currentPlayer === 'player1' ? 'player2' : 'player1';
@@ -468,12 +472,23 @@ function updateObjective(state: GameState): void {
     (u) => hexToKey(u.position) === objectiveKey,
   );
 
+  const previousOccupier = state.round.objective.occupiedBy;
+
   if (!unitOnObjective) {
+    if (previousOccupier !== null) {
+      const prevLabel = previousOccupier === 'player1' ? 'P1' : 'P2';
+      state.pendingEvents.push({
+        type: 'objective-change',
+        actingPlayer: previousOccupier,
+        message: `${prevLabel} lost control of the objective`,
+      });
+    }
     state.round.objective = { occupiedBy: null, turnsHeld: 0 };
     return;
   }
 
   const occupier = unitOnObjective.owner;
+  const label = occupier === 'player1' ? 'P1' : 'P2';
 
   // KotH city gate: occupier must hold 2+ cities to progress
   const citiesHeld = countCitiesHeld(state, occupier);
@@ -481,12 +496,30 @@ function updateObjective(state: GameState): void {
   if (state.round.objective.occupiedBy === occupier) {
     if (citiesHeld >= 2) {
       state.round.objective.turnsHeld += 1;
+      state.pendingEvents.push({
+        type: 'koth-progress',
+        actingPlayer: occupier,
+        message: `${label} holds objective (${state.round.objective.turnsHeld}/2 turns)`,
+      });
     } else {
       // Present but not progressing — reset turnsHeld
       state.round.objective.turnsHeld = 0;
     }
   } else {
+    // New occupier seized the objective
+    state.pendingEvents.push({
+      type: 'objective-change',
+      actingPlayer: occupier,
+      message: `${label} seized the objective`,
+    });
     state.round.objective = { occupiedBy: occupier, turnsHeld: citiesHeld >= 2 ? 1 : 0 };
+    if (citiesHeld >= 2) {
+      state.pendingEvents.push({
+        type: 'koth-progress',
+        actingPlayer: occupier,
+        message: `${label} holds objective (1/2 turns)`,
+      });
+    }
   }
 }
 
@@ -677,6 +710,8 @@ function updateCityOwnership(state: GameState): void {
     unitByHex.set(hexToKey(unit.position), unit);
   }
 
+  const unitLabels: Record<string, string> = { infantry: 'Infantry', tank: 'Tank', artillery: 'Artillery', recon: 'Recon' };
+
   for (const cityKey of state.cityOwnership.keys()) {
     const unit = unitByHex.get(cityKey);
     if (unit) {
@@ -685,8 +720,21 @@ function updateCityOwnership(state: GameState): void {
         // City flips to new owner — unit loses 1 HP
         state.cityOwnership.set(cityKey, unit.owner);
         unit.hp -= 1;
+        const label = unit.owner === 'player1' ? 'P1' : 'P2';
+        const unitName = unitLabels[unit.type] ?? unit.type;
         if (unit.hp <= 0) {
           removeUnit(state.players[unit.owner].units, unit.id);
+          state.pendingEvents.push({
+            type: 'capture-death',
+            actingPlayer: unit.owner,
+            message: `${label} ${unitName} died capturing a city`,
+          });
+        } else {
+          state.pendingEvents.push({
+            type: 'capture-damage',
+            actingPlayer: unit.owner,
+            message: `${label} ${unitName} took 1 damage capturing a city (${unit.hp} HP left)`,
+          });
         }
       }
       // If city already owned by this player, no HP cost
