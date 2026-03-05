@@ -105,6 +105,32 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 
 ---
 
+### Infantry (Upgraded) — Heavy Riveter
+
+**File**: `infantry2_engineer.glb`
+
+**Subject**: Front view only. A heavy construction soldier standing in a T-pose — arms straight out to the sides at shoulder height, legs slightly apart. Welded steel plate armor over dirty coveralls — chest plate bolted together from thick steel panels, shoulder pauldrons made from cut I-beam sections, thigh guards from flattened pipe. Hydraulic exo-frame on both arms — exposed pistons and steel rods running from shoulder to wrist, bolted at the joints. Welding mask flipped down over the face — dark rectangular viewport, mask surface scratched and spatter-marked. Yellow hazard stripes painted across the chest plate and shoulder pauldrons, paint chipped at the edges. Right hand gripping a portable rivet cannon — heavy two-handed weapon with a belt feed running to an ammo box on the hip, steel barrel with ventilation slots. Steel-toe boots reinforced with welded toe caps. Hard edge forms, clean material separation between steel plate, fabric, hydraulic components. Surface wear baked in.
+
+**Visual markers**:
+- Welded steel plate armor — chest plate, I-beam shoulder pauldrons, pipe thigh guards
+- Hydraulic exo-frame on both arms — exposed pistons and rods
+- Welding mask down — dark viewport, spatter-marked
+- Belt-fed rivet cannon — heavy, two-handed
+- Yellow hazard stripes on armor, chipped paint
+
+**Silhouette**: Wide and heavy. Exo-frame arms extend the width. Plate armor bulks up the torso. Welding mask adds height. At RTS zoom reads as a stocky armored construction worker — wider and heavier than base infantry.
+
+**Colors**: Primary yellow `#F2C94C` hazard stripes on armor, shoulder markings. Secondary steel `#828282` plate armor, exo-frame, rivet cannon, welding mask. Accent black `#1A1A1A` hydraulic hoses, ammo belt, boot soles, welding mask viewport.
+
+**Animations**:
+- `idle`: exo-frame hisses with hydraulic pressure. Weight shifts. Rivet cannon held steady.
+- `move`: heavy stomping stride, exo-frame pistons cycling. Slower than base infantry.
+- `attack`: raises rivet cannon, fires burst of rivets forward. Heavy recoil absorbed by exo-frame.
+- `hit`: plate armor sparks on impact. Staggers but holds ground.
+- `death`: exo-frame locks up, soldier topples forward like a felled tree. Crashes flat.
+
+---
+
 ### Tank — Siege Construction Vehicle
 
 **File**: `tank_engineer.glb`
@@ -156,6 +182,32 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 - `attack`: sensor pod flashes (vertex color pulse), tilts toward target, slight recoil.
 - `hit`: wobbles violently, one arm dips, recovers.
 - `death`: rotors stall, spirals down, crashes flat. Sparks (vertex flash).
+
+---
+
+### Scout (Upgraded) — Giant Mole Rat
+
+**File**: `scout2_engineer.glb`
+
+**Subject**: A giant naked mole rat the size of a pony, ridden by a construction scout. Wrinkled pink-grey skin, no fur, massive protruding front incisors, tiny squinting eyes, stubby ears. Thick muscular body built for burrowing — wide flat claws on all four feet, barrel-shaped torso. Simple leather saddle strapped behind the shoulders, rope reins looped behind the incisors. Rider wears a yellow hard hat, welding goggles pushed up, utility belt, heavy work trousers, steel-toe boots. Rider sits upright on the saddle. No armor on the animal — wild tamed. Hard edge forms, clean material separation between skin, leather, metal. Surface wear baked in.
+
+**Visual markers**:
+- Giant naked mole rat — wrinkled pink-grey skin, no fur, massive incisors
+- Wide flat digging claws on all four feet
+- Tiny squinting eyes, stubby ears
+- Simple leather saddle and rope reins
+- Rider in hard hat and work gear
+
+**Silhouette**: Low and wide. Barrel-shaped body close to the ground, massive head with protruding teeth. Rider adds vertical element above a horizontal beast.
+
+**Colors**: Primary pink-grey skin on the mole rat. Secondary yellow `#F2C94C` hard hat, hazard stripe on saddle straps. Accent steel `#828282` tools on belt, boot caps, goggle frames.
+
+**Animations**:
+- `idle`: mole rat sniffs the air, head bobs side to side. Rider shifts weight.
+- `move`: low scurrying gallop, belly close to ground, claws dig in. Rider leans forward.
+- `attack`: mole rat lunges forward with open jaws. Rider braces.
+- `hit`: mole rat flinches sideways, stumbles. Rider grabs saddle.
+- `death`: mole rat collapses forward, slides on belly. Rider thrown.
 
 ---
 
@@ -237,6 +289,32 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 
 ---
 
+### Infantry (Upgraded) — Convoy Gunner
+
+**File**: `infantry2_caravaner.glb`
+
+**Subject**: Front view only. A heavy convoy gunner standing in a T-pose — arms straight out to the sides at shoulder height, legs slightly apart. Heavier welded scrap plate armor than base infantry — thick copper-brown steel plates bolted over chest, shoulders, and thighs over a leather jacket. Bandoliers of ammunition across the chest in an X, extra ammo belt draped over the left shoulder feeding down to the weapon. Goggles on forehead, turquoise scarf wrapped around the neck and lower face. Fuel canister strapped to the back — dented steel cylinder with a brass valve cap. Right hand gripping a belt-fed machine gun ripped from a truck mount — arm extended straight out to the side, heavy barrel, bipod folded under, ammo belt trailing from the receiver. Heavy copper-brown boots, knee guards made from flattened scrap metal. Hard edge forms, clean material separation between metal plate, leather, fabric, ammunition. Surface wear baked in.
+
+**Visual markers**:
+- Heavy welded scrap plate armor — chest, shoulders, thighs
+- Belt-fed machine gun — heavy, ripped from a truck mount, bipod folded
+- Extra ammo belt draped over shoulder, bandoliers across chest
+- Fuel canister on back — dented steel cylinder
+- Turquoise scarf, goggles on forehead
+
+**Silhouette**: Wide and heavy. Plate armor and ammo belts bulk up the torso. Machine gun extends one side. At RTS zoom reads as a wider, heavier version of the base caravaner.
+
+**Colors**: Primary copper `#D4845A` armor plates, machine gun body, boots, fuel canister. Secondary turquoise `#4ECDC4` scarf, painted markings on armor. Accent sand `#E8D5B7` ammo belt, bandolier pouches, leather jacket underneath.
+
+**Animations**:
+- `idle`: shifts weight, adjusts ammo belt on shoulder. Machine gun barrel dips and rises.
+- `move`: heavy forward lean, machine gun at hip. Slower than base infantry. Ammo belt sways.
+- `attack`: plants feet, raises machine gun, fires sustained burst. Brass casings eject. Heavy recoil.
+- `hit`: staggers back, armor plate sparks. Catches balance with wide stance.
+- `death`: drops machine gun, sinks to knees, falls sideways. Ammo belt spills.
+
+---
+
 ### Tank — War Rig Truck
 
 **File**: `tank_caravaner.glb`
@@ -288,6 +366,31 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 - `attack`: rider draws sidearm and fires sideways, bike swerves slightly.
 - `hit`: bike jolts, rider grips handlebars, swerves to recover.
 - `death`: bike tips sideways, rider thrown, bike slides on ground.
+
+---
+
+### Scout (Upgraded) — War Ostrich
+
+**File**: `scout2_caravaner.glb`
+
+**Subject**: A wild tamed war ostrich ridden by a convoy scout. Large flightless bird with thick powerful legs, long neck, small fierce head. Dense plumage of dusty brown-grey feathers covering the entire body — big fluffy tail feathers, wing feathers spread wide, thick feathered thighs. Sun-bleached feather tips. No armor on the bird. Rope bridle around the beak, simple leather saddle nestled into the feathers on the back, stirrups hanging. Rider wears a biker helmet with goggles strapped over it, a long sand-colored duster coat over light copper scrap armor, turquoise scarf trailing from the neck. Sand-colored cargo pants tucked into copper-brown boots. Hard edge forms, clean material separation between feathers, leather, fabric, metal. Surface wear baked in.
+
+**Visual markers**:
+- Giant ostrich — dense dusty brown-grey plumage, powerful thick legs
+- Rope bridle and simple leather saddle
+- Rider in biker helmet, duster coat, turquoise scarf
+- No armor on the bird — wild tamed
+
+**Silhouette**: Tall and narrow. Long neck rises above rider's head. Powerful legs underneath. At RTS zoom reads as a tall vertical shape with a distinctive bird head at the top.
+
+**Colors**: Primary dusty brown-grey feathers on the ostrich. Secondary copper `#D4845A` scrap armor, boots, saddle leather. Accent turquoise `#4ECDC4` scarf, goggle lenses.
+
+**Animations**:
+- `idle`: ostrich shifts weight between legs, head bobs, feathers ruffle. Rider adjusts reins.
+- `move`: long-stride gallop, neck pumps forward and back. Rider leans into the motion, scarf trails.
+- `attack`: rider draws sidearm and fires sideways. Ostrich kicks forward with one leg.
+- `hit`: ostrich stumbles, wings flare out for balance. Rider grabs saddle.
+- `death`: ostrich crumples forward, wings spread on ground. Rider thrown clear.
 
 ---
 
@@ -377,6 +480,33 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 
 ---
 
+### Infantry (Upgraded) — El Químico
+
+**File**: `infantry2_pistolero.glb`
+
+**Subject**: Front view only. A cartel chemist standing in a T-pose — arms straight out to the sides at shoulder height, legs slightly apart. Thin build, not muscular. Thick-framed glasses — dark rectangular frames, cracked at the bridge, taped with a small strip of white tape. Clean-shaven with a thin mustache. Black hair slicked straight back, neat, parted with a comb. White dress shirt — once clean, now yellowed at the collar and cuffs, sleeves rolled to the elbow exposing forearms with chemical burn scars — pink-red discolored patches on light brown skin. Leather shoulder holster over the shirt on the left side — compact pistol in the holster, an afterthought. Stained lab coat worn open over everything — off-white turned yellow-brown from chemical exposure, four front pockets stuffed with small glass vials, two vials clipped to the left lapel with binder clips. Nitrile gloves on both hands — purple, slightly torn at the fingertips, hands underneath permanently discolored grey-yellow. Two gold rings — one on each hand, thick bands, cartel money. Dark trousers, black leather shoes scuffed at the toes. Right hand gripping a handheld dispersal nozzle — arm extended straight out to the side, chrome spray nozzle connected by a rubber hose to a pressurized steel tank on the back. The tank is a modified fire extinguisher — dented steel cylinder, brass pressure gauge on top, neon green spray paint marking on the tank body. Hard edge forms, clean material separation between fabric, rubber, glass, steel. Surface wear baked in — chemical stains, yellowed fabric, scuffed shoes.
+
+**Visual markers**:
+- Thick-framed glasses — cracked, taped at the bridge
+- Stained lab coat worn open — vials clipped to lapel, stuffed pockets
+- White dress shirt yellowed, sleeves rolled, chemical burn scars on forearms
+- Pressurized tank on back — modified fire extinguisher, neon green spray mark
+- Handheld dispersal nozzle with rubber hose
+- Purple nitrile gloves, gold rings, shoulder holster
+
+**Silhouette**: Narrow and vertical. Lab coat hangs loose, tank on back adds bulk behind. Not a soldier — reads as a civilian specialist. At RTS zoom the lab coat silhouette is unmistakable.
+
+**Colors**: Primary charcoal `#3D3D3D` trousers, shoes, shoulder holster. Secondary neon green `#39FF14` spray mark on tank, vial liquid color. Accent yellowed white lab coat and shirt, gold rings, brass gauge.
+
+**Animations**:
+- `idle`: adjusts glasses with one gloved hand. Completely still otherwise. Calm.
+- `move`: measured walk, nozzle at side. Lab coat sways. No urgency.
+- `attack`: raises nozzle, sprays forward. Green mist. No recoil — just pressure release.
+- `hit`: stumbles, glasses slip. Catches them. Tank hisses from a leak.
+- `death`: drops nozzle, tank ruptures — green cloud. Sinks to knees, falls sideways.
+
+---
+
 ### Tank — Blindado
 
 **File**: `tank_pistolero.glb`
@@ -432,6 +562,32 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 - `attack`: rider draws sidearm with right hand, fires out the open side, UTV swerves slightly.
 - `hit`: UTV bucks hard over impact, rider grabs wheel with both hands, overcorrects.
 - `death`: UTV rolls to the side, rider thrown clear, vehicle settles on its roll cage.
+
+---
+
+### Scout (Upgraded) — Black Horse
+
+**File**: `scout2_pistolero.glb`
+
+**Subject**: A black stallion ridden by a cartel scout. Plain black horse — muscular, tall, no armor, no barding. Coat is jet black, mane and tail long and unkempt. Simple rope bridle, no bit. Worn leather saddle, saddlebags behind the rider. Rider wears a black balaclava covering the face, charcoal bulletproof vest over dark clothing, tactical cargo pants tucked into black boots. Neon green tape wrapped around the left wrist. Rider sits upright, one hand on reins, other hand resting near hip. Hard edge forms, clean material separation between horse hide, leather, fabric, nylon. Surface wear baked in.
+
+**Visual markers**:
+- Black stallion — jet black coat, long unkempt mane and tail
+- No armor on the horse — rope bridle only
+- Rider in balaclava and plate carrier
+- Neon green tape on left wrist
+- Worn leather saddle and saddlebags
+
+**Silhouette**: Tall and commanding. Horse and rider form a classic mounted silhouette. At RTS zoom reads as a dark imposing shape — taller than infantry, narrower than vehicles.
+
+**Colors**: Primary black `#1A1A1A` horse coat, rider clothing, boots, balaclava. Secondary charcoal `#3D3D3D` plate carrier, saddle, cargo pants. Accent neon green `#39FF14` tape on wrist, small marking on saddlebag.
+
+**Animations**:
+- `idle`: horse shifts weight, tail swishes. Rider scans surroundings, one hand near hip.
+- `move`: full gallop, mane and tail streaming. Rider leans forward in saddle.
+- `attack`: rider draws sidearm and fires while riding. Horse maintains stride.
+- `hit`: horse rears slightly, rider grabs mane. Recovers.
+- `death`: horse crumples forward, rider thrown over the neck.
 
 ---
 
@@ -517,6 +673,32 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 
 ---
 
+### Infantry (Upgraded) — EOD Officer
+
+**File**: `infantry2_warden.glb`
+
+**Subject**: Front view only. A bomb disposal officer standing in a T-pose — arms straight out to the sides at shoulder height, legs slightly apart. Full EOD bomb suit — massive padded torso, thick protective collar rising above the shoulders to jaw level, heavy armored limbs with segmented padding at elbows and knees. Blast visor down — dark rectangular viewport in a heavy face plate, visor scratched from use. Charcoal suit body with reflective orange tape on both shoulders and across the chest. Stenciled badge number on the chest plate, partially worn. Right hand gripping a rotary grenade launcher — arm extended straight out to the side, six-round cylinder, short stubby barrel, charcoal finish worn at the grip. Heavy armored boots, shin guards integrated into the suit. Hard edge forms, clean material separation between padded suit material, visor glass, reflective tape, metal weapon. Surface wear baked in.
+
+**Visual markers**:
+- Full EOD bomb suit — massive padded torso, thick collar, heavy limbs
+- Blast visor down — dark viewport, scratched
+- Rotary grenade launcher — six-round cylinder, short barrel
+- Reflective orange tape on shoulders and chest
+- Stenciled badge number on chest plate
+
+**Silhouette**: Wide and bulky. Bomb suit makes the torso enormous. Thick collar rises above shoulders. At RTS zoom reads as the widest, heaviest infantry shape — a walking wall of padding.
+
+**Colors**: Primary charcoal `#3A3A3A` bomb suit body, visor frame, grenade launcher. Secondary high-vis orange `#FF6B00` reflective tape on shoulders, chest stripe, helmet marking. Accent white `#F0F0F0` badge number stencil, visor frame trim.
+
+**Animations**:
+- `idle`: slow weight shift. Suit creaks. Grenade launcher held steady at side.
+- `move`: heavy plodding stride — slowest infantry in the game. Bomb suit restricts movement.
+- `attack`: raises grenade launcher, fires single round. Cylinder rotates. Thump recoil.
+- `hit`: suit absorbs impact — barely moves. Visor cracks.
+- `death`: suit locks up, tips backward like a felled statue. Crashes onto back. Does not get up.
+
+---
+
 ### Tank — Armored Response Vehicle
 
 **File**: `tank_warden.glb`
@@ -570,6 +752,32 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 - `attack`: camera pod locks on target, emits targeting pulse (vertex flash on lens). Body recoils slightly.
 - `hit`: one rotor guard clips, drone lurches. Warning light flickers. Recovers with overcorrection.
 - `death`: rotor pair fails, drone tilts, spirals down. Warning light stays on as it crashes (stubborn institutional equipment).
+
+---
+
+### Scout (Upgraded) — Bloodhound
+
+**File**: `scout2_warden.glb`
+
+**Subject**: A giant bloodhound the size of a horse, ridden by a security officer. Massive tracking dog — long drooping ears hanging past the jaw, deep wrinkled face, heavy jowls, sad drooping eyes. Short tan-brown coat, muscular body, huge paws. No armor on the dog — wild tamed. Simple leather saddle with reflective orange tape on the straps, rope reins. Rider wears a charcoal security helmet with flip-down visor, orange stripe across the crown, armored vest with stenciled badge number, reinforced knee guards. Rider sits upright, one hand on reins. Hard edge forms, clean material separation between dog hide, leather, fabric, armor plate. Surface wear baked in.
+
+**Visual markers**:
+- Giant bloodhound — long drooping ears, wrinkled face, heavy jowls
+- Massive paws, muscular body, short tan-brown coat
+- No armor on the dog — saddle with orange reflective tape
+- Rider in security helmet and armored vest with badge number
+- Orange stripe on helmet, reflective tape on saddle straps
+
+**Silhouette**: Low and heavy. Bloodhound's body is wide and low-slung, drooping ears extend the width. Rider adds height. At RTS zoom reads as a heavy low shape with distinctive floppy ear silhouette.
+
+**Colors**: Primary tan-brown dog coat. Secondary charcoal `#3A3A3A` rider helmet, vest, uniform. Accent high-vis orange `#FF6B00` helmet stripe, reflective tape on saddle, shoulder tape.
+
+**Animations**:
+- `idle`: bloodhound sniffs the ground, ears sway. Rider adjusts visor.
+- `move`: loping gallop, ears flapping, jowls bouncing. Rider leans forward.
+- `attack`: bloodhound lunges with open jaws, deep bark. Rider braces in saddle.
+- `hit`: dog stumbles sideways, yelps. Rider grabs saddle horn.
+- `death`: bloodhound collapses to its side, ears spread on ground. Rider rolls off.
 
 ---
 
@@ -657,6 +865,33 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 
 ---
 
+### Infantry (Upgraded) — The Wrecker
+
+**File**: `infantry2_greaser.glb`
+
+**Subject**: Front view only. A large shirtless street fighter standing in a T-pose — arms straight out to the sides at shoulder height, legs slightly apart. Broad shoulders, thick arms, barrel chest. No shirt — bare torso and arms covered in American traditional tattoos: bold black outlines, limited color. A black panther mid-leap across the entire chest — head on the left pec, claws extended to the right, bold black fill with yellow eyes. A heart with a banner reading MOM on the left upper arm. An eagle with spread wings across the upper back visible at the shoulders. A dagger through a rose on the right forearm. An anchor on the left forearm. A spiderweb on the right elbow. All tattoos bold black outlines, flat color fills — red, green, yellow — no fine line work, no tribal, no modern style. Full pompadour — glossy black hair, high wave front. Red bandana tied around the forehead. Faded indigo jeans, wide cut, cuffed at the ankle. Scuffed black engineer boots, steel toe exposed from wear. Right hand gripping a heavy steel car engine block on a thick chain — arm extended straight out to the side, chain links hanging, engine block dangling below the fist. Left hand empty, knuckles tattooed with block letters. Hard edge forms, clean material separation between bare skin, tattoo ink, denim, steel. Surface wear baked in — grease stains on jeans, road grime on boots.
+
+**Visual markers**:
+- Shirtless — bare torso covered in American traditional tattoos
+- Black panther mid-leap across the chest — bold black, yellow eyes
+- MOM heart banner on left upper arm
+- Engine block on a chain — held in right hand, swinging
+- Full pompadour, red bandana on forehead
+- No shirt, no vest, no armor — just skin and ink
+
+**Silhouette**: Wide and raw. Bare tattooed torso reads as the widest infantry shoulders. Engine block on chain hangs low on one side. At RTS zoom reads as a big dark shape with something heavy swinging.
+
+**Colors**: Primary black `#1A1A1A` tattoo outlines, hair, boots, jeans. Secondary skin tone — bare chest and arms as the canvas. Accent red `#C1272D` bandana, tattoo fills (heart, rose), cherry red pinstripe detail on the chain.
+
+**Animations**:
+- `idle`: rolls shoulders, chain drags on ground. Engine block scrapes. Head turns slow.
+- `move`: heavy forward stride, engine block dragging behind. Chain clinks with each step.
+- `attack`: winds up, swings engine block overhead in an arc. Chain extends full length. Crashes down.
+- `hit`: absorbs impact, barely moves. Spits. Adjusts grip on chain.
+- `death`: drops chain, engine block thuds. Sinks to knees, falls forward flat. Tattoos face up.
+
+---
+
 ### Scout — Café Racer
 
 **File**: `scout_greaser.glb`
@@ -684,6 +919,32 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 - `attack`: rider draws sidearm with right hand while steering one-handed, fires to the side. Bike swerves slightly from the shift in weight.
 - `hit`: front wheel bucks, rider grips tank with knees, recovers with overcorrection.
 - `death`: rear wheel slides out, bike lays down at speed, rider and bike slide together across ground.
+
+---
+
+### Scout (Upgraded) — Racing Greyhound
+
+**File**: `scout2_greaser.glb`
+
+**Subject**: A giant racing greyhound the size of a horse, ridden by a street fighter. Lean muscular dog — deep chest, tucked waist, long thin legs built for speed. Short smooth brindle coat, dark with lighter streaks. Long narrow snout, alert ears folded back. Numbered racing vest — black with white number 7, slightly torn at the edges. No armor on the dog — wild tamed. Simple leather saddle low on the back, rope reins. Rider wears a battered black leather motorcycle jacket, dirty white t-shirt, faded indigo jeans cuffed at the ankle, scuffed black engineer boots. Full pompadour — glossy black hair, high wave front. Rider crouched low on the saddle. Hard edge forms, clean material separation between dog hide, leather, fabric, denim. Surface wear baked in.
+
+**Visual markers**:
+- Giant racing greyhound — lean, deep chest, tucked waist, long thin legs
+- Numbered racing vest — black with white 7, torn edges
+- Short smooth brindle coat
+- Rider in leather jacket, pompadour, engineer boots
+- Crouched low riding posture — speed stance
+
+**Silhouette**: Low and long. Greyhound's body is streamlined and horizontal — deep chest tapering to narrow waist. At RTS zoom reads as the fastest, leanest shape on the field.
+
+**Colors**: Primary black `#1A1A1A` leather jacket, dog's dark brindle base, racing vest, boots. Secondary chrome `#D0D0D0` jacket zipper pulls, boot buckles. Accent white number 7 on racing vest, dirty white t-shirt.
+
+**Animations**:
+- `idle`: greyhound shifts weight, muscles twitch. Rider adjusts grip on reins.
+- `move`: full sprint, double-suspension gallop, ears pinned back. Rider crouched flat against neck.
+- `attack`: greyhound snaps forward with jaws. Rider swings with one hand.
+- `hit`: dog stumbles mid-stride, catches balance. Rider grabs saddle.
+- `death`: greyhound tumbles forward at speed, rolls. Rider thrown clear.
 
 ---
 
@@ -800,6 +1061,32 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 
 ---
 
+### Infantry (Upgraded) — Arc Trooper
+
+**File**: `infantry2_current.glb`
+
+**Subject**: Front view only. A heavy power grid soldier standing in a T-pose — arms straight out to the sides at shoulder height, legs slightly apart. Heavier insulated suit than base infantry — thicker rubber-coated coveralls with reinforced ceramic plating across chest, shoulders, and forearms. Sealed hood with a clear visor tinted blue, visor larger and more heavily framed than base infantry. Massive Tesla coil backpack — exposed copper coils wound in a vertical helix, capacitor banks on both sides, cooling vents humming, blue arcs crackling between the coil terminals. Heavy insulated gloves with copper-tipped fingers. Blue LED indicator strips along all suit seams — brighter and more numerous than base infantry. Right hand gripping an arc projector cannon — arm extended straight out to the side, two-handed weapon with an insulated barrel, copper electrode tips at the muzzle, power cable running from the weapon back to the Tesla coil backpack. Heavy insulated boots with copper grounding strips on the soles. Hard edge forms, clean material separation between rubber suit, ceramic plate, copper coils, electrode metal. Surface wear baked in.
+
+**Visual markers**:
+- Massive Tesla coil backpack — exposed copper helix, capacitor banks, arcs between terminals
+- Arc projector cannon — insulated barrel, copper electrode tips, power cable to backpack
+- Heavier ceramic plating on chest, shoulders, forearms
+- Brighter, more numerous blue LED strips along all seams
+- Copper-tipped gloves, copper grounding strips on boots
+
+**Silhouette**: Tall and heavy. Tesla coil backpack rises above the head. Ceramic plating widens the torso. At RTS zoom reads as a taller, glowing-brighter version of the base current infantry — more blue, more bulk.
+
+**Colors**: Primary electric blue `#1E90FF` LED strips, arc crackle between coil terminals, electrode glow, visor tint. Secondary white `#E8ECF0` suit body, ceramic plates, gloves, hood. Accent copper exposed coil windings, electrode tips, finger tips, grounding strips.
+
+**Animations**:
+- `idle`: Tesla coil arcs between terminals continuously. LED strips pulse. Capacitor banks hum.
+- `move`: measured heavy stride, arc cannon at ready. Coil crackle intensifies with movement.
+- `attack`: arc cannon fires sustained beam — blue-white arc streams from electrode tips. Tesla coil flares. Heavy recoil.
+- `hit`: staggers, ceramic plate shatters. Tesla coil discharges wildly — random arcs. LEDs flicker.
+- `death`: Tesla coil overloads — massive blue flash, coil melts. Suit goes dark. Collapses forward, smoke rises.
+
+---
+
 ### Tank — Mobile Substation
 
 **File**: `tank_current.glb`
@@ -851,6 +1138,32 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 - `attack`: sensor lens flashes (targeting pulse), emits focused signal burst. Antennas flare. Slight backward recoil.
 - `hit`: wobbles violently, thrust pod flickers. Antenna bends. Overcorrects to recover.
 - `death`: thrust pods fail in sequence — drone tilts, spins, drops. Running lights die. Clatters to ground intact but dead.
+
+---
+
+### Scout (Upgraded) — Electric Jellyfish
+
+**File**: `scout2_current.glb`
+
+**Subject**: A giant floating jellyfish the size of a small car, with a rider harnessed underneath. Translucent bell-shaped body — pale blue-white membrane, internal structures faintly visible through the skin. Long trailing tentacles hanging below, crackling with blue electric arcs between them. Bioluminescent blue glow pulsing through the bell. The rider hangs in a harness suspended from the underside of the bell — straps and a simple seat between the tentacles. Rider wears a full insulated suit, thick rubber-coated coveralls with ceramic plate reinforcement at chest and shoulders, sealed hood with a clear visor tinted blue, heavy insulated gloves. Blue LED indicator strips on the suit seams. The jellyfish hovers silently above the ground. No armor — living creature. Hard edge forms on the rider and harness, organic translucent forms on the jellyfish. Surface wear baked into the rider's suit.
+
+**Visual markers**:
+- Giant translucent jellyfish — bell-shaped body, pale blue-white membrane
+- Trailing tentacles crackling with blue electric arcs
+- Bioluminescent blue glow pulsing through the bell
+- Rider in insulated suit harnessed underneath
+- Blue LED strips on rider's suit, blue visor tint
+
+**Silhouette**: Tall and ethereal. Jellyfish bell dominates the top, tentacles trail below. Rider is a small shape suspended in the middle. At RTS zoom reads as a glowing vertical blob — unmistakable.
+
+**Colors**: Primary electric blue `#1E90FF` bioluminescent glow, arc crackle, LED strips, visor tint. Secondary translucent blue-white jellyfish membrane. Accent white `#E8ECF0` insulated suit body, ceramic plates, harness straps.
+
+**Animations**:
+- `idle`: jellyfish bell pulses slowly — contracts and expands. Tentacles drift. Blue glow throbs.
+- `move`: bell contracts rhythmically, propelling forward. Tentacles stream behind. Rider sways in harness.
+- `attack`: tentacles lash forward, blue arcs intensify. Crackling discharge at the tips.
+- `hit`: bell contracts sharply, tentacles flail. Glow flickers. Rider swings in harness.
+- `death`: glow dies, bell deflates, tentacles go limp. Whole creature sinks to the ground. Rider drops with it.
 
 ---
 

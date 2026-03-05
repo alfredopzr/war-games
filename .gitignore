@@ -6,3 +6,14 @@ coverage/
 .DS_Store
 *.tsbuildinfo
 .vite/
+
+# Asset pipeline - ignore everything except PRODUCTION and animated
+asset_gen_pipeline.zip
+GLB/
+asset_gen_pipeline/**
+!asset_gen_pipeline/PRODUCTION/
+!asset_gen_pipeline/PRODUCTION/**
+!asset_gen_pipeline/animated/
+!asset_gen_pipeline/animated/**
+!asset_gen_pipeline/previews/
+!asset_gen_pipeline/previews/**
