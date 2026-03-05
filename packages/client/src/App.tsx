@@ -219,7 +219,7 @@ export function App(): ReactElement {
       // Block input during turn replay
       if (useGameStore.getState().isReplayPlaying) return;
 
-      const hex = screenToHex(e.clientX, e.clientY, HEX_SIZE, app.stage);
+      const hex = screenToHex(e.offsetX, e.offsetY, HEX_SIZE, app.stage);
       const store = useGameStore.getState();
 
       // Build phase: target selection for hunt/capture directives
@@ -378,7 +378,7 @@ export function App(): ReactElement {
       const app = appRef.current;
       if (!app) return;
 
-      const hex = screenToHex(e.clientX, e.clientY, HEX_SIZE, app.stage);
+      const hex = screenToHex(e.offsetX, e.offsetY, HEX_SIZE, app.stage);
       const unit = findUnitAtHex(gameState, hex);
       if (unit && unit.owner === currentPlayerView) {
         e.preventDefault();
@@ -403,7 +403,7 @@ export function App(): ReactElement {
       const app = appRef.current;
       if (!app) return;
 
-      const hex = screenToHex(e.clientX, e.clientY, HEX_SIZE, app.stage);
+      const hex = screenToHex(e.offsetX, e.offsetY, HEX_SIZE, app.stage);
       setHoveredHex(hex);
     },
     [gameState, setHoveredHex],

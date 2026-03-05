@@ -252,14 +252,14 @@ export function setupCameraControls(app: Application, stage: Container): () => v
 
     // Compute world point under cursor (using current *target* values so
     // consecutive scroll ticks accumulate correctly)
-    const worldX = (e.clientX - state.targetPosX) / oldTarget;
-    const worldY = (e.clientY - state.targetPosY) / oldTarget;
+    const worldX = (e.offsetX - state.targetPosX) / oldTarget;
+    const worldY = (e.offsetY - state.targetPosY) / oldTarget;
 
     state.targetZoom = newTarget;
 
     // Adjust target position so the world point stays under the cursor
-    state.targetPosX = e.clientX - worldX * newTarget;
-    state.targetPosY = e.clientY - worldY * newTarget;
+    state.targetPosX = e.offsetX - worldX * newTarget;
+    state.targetPosY = e.offsetY - worldY * newTarget;
 
     clampTargets(app.screen.width, app.screen.height);
   };
