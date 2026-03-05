@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { GameState, PlayerId } from '@hexwar/engine';
-import { getAllHexes, hexToKey, hexToWorld, hexWorldVertices } from '@hexwar/engine';
+import { hexToKey, hexToWorld, hexWorldVertices } from '@hexwar/engine';
 import { getThreeContext } from './three-scene';
 
 // ---------------------------------------------------------------------------
@@ -47,29 +47,31 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
   const enemyKeys = new Set<string>();
   for (const h of enemyZone) enemyKeys.add(hexToKey(h));
 
-  const allHexes = getAllHexes(state.map.gridSize);
+  // Only iterate deploy zone hexes, not entire grid
+  const zoneEntries: { hex: typeof friendlyZone[0]; fillColor: number; fillAlpha: number; strokeColor: number; strokeAlpha: number }[] = [];
 
-  for (const hex of allHexes) {
+  for (const hex of friendlyZone) {
+    zoneEntries.push({
+      hex,
+      fillColor: currentPlayerView === 'player1' ? 0x4a5a3a : 0x6a3a2a,
+      fillAlpha: 0.45,
+      strokeColor: currentPlayerView === 'player1' ? 0x8a9a7a : 0xaa7a6a,
+      strokeAlpha: 1,
+    });
+  }
+
+  for (const hex of enemyZone) {
+    zoneEntries.push({
+      hex,
+      fillColor: currentPlayerView === 'player1' ? 0x5a2a1a : 0x2a3a1a,
+      fillAlpha: 0.35,
+      strokeColor: currentPlayerView === 'player1' ? 0x8a5a4a : 0x6a7a5a,
+      strokeAlpha: 1,
+    });
+  }
+
+  for (const { hex, fillColor, fillAlpha, strokeColor, strokeAlpha } of zoneEntries) {
     const hexKey = hexToKey(hex);
-    let fillColor: number | null = null;
-    let fillAlpha = 0;
-    let strokeColor = 0;
-    let strokeAlpha = 0;
-
-    if (friendlyKeys.has(hexKey)) {
-      fillColor = currentPlayerView === 'player1' ? 0x4a5a3a : 0x6a3a2a;
-      fillAlpha = 0.45;
-      strokeColor = currentPlayerView === 'player1' ? 0x8a9a7a : 0xaa7a6a;
-      strokeAlpha = 1;
-    } else if (enemyKeys.has(hexKey)) {
-      fillColor = currentPlayerView === 'player1' ? 0x5a2a1a : 0x2a3a1a;
-      fillAlpha = 0.35;
-      strokeColor = currentPlayerView === 'player1' ? 0x8a5a4a : 0x6a7a5a;
-      strokeAlpha = 1;
-    }
-
-    if (fillColor === null) continue;
-
     const elev = state.map.elevation.get(hexKey) ?? 0;
     const center = hexToWorld(hex, elev);
     const verts = hexWorldVertices(hex, elev);

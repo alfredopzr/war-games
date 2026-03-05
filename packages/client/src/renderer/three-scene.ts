@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import type { GridSize } from '@hexwar/engine';
-import { hexToWorld, getAllHexes } from '@hexwar/engine';
+import { hexToWorld, createHex } from '@hexwar/engine';
 
 // ---------------------------------------------------------------------------
 // Three.js context — scene, camera, renderers
@@ -25,7 +24,7 @@ export function getThreeContext(): ThreeContext | null {
  * Camera tilt angle in degrees from vertical.
  * ~35° gives a natural isometric look with true hex geometry.
  */
-const CAMERA_TILT_DEG = 35;
+const CAMERA_TILT_DEG = 50;
 const CAMERA_TILT_RAD = (CAMERA_TILT_DEG * Math.PI) / 180;
 
 export function createThreeContext(parentDiv: HTMLDivElement): ThreeContext {
@@ -82,20 +81,18 @@ const PADDING = 1.0; // world units of padding around the map
  * Camera is tilted CAMERA_TILT_DEG from vertical (looking down at the XZ plane).
  */
 export function fitCameraToMap(
-  gridSize: GridSize,
   elevationMap: Map<string, number>,
 ): void {
   if (!ctx) return;
 
-  // Compute world-space bounding box of all hexes
-  const hexes = getAllHexes(gridSize);
+  // Compute world-space bounding box from actual terrain hex keys
   let minX = Infinity, maxX = -Infinity;
   let minZ = Infinity, maxZ = -Infinity;
   let maxY = 0;
 
-  for (const hex of hexes) {
-    const key = `${hex.q},${hex.r}`;
-    const elev = elevationMap.get(key) ?? 0;
+  for (const [key, elev] of elevationMap) {
+    const [qStr, rStr] = key.split(',');
+    const hex = createHex(Number(qStr), Number(rStr));
     const w = hexToWorld(hex, elev);
     minX = Math.min(minX, w.x);
     maxX = Math.max(maxX, w.x);

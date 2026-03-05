@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { GameState, CubeCoord } from '@hexwar/engine';
-import { getAllHexes, hexToKey, hexToWorld, hexWorldVertices } from '@hexwar/engine';
+import { hexToKey, hexToWorld, hexWorldVertices, createHex } from '@hexwar/engine';
 import { getThreeContext } from './three-scene';
 import { ASH_EMBER_TERRAIN, OBJECTIVE_COLOR, PLAYER_COLORS } from './constants';
 
@@ -72,16 +72,21 @@ export function renderTerrain(state: GameState): void {
   terrainGroup.name = 'terrainGroup';
   terrainGroup.renderOrder = 0;
 
-  const allHexes = getAllHexes(state.map.gridSize);
+  // Build hex list from terrain map keys (hex boundary has negative coords)
+  const hexList: CubeCoord[] = [];
+  for (const key of state.map.terrain.keys()) {
+    const [qStr, rStr] = key.split(',');
+    hexList.push(createHex(Number(qStr), Number(rStr)));
+  }
 
   // Sort by world Z (back-to-front) for correct elevation overlap
-  const sortedHexes = [...allHexes].sort((a: CubeCoord, b: CubeCoord) => {
+  const sortedHexes = hexList.sort((a: CubeCoord, b: CubeCoord) => {
     return hexToWorld(a).z - hexToWorld(b).z;
   });
 
   for (const hex of sortedHexes) {
     const hexKey = hexToKey(hex);
-    const terrain = state.map.terrain.get(hexKey) ?? 'plains';
+    const terrain = state.map.terrain.get(hexKey)!;
     const elev = state.map.elevation.get(hexKey) ?? 0;
     const fill = ASH_EMBER_TERRAIN[terrain] ?? 0x6A6A58;
 
@@ -172,13 +177,13 @@ export function renderTerrain(state: GameState): void {
 
   // City ownership borders
   if (state.cityOwnership) {
-    for (const hex of allHexes) {
-      const key = hexToKey(hex);
-      const owner = state.cityOwnership.get(key);
+    for (const [key, owner] of state.cityOwnership) {
       if (owner) {
+        const [cq, cr] = key.split(',');
+        const cityHex = createHex(Number(cq), Number(cr));
         const elev = state.map.elevation.get(key) ?? 0;
         const ownerColor = parseColor(PLAYER_COLORS[owner].light);
-        const cityOutline = createHexOutline(hex, elev, ownerColor, 0.004);
+        const cityOutline = createHexOutline(cityHex, elev, ownerColor, 0.004);
         terrainGroup.add(cityOutline);
       }
     }

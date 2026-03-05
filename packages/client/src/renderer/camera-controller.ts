@@ -1,11 +1,9 @@
-import type { GridSize } from '@hexwar/engine';
 import { getThreeContext, fitCameraToMap, resizeThreeRenderers } from './three-scene';
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
-let gridSize: GridSize | null = null;
 let elevationMap: Map<string, number> | null = null;
 
 // ---------------------------------------------------------------------------
@@ -18,15 +16,14 @@ export function wasDrag(): boolean {
 }
 
 /** Store map parameters so resize can refit the camera. */
-export function setMapParams(grid: GridSize, elev: Map<string, number>): void {
-  gridSize = grid;
+export function setMapParams(elev: Map<string, number>): void {
   elevationMap = elev;
 }
 
 /** Refit camera to current map. Call after map data is available. */
 export function refitCamera(): void {
-  if (gridSize && elevationMap) {
-    fitCameraToMap(gridSize, elevationMap);
+  if (elevationMap) {
+    fitCameraToMap(elevationMap);
   }
 }
 
