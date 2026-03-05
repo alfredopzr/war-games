@@ -3,7 +3,7 @@ import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/e
 import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, DirectiveTarget, Command, PlayerId } from '@hexwar/engine';
 import type { TurnEvent } from '../renderer/replay-sequencer';
 
-export type GameMode = 'hotseat' | 'vsAI' | 'online';
+export type GameMode = 'vsAI' | 'online';
 export type LobbyState = 'menu' | 'creating' | 'waiting' | 'joining' | null;
 
 export interface BattleLogEntry {
@@ -46,6 +46,8 @@ interface GameStore {
   opponentConnected: boolean;
   opponentBuildConfirmed: boolean;
   waitingForServer: boolean;
+  commandsSubmitted: boolean;
+  opponentCommandsSubmitted: boolean;
   lobbyState: LobbyState;
 
   // UI state
@@ -92,8 +94,7 @@ interface GameStore {
   turnReplayEvents: TurnEvent[];
   isReplayPlaying: boolean;
 
-  // Turn transition / round result / game over overlays
-  showTransition: boolean;
+  // Round result / game over overlays
   showRoundResult: boolean;
   roundResult: RoundResultData | null;
   showGameOver: boolean;
@@ -107,6 +108,8 @@ interface GameStore {
   setOpponentConnected: (connected: boolean) => void;
   setOpponentBuildConfirmed: (confirmed: boolean) => void;
   setWaitingForServer: (waiting: boolean) => void;
+  setCommandsSubmitted: (submitted: boolean) => void;
+  setOpponentCommandsSubmitted: (submitted: boolean) => void;
   setLobbyState: (state: LobbyState) => void;
   selectUnit: (unit: Unit | null) => void;
   setHoveredHex: (hex: CubeCoord | null) => void;
@@ -122,9 +125,7 @@ interface GameStore {
   removePlacedUnit: (unitId: string) => void;
   addPendingCommand: (command: Command) => void;
   clearPendingCommands: () => void;
-  switchPlayerView: () => void;
   markUnitDamaged: (unitId: string) => void;
-  dismissTransition: () => void;
   setBuildTimeRemaining: (time: number) => void;
   startBuildTimer: () => void;
   stopBuildTimer: () => void;
@@ -141,12 +142,14 @@ interface GameStore {
 
 export const useGameStore = create<GameStore>((set) => ({
   gameState: null,
-  gameMode: 'hotseat',
+  gameMode: 'vsAI',
   roomId: null,
   myPlayerId: null,
   opponentConnected: false,
   opponentBuildConfirmed: false,
   waitingForServer: false,
+  commandsSubmitted: false,
+  opponentCommandsSubmitted: false,
   lobbyState: null,
   selectedUnit: null,
   hoveredHex: null,
@@ -168,7 +171,6 @@ export const useGameStore = create<GameStore>((set) => ({
   targetSelectionMode: false,
   targetSelectionDirective: null,
   toastMessage: null,
-  showTransition: false,
   showRoundResult: false,
   roundResult: null,
   showGameOver: false,
@@ -189,6 +191,10 @@ export const useGameStore = create<GameStore>((set) => ({
   setOpponentBuildConfirmed: (confirmed: boolean): void => set({ opponentBuildConfirmed: confirmed }),
 
   setWaitingForServer: (waiting: boolean): void => set({ waitingForServer: waiting }),
+
+  setCommandsSubmitted: (submitted: boolean): void => set({ commandsSubmitted: submitted }),
+
+  setOpponentCommandsSubmitted: (submitted: boolean): void => set({ opponentCommandsSubmitted: submitted }),
 
   setLobbyState: (state: LobbyState): void => set({ lobbyState: state }),
 
@@ -279,37 +285,12 @@ export const useGameStore = create<GameStore>((set) => ({
 
   clearPendingCommands: (): void => set({ pendingCommands: [] }),
 
-  switchPlayerView: (): void =>
-    set((prev) => ({
-      currentPlayerView: prev.currentPlayerView === 'player1' ? 'player2' : 'player1',
-      selectedUnit: null,
-      commandMode: 'none',
-    })),
-
   markUnitDamaged: (unitId: string): void =>
     set((prev) => {
       const updated = new Map(prev.damagedUnits);
       updated.set(unitId, Date.now());
       return { damagedUnits: updated };
     }),
-
-  dismissTransition: (): void => {
-    const prev = useGameStore.getState();
-    const nextPlayer = prev.currentPlayerView === 'player1' ? 'player2' : 'player1';
-
-    set({
-      showTransition: false,
-      currentPlayerView: nextPlayer,
-      selectedUnit: null,
-      commandMode: 'none',
-    });
-
-    // If still in build phase, start timer for next player
-    const current = useGameStore.getState();
-    if (current.gameState?.phase === 'build') {
-      useGameStore.getState().startBuildTimer();
-    }
-  },
 
   setBuildTimeRemaining: (time: number): void => set({ buildTimeRemaining: time }),
 
@@ -377,52 +358,28 @@ export const useGameStore = create<GameStore>((set) => ({
       }
     }
 
-    if (store.gameMode === 'vsAI' && store.currentPlayerView === 'player1') {
-      // VS AI: P1 confirms build, AI immediately builds for P2, then go straight to battle
-      const aiPlacements = aiBuildPhase(store.gameState, 'player2');
-      for (const p of aiPlacements) {
-        try {
-          placeUnit(store.gameState, 'player2', p.unitType, p.position, p.directive);
-        } catch {
-          // skip if placement fails (hex occupied or can't afford)
-        }
+    // AI builds for P2, then go straight to battle
+    const aiPlacements = aiBuildPhase(store.gameState, 'player2');
+    console.log(`[AI BUILD] Budget: ${store.gameState.players.player2.resources}g, placing ${aiPlacements.length} units:`);
+    for (const p of aiPlacements) {
+      console.log(`  ${p.unitType} @ (${p.position.q},${p.position.r}) [${p.directive}] cost=${p.cost}`);
+      try {
+        placeUnit(store.gameState, 'player2', p.unitType, p.position, p.directive);
+      } catch (e) {
+        console.warn(`  FAILED: ${e instanceof Error ? e.message : e}`);
       }
-      startBattlePhase(store.gameState);
-      // Go straight to battle as player1 — no P2 transition needed
-      useGameStore.setState({
-        buildTimerInterval: null,
-        buildTimeRemaining: 120,
-        gameState: { ...store.gameState },
-        selectedUnit: null,
-        placementMode: null,
-        showTransition: false,
-        currentPlayerView: 'player1',
-        survivingUnitIds: new Set<string>(),
-      });
-    } else if (store.currentPlayerView === 'player1') {
-      // Hot-seat: P1 builds first, then show transition for P2
-      useGameStore.setState({
-        buildTimerInterval: null,
-        buildTimeRemaining: 120,
-        showTransition: true,
-        gameState: { ...store.gameState },
-        selectedUnit: null,
-        placementMode: null,
-      });
-    } else {
-      // P2 done building — start battle phase
-      startBattlePhase(store.gameState);
-      // Show transition to hand control to P1 for the first battle turn
-      useGameStore.setState({
-        buildTimerInterval: null,
-        buildTimeRemaining: 120,
-        gameState: { ...store.gameState },
-        selectedUnit: null,
-        placementMode: null,
-        showTransition: true,
-        survivingUnitIds: new Set<string>(),
-      });
     }
+    console.log(`[AI BUILD] P2 units after placement: ${store.gameState.players.player2.units.length}, remaining gold: ${store.gameState.players.player2.resources}g`);
+    startBattlePhase(store.gameState);
+    useGameStore.setState({
+      buildTimerInterval: null,
+      buildTimeRemaining: 120,
+      gameState: { ...store.gameState },
+      selectedUnit: null,
+      placementMode: null,
+      currentPlayerView: 'player1',
+      survivingUnitIds: new Set<string>(),
+    });
   },
 
   addBattleLogEntries: (entries: BattleLogEntry[]): void =>
@@ -473,10 +430,7 @@ export const useGameStore = create<GameStore>((set) => ({
       return {
         showRoundResult: false,
         roundResult: null,
-        showTransition: true,
-        // Reset view to player2 so dismissTransition flips to player1
-        currentPlayerView: 'player2',
-        // Clear stale battle state
+        currentPlayerView: 'player1',
         selectedUnit: null,
         commandMode: 'none',
         placementMode: null,
@@ -494,12 +448,14 @@ export const useGameStore = create<GameStore>((set) => ({
     }
     set({
       gameState: null,
-      gameMode: 'hotseat',
+      gameMode: 'vsAI',
       roomId: null,
       myPlayerId: null,
       opponentConnected: false,
       opponentBuildConfirmed: false,
       waitingForServer: false,
+      commandsSubmitted: false,
+      opponentCommandsSubmitted: false,
       lobbyState: null,
       selectedUnit: null,
       hoveredHex: null,
@@ -521,8 +477,7 @@ export const useGameStore = create<GameStore>((set) => ({
       toastMessage: null,
       targetSelectionMode: false,
       targetSelectionDirective: null,
-      showTransition: false,
-      showRoundResult: false,
+          showRoundResult: false,
       roundResult: null,
       showGameOver: false,
     });

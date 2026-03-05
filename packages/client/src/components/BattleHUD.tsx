@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import {
-  executeTurn, checkRoundEnd, scoreRound,
+  executeTurn, filterValidCommands, checkRoundEnd, scoreRound,
   CP_PER_ROUND, UNIT_STATS,
   calculateIncome, applyCarryover, applyMaintenance,
-  aiBattlePhase,
+  aiBattlePhase, createCommandPool,
 } from '@hexwar/engine';
-import type { PlayerId, ObjectiveState, GameState, Unit } from '@hexwar/engine';
+import type { PlayerId, ObjectiveState, GameState } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 import type { BattleLogEntry } from '../store/game-store';
-import { diffTurnEvents, startReplay, skipReplay } from '../renderer/replay-sequencer';
+import { skipReplay } from '../renderer/replay-sequencer';
 
 function phaseClass(phase: string): string {
   switch (phase) {
@@ -98,89 +98,93 @@ function computeIncomeBreakdown(
   };
 }
 
-function diffBattleLog(
-  before: { units: Map<string, Unit>; cities: Map<string, PlayerId | null> },
-  after: GameState,
-  actingPlayer: PlayerId,
-  turnNumber: number,
-): BattleLogEntry[] {
-  const entries: BattleLogEntry[] = [];
-  const unitLabels: Record<string, string> = { infantry: 'Infantry', tank: 'Tank', artillery: 'Artillery', recon: 'Recon' };
+function resolveSimultaneousLocal(
+  gameState: GameState,
+  p1Commands: import('@hexwar/engine').Command[],
+): void {
+  const store = useGameStore.getState();
+  const turnNum = gameState.round.turnNumber;
 
-  // Check for kills
-  for (const [id, unit] of before.units) {
-    const allAfter = [...after.players.player1.units, ...after.players.player2.units];
-    if (!allAfter.find((u) => u.id === id)) {
-      entries.push({
-        turn: turnNumber,
-        player: actingPlayer,
-        type: 'kill',
-        message: `${actingPlayer === 'player1' ? 'P1' : 'P2'} destroyed ${unit.owner === 'player1' ? 'P1' : 'P2'} ${unitLabels[unit.type] ?? unit.type}`,
-      });
-    }
+  // Generate AI commands from pre-resolution state
+  const aiCommands = aiBattlePhase(gameState, 'player2');
+
+  console.log(`[TURN ${turnNum}] P1 units: ${gameState.players.player1.units.length}, P2 units: ${gameState.players.player2.units.length}`);
+  console.log(`[TURN ${turnNum}] P1 commands (${p1Commands.length}):`, p1Commands.map((c) => `${c.type}:${c.unitId}`));
+  console.log(`[TURN ${turnNum}] AI commands (${aiCommands.length}):`, aiCommands.map((c) => {
+    if (c.type === 'direct-attack') return `attack:${c.unitId}→${c.targetUnitId}`;
+    if (c.type === 'direct-move') return `move:${c.unitId}→(${c.targetHex.q},${c.targetHex.r})`;
+    if (c.type === 'retreat') return `retreat:${c.unitId}`;
+    return `redirect:${c.unitId}→${c.type === 'redirect' ? c.newDirective : '?'}`;
+  }));
+  for (const u of gameState.players.player2.units) {
+    console.log(`  P2 ${u.type} [${u.directive}] hp=${u.hp} @ (${u.position.q},${u.position.r})`);
   }
 
-  // Check for city captures
-  for (const [key, newOwner] of after.cityOwnership) {
-    const prevOwner = before.cities.get(key);
-    if (newOwner !== prevOwner) {
-      if (newOwner) {
-        const label = newOwner === 'player1' ? 'P1' : 'P2';
-        const type = prevOwner ? 'recapture' : 'capture';
-        entries.push({
-          turn: turnNumber,
-          player: newOwner,
-          type,
-          message: `${label} ${type === 'recapture' ? 'recaptured' : 'captured'} a city`,
-        });
-      }
-    }
-  }
-
-  return entries;
-}
-
-function snapshotUnits(gameState: GameState): Map<string, Unit> {
-  const m = new Map<string, Unit>();
-  for (const player of Object.values(gameState.players)) {
-    for (const unit of player.units) {
-      m.set(unit.id, { ...unit });
-    }
-  }
-  return m;
-}
-
-function snapshotCities(gameState: GameState): Map<string, PlayerId | null> {
-  return new Map(gameState.cityOwnership);
-}
-
-function executeAiTurn(gameState: GameState): void {
-  // Snapshot unit HPs before AI execution for damage flash detection
+  // Snapshot before any resolution
   const allUnitsBefore = new Map<string, number>();
   for (const player of Object.values(gameState.players)) {
     for (const unit of player.units) {
       allUnitsBefore.set(unit.id, unit.hp);
     }
   }
+  const turnsHeldBefore = gameState.round.objective.turnsHeld;
+  const occupierBefore = gameState.round.objective.occupiedBy;
 
-  const turnNum = gameState.round.turnNumber;
-  const aiCommands = aiBattlePhase(gameState, 'player2');
-  executeTurn(gameState, aiCommands);
+  // Randomize resolution order
+  const order: [PlayerId, PlayerId] = Math.random() < 0.5
+    ? ['player1', 'player2']
+    : ['player2', 'player1'];
 
-  // Drain engine pendingEvents into battle log
+  const commandsMap: Record<PlayerId, import('@hexwar/engine').Command[]> = {
+    player1: p1Commands,
+    player2: aiCommands,
+  };
+
+  // --- Resolve first player ---
+  gameState.round.currentPlayer = order[0];
+  gameState.round.commandPool = createCommandPool();
+  for (const unit of gameState.players[order[0]].units) {
+    unit.hasActed = false;
+  }
+
+  executeTurn(gameState, commandsMap[order[0]]);
+
+  const logEntries: BattleLogEntry[] = [];
   if (gameState.pendingEvents.length > 0) {
-    const aiLogEntries: BattleLogEntry[] = gameState.pendingEvents.map((evt) => ({
-      turn: turnNum,
-      player: evt.actingPlayer,
-      type: evt.type,
-      message: evt.message,
-    }));
-    useGameStore.getState().addBattleLogEntries(aiLogEntries);
+    for (const evt of gameState.pendingEvents) {
+      logEntries.push({ turn: turnNum, player: evt.actingPlayer, type: evt.type, message: evt.message });
+    }
     gameState.pendingEvents = [];
   }
 
+  const occupierAfterFirst = gameState.round.objective.occupiedBy;
+
+  // Check early round end (elimination after first resolution)
+  const earlyRoundEnd = checkRoundEnd(gameState);
+
+  if (!earlyRoundEnd.roundOver) {
+    // --- Resolve second player ---
+    // currentPlayer was switched by first executeTurn
+    executeTurn(gameState, commandsMap[order[1]]);
+
+    if (gameState.pendingEvents.length > 0) {
+      for (const evt of gameState.pendingEvents) {
+        logEntries.push({ turn: turnNum, player: evt.actingPlayer, type: evt.type, message: evt.message });
+      }
+      gameState.pendingEvents = [];
+    }
+
+    // Fix turnsHeld double-increment
+    if (
+      gameState.round.objective.occupiedBy === occupierAfterFirst &&
+      occupierAfterFirst === occupierBefore &&
+      gameState.round.objective.turnsHeld > turnsHeldBefore + 1
+    ) {
+      gameState.round.objective.turnsHeld = turnsHeldBefore + 1;
+    }
+  }
+
   // Flash damaged units
-  const store = useGameStore.getState();
   const updated = new Map(store.damagedUnits);
   for (const player of Object.values(gameState.players)) {
     for (const unit of player.units) {
@@ -192,22 +196,27 @@ function executeAiTurn(gameState: GameState): void {
   }
   useGameStore.setState({ damagedUnits: updated });
 
-  // Check if round ended after AI turn
-  const result = checkRoundEnd(gameState);
-  if (result.roundOver) {
-    const winnerLabel = result.winner === 'player1' ? 'P1' : result.winner === 'player2' ? 'P2' : 'No one';
-    const reasonLabel = result.reason === 'king-of-the-hill' ? 'King of the Hill'
-      : result.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
+  if (logEntries.length > 0) {
+    store.addBattleLogEntries(logEntries);
+  }
+
+  // Check round end
+  const roundEnd = earlyRoundEnd.roundOver ? earlyRoundEnd : checkRoundEnd(gameState);
+
+  if (roundEnd.roundOver) {
+    const winnerLabel = roundEnd.winner === 'player1' ? 'P1' : roundEnd.winner === 'player2' ? 'P2' : 'No one';
+    const reasonLabel = roundEnd.reason === 'king-of-the-hill' ? 'King of the Hill'
+      : roundEnd.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
     store.addBattleLogEntries([{
       turn: turnNum,
-      player: result.winner ?? 'player1',
+      player: roundEnd.winner ?? 'player1',
       type: 'round-end',
       message: `${winnerLabel} wins the round (${reasonLabel})`,
     }]);
 
-    const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
-    const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
-    scoreRound(gameState, result.winner);
+    const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', roundEnd.winner);
+    const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', roundEnd.winner);
+    scoreRound(gameState, roundEnd.winner);
 
     if (gameState.phase === 'game-over' && gameState.winner) {
       const gameWinnerLabel = gameState.winner === 'player1' ? 'P1' : 'P2';
@@ -220,11 +229,18 @@ function executeAiTurn(gameState: GameState): void {
     }
 
     store.setGameState({ ...gameState });
-    store.showRoundResultScreen(result.winner, result.reason ?? 'unknown', p1Breakdown, p2Breakdown);
+    store.showRoundResultScreen(roundEnd.winner, roundEnd.reason ?? 'unknown', p1Breakdown, p2Breakdown);
     return;
   }
 
-  // Round not over — it's player1's turn again
+  // Round not over — reset for player1's next planning phase
+  // After simultaneous resolution, currentPlayer should be player1 for next planning window
+  gameState.round.currentPlayer = 'player1';
+  gameState.round.commandPool = createCommandPool();
+  for (const unit of gameState.players.player1.units) {
+    unit.hasActed = false;
+  }
+
   store.setGameState({ ...gameState });
 }
 
@@ -233,11 +249,12 @@ export function BattleHUD(): ReactElement | null {
   const currentPlayerView = useGameStore((s) => s.currentPlayerView);
   const pendingCommands = useGameStore((s) => s.pendingCommands);
   const gameMode = useGameStore((s) => s.gameMode);
-  const setGameState = useGameStore((s) => s.setGameState);
   const clearPendingCommands = useGameStore((s) => s.clearPendingCommands);
   const selectUnit = useGameStore((s) => s.selectUnit);
   const waitingForServer = useGameStore((s) => s.waitingForServer);
-  const myPlayerId = useGameStore((s) => s.myPlayerId);
+  const commandsSubmitted = useGameStore((s) => s.commandsSubmitted);
+  const opponentCommandsSubmitted = useGameStore((s) => s.opponentCommandsSubmitted);
+
   const buildTimeRemaining = useGameStore((s) => s.buildTimeRemaining);
   const startBuildTimer = useGameStore((s) => s.startBuildTimer);
   const confirmBuild = useGameStore((s) => s.confirmBuild);
@@ -281,163 +298,34 @@ export function BattleHUD(): ReactElement | null {
       return;
     }
 
-    // Snapshot state before turn for diff
-    const unitsBefore = snapshotUnits(gameState);
-    const citiesBefore = snapshotCities(gameState);
-    const actingPlayer = gameState.round.currentPlayer;
-    const turnNum = gameState.round.turnNumber;
-
-    // Snapshot unit HPs before execution for damage flash detection
-    const allUnitsBefore = new Map<string, number>();
-    for (const player of Object.values(gameState.players)) {
-      for (const unit of player.units) {
-        allUnitsBefore.set(unit.id, unit.hp);
-      }
-    }
-
-    // Snapshot for replay diff (position + hp + owner)
-    const replayUnitsBefore = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
-    for (const player of Object.values(gameState.players)) {
-      for (const unit of player.units) {
-        replayUnitsBefore.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: unit.owner });
-      }
-    }
-    const replayCitiesBefore = new Map(gameState.cityOwnership);
-
-    // Execute the turn with pending commands
-    executeTurn(gameState, pendingCommands);
-
-    // Generate and store battle log entries
-    const logEntries = diffBattleLog(
-      { units: unitsBefore, cities: citiesBefore },
-      gameState,
-      actingPlayer,
-      turnNum,
-    );
-    // Drain engine pendingEvents (capture-damage, capture-death, objective, koth)
-    if (gameState.pendingEvents.length > 0) {
-      for (const evt of gameState.pendingEvents) {
-        logEntries.push({
-          turn: turnNum,
-          player: evt.actingPlayer,
-          type: evt.type,
-          message: evt.message,
-        });
-      }
-      gameState.pendingEvents = [];
-    }
-    if (logEntries.length > 0) {
-      useGameStore.getState().addBattleLogEntries(logEntries);
-    }
-
-    // Check for damage and flash units
-    const store = useGameStore.getState();
-    const updated = new Map(store.damagedUnits);
-    for (const player of Object.values(gameState.players)) {
-      for (const unit of player.units) {
-        const prevHp = allUnitsBefore.get(unit.id);
-        if (prevHp !== undefined && unit.hp < prevHp) {
-          updated.set(unit.id, Date.now());
-        }
-      }
-    }
-    useGameStore.setState({ damagedUnits: updated });
-
-    // Generate replay events from before/after diff
-    const replayUnitsAfter = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
-    for (const player of Object.values(gameState.players)) {
-      for (const unit of player.units) {
-        replayUnitsAfter.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: unit.owner });
-      }
-    }
-    const replayEvents = diffTurnEvents(replayUnitsBefore, replayUnitsAfter, replayCitiesBefore, gameState.cityOwnership);
-
-    // Post-turn flow: check round end, then continue to next player
-    const finishPostTurn = (): void => {
-      const result = checkRoundEnd(gameState);
-      if (result.roundOver) {
-        const winnerLabel = result.winner === 'player1' ? 'P1' : result.winner === 'player2' ? 'P2' : 'No one';
-        const reasonLabel = result.reason === 'king-of-the-hill' ? 'King of the Hill'
-          : result.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
-        useGameStore.getState().addBattleLogEntries([{
-          turn: gameState.round.turnNumber,
-          player: result.winner ?? 'player1',
-          type: 'round-end',
-          message: `${winnerLabel} wins the round (${reasonLabel})`,
-        }]);
-
-        const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
-        const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
-
-        scoreRound(gameState, result.winner);
-
-        // Check if game is over after scoring
-        if (gameState.phase === 'game-over' && gameState.winner) {
-          const gameWinnerLabel = gameState.winner === 'player1' ? 'P1' : 'P2';
-          useGameStore.getState().addBattleLogEntries([{
-            turn: gameState.round.turnNumber,
-            player: gameState.winner,
-            type: 'game-end',
-            message: `${gameWinnerLabel} wins the game!`,
-          }]);
-        }
-
-        clearPendingCommands();
-        selectUnit(null);
-
-        setGameState({ ...gameState });
-        useGameStore.getState().showRoundResultScreen(result.winner, result.reason ?? 'unknown', p1Breakdown, p2Breakdown);
+    // vsAI mode: simultaneous resolution
+    const validCommands = filterValidCommands(gameState, pendingCommands, 'player1');
+    clearPendingCommands();
+    selectUnit(null);
+    setAiThinking(true);
+    setTimeout(() => {
+      const currentGame = useGameStore.getState().gameState;
+      if (!currentGame || currentGame.phase !== 'battle') {
+        setAiThinking(false);
         return;
       }
-
-      clearPendingCommands();
-      selectUnit(null);
-
-      if (gameMode === 'vsAI' && currentPlayerView === 'player1') {
-        setGameState({ ...gameState });
-        setAiThinking(true);
-        setTimeout(() => {
-          const currentGame = useGameStore.getState().gameState;
-          if (!currentGame || currentGame.phase !== 'battle') {
-            setAiThinking(false);
-            return;
-          }
-          executeAiTurn(currentGame);
-          setAiThinking(false);
-        }, 500);
-      } else {
-        setGameState({ ...gameState });
-        useGameStore.setState({ showTransition: true });
-      }
-    };
-
-    // If there are replay events, play the replay before continuing
-    if (replayEvents.length > 0) {
-      store.setTurnReplayEvents(replayEvents);
-      store.setReplayPlaying(true);
-      setGameState({ ...gameState });
-      startReplay(replayEvents, gameState.map.elevation, () => {
-        useGameStore.getState().setReplayPlaying(false);
-        useGameStore.getState().setTurnReplayEvents([]);
-        finishPostTurn();
-      });
-    } else {
-      finishPostTurn();
-    }
-  }, [gameState, pendingCommands, gameMode, currentPlayerView, clearPendingCommands, selectUnit, setGameState, aiThinking]);
+      resolveSimultaneousLocal(currentGame, validCommands);
+      setAiThinking(false);
+    }, 500);
+  }, [gameState, pendingCommands, clearPendingCommands, selectUnit, aiThinking]);
 
   if (!gameState) return null;
 
   const { phase, round } = gameState;
   const cpRemaining = CP_PER_ROUND - pendingCommands.length;
   const turnTotal = round.maxTurnsPerSide;
-  const currentTurn = round.turnsPlayed[round.currentPlayer] + 1;
+  const currentTurn = round.turnsPlayed.player1 + 1;
 
   const isBuildPhase = phase === 'build';
   const isBattlePhase = phase === 'battle';
-  const isCurrentPlayersTurn = round.currentPlayer === currentPlayerView;
-  const showEndTurn = isBattlePhase && isCurrentPlayersTurn
-    && (gameMode !== 'online' || myPlayerId === round.currentPlayer);
+  const showEndTurn = isBattlePhase && (
+    gameMode === 'online' ? !commandsSubmitted : true
+  );
 
   if (isBuildPhase) {
     const timerColorClass = buildTimeRemaining <= 10
@@ -488,9 +376,9 @@ export function BattleHUD(): ReactElement | null {
           Turn{' '}
           <span className="turn-counter">{currentTurn}/{turnTotal}</span>
         </span>
-        <span className="current-player-label" data-color={playerColor(round.currentPlayer)}>
-          <span className="player-indicator" style={{ color: playerColor(round.currentPlayer) }}>
-            {playerLabel(round.currentPlayer)}
+        <span className="current-player-label" data-color={playerColor(currentPlayerView)}>
+          <span className="player-indicator" style={{ color: playerColor(currentPlayerView) }}>
+            {playerLabel(currentPlayerView)}
           </span>
         </span>
       </div>
@@ -529,7 +417,9 @@ export function BattleHUD(): ReactElement | null {
             type="button"
             disabled={aiThinking || waitingForServer}
           >
-            {waitingForServer ? 'Waiting...' : aiThinking ? 'AI thinking...' : 'End Turn'}
+            {gameMode === 'online' && waitingForServer
+              ? (opponentCommandsSubmitted ? 'Resolving...' : 'Waiting for opponent...')
+              : aiThinking ? 'AI thinking...' : 'End Turn'}
           </button>
         )}
       </div>

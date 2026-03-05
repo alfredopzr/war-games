@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, type ReactElement } from 'react';
 import {
   placeUnit,
-  getAllHexes, hexToKey, calculateVisibility,
+  hexToKey, calculateVisibility, createHex,
   canAttack, cubeDistance, UNIT_STATS,
 } from '@hexwar/engine';
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
@@ -10,6 +10,7 @@ import { renderTerrain } from './renderer/terrain-renderer';
 import { renderFog } from './renderer/fog-renderer';
 import { renderDeployZones } from './renderer/deploy-renderer';
 import { renderSelectionHighlights } from './renderer/selection-renderer';
+import { renderCommandVisuals, clearCommandVisuals } from './renderer/command-renderer';
 import { renderUnits } from './renderer/unit-renderer';
 import { updateEffects } from './renderer/effects-renderer';
 import { setupStaticCamera, setMapParams, wasDrag } from './renderer/camera-controller';
@@ -19,13 +20,13 @@ import {
 } from './renderer/three-scene';
 import { preloadFactionModels } from './renderer/model-loader';
 import { syncUnitModels, advanceAnimations, clearAllUnitModels } from './renderer/unit-model';
+import { preloadAllProps, renderProps, clearProps } from './renderer/prop-renderer';
 import { useGameStore } from './store/game-store';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
 import { DirectiveSelector } from './components/DirectiveSelector';
 import { BattleHUD } from './components/BattleHUD';
 import { BottomPanel } from './components/BottomPanel';
 import { CommandMenu } from './components/CommandMenu';
-import { TurnTransition } from './components/TurnTransition';
 import { RoundResult } from './components/RoundResult';
 import { GameOverScreen } from './components/GameOverScreen';
 import { StartMenu } from './components/StartMenu';
@@ -56,7 +57,12 @@ function renderScene(state: GameState): void {
   const lastKnownEnemies = store.lastKnownEnemies;
   const selectedUnit = store.selectedUnit;
   const isBuildPhase = state.phase === 'build';
-  const allHexes = getAllHexes(state.map.gridSize);
+  // Build hex list from terrain map keys (hex boundary has negative coords)
+  const allHexes: CubeCoord[] = [];
+  for (const key of state.map.terrain.keys()) {
+    const [qStr, rStr] = key.split(',');
+    allHexes.push(createHex(Number(qStr), Number(rStr)));
+  }
 
   renderTerrain(state);
 
@@ -73,6 +79,8 @@ function renderScene(state: GameState): void {
     state.map.elevation,
   );
 
+  renderCommandVisuals(store.pendingCommands, state);
+
   renderUnits(state, currentPlayerView, visibleHexes, lastKnownEnemies);
 
   if (!isBuildPhase) {
@@ -84,19 +92,20 @@ export function App(): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const cleanupCameraRef = useRef<(() => void) | null>(null);
   const modelsLoadedRef = useRef(false);
+  const propsRenderedRef = useRef(false);
 
   const gameState = useGameStore((s) => s.gameState);
   const selectedUnit = useGameStore((s) => s.selectedUnit);
   const currentPlayerView = useGameStore((s) => s.currentPlayerView);
   const visibleHexes = useGameStore((s) => s.visibleHexes);
   const lastKnownEnemies = useGameStore((s) => s.lastKnownEnemies);
-  const showTransition = useGameStore((s) => s.showTransition);
   const showRoundResult = useGameStore((s) => s.showRoundResult);
   const showGameOver = useGameStore((s) => s.showGameOver);
   const selectUnit = useGameStore((s) => s.selectUnit);
   const setVisibleHexes = useGameStore((s) => s.setVisibleHexes);
   const setHoveredHex = useGameStore((s) => s.setHoveredHex);
 
+  const pendingCommands = useGameStore((s) => s.pendingCommands);
   const myPlayerId = useGameStore((s) => s.myPlayerId);
   const gameMode = useGameStore((s) => s.gameMode);
 
@@ -105,7 +114,7 @@ export function App(): ReactElement {
     if (!gameState) return;
     const viewPlayer = (gameMode === 'online' && myPlayerId) ? myPlayerId : currentPlayerView;
     const friendly = getPlayerUnits(gameState, viewPlayer);
-    const vis = calculateVisibility(friendly, gameState.map.terrain);
+    const vis = calculateVisibility(friendly, gameState.map.terrain, gameState.map.elevation);
     setVisibleHexes(vis);
 
     const enemyPlayer = getEnemyPlayer(viewPlayer);
@@ -145,6 +154,8 @@ export function App(): ReactElement {
       }
       stopRenderLoop();
       clearAllUnitModels();
+      clearCommandVisuals();
+      clearProps();
       disposeThreeContext();
     };
   }, []);
@@ -157,8 +168,8 @@ export function App(): ReactElement {
     setMapFlip(currentPlayerView === 'player1');
 
     // Store map params for camera fitting
-    setMapParams(gameState.map.gridSize, gameState.map.elevation);
-    fitCameraToMap(gameState.map.gridSize, gameState.map.elevation);
+    setMapParams(gameState.map.elevation);
+    fitCameraToMap(gameState.map.elevation);
 
     renderScene(gameState);
 
@@ -173,8 +184,16 @@ export function App(): ReactElement {
       });
     }
 
+    // Preload and render props once on map load
+    if (!propsRenderedRef.current) {
+      propsRenderedRef.current = true;
+      preloadAllProps().then(() => {
+        renderProps(gameState);
+      });
+    }
+
     syncUnitModels(gameState, currentPlayerView, useGameStore.getState().visibleHexes);
-  }, [gameState, selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies]);
+  }, [gameState, selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies, pendingCommands]);
 
   // Click handler
   const handleClick = useCallback(
@@ -281,6 +300,15 @@ export function App(): ReactElement {
           }
           if (!gameState.map.terrain.has(targetKey)) {
             useGameStore.getState().showToast('Invalid hex');
+            return;
+          }
+          const pendingTargets = new Set(
+            store.pendingCommands
+              .filter((c): c is Command & { type: 'direct-move' } => c.type === 'direct-move')
+              .map((c) => hexToKey(c.targetHex)),
+          );
+          if (pendingTargets.has(targetKey)) {
+            useGameStore.getState().showToast('Hex claimed by another command');
             return;
           }
           const command: Command = { type: 'direct-move', unitId: selected.id, targetHex: hex };
@@ -421,7 +449,6 @@ export function App(): ReactElement {
         )}
       </div>
       <Toast />
-      {showTransition && <TurnTransition />}
       {showRoundResult && <RoundResult />}
       {showGameOver && <GameOverScreen />}
     </>

@@ -125,7 +125,7 @@ export function StartMenu(): ReactElement | null {
   if (gameState) return null;
   if (lobbyState) return <Lobby />;
 
-  const startGame = (mode: 'hotseat' | 'vsAI'): void => {
+  const startGame = (mode: 'vsAI'): void => {
     setGameMode(mode);
     const state = createGame(42);
     setGameState(state);
@@ -270,9 +270,6 @@ export function StartMenu(): ReactElement | null {
         )}
 
         <div className="start-menu-actions">
-          <button className="start-menu-button" onClick={() => startGame('hotseat')} type="button">
-            Hot-Seat
-          </button>
           <button className="start-menu-button" onClick={() => startGame('vsAI')} type="button">
             vs AI
           </button>

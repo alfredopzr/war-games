@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactElement } from 'react';
-import { canIssueCommand, CP_PER_ROUND, cubeDistance, canAttack, getAllHexes, hexToKey, UNIT_STATS } from '@hexwar/engine';
+import { canIssueCommand, CP_PER_ROUND, cubeDistance, canAttack, createHex, hexToKey, UNIT_STATS } from '@hexwar/engine';
 import type { DirectiveType, CommandPool } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
@@ -25,6 +25,8 @@ export function CommandMenu(): ReactElement | null {
   const selectedUnit = useGameStore((s) => s.selectedUnit);
   const currentPlayerView = useGameStore((s) => s.currentPlayerView);
   const pendingCommands = useGameStore((s) => s.pendingCommands);
+  const gameMode = useGameStore((s) => s.gameMode);
+  const commandsSubmitted = useGameStore((s) => s.commandsSubmitted);
   const commandMode = useGameStore((s) => s.commandMode);
   const setCommandMode = useGameStore((s) => s.setCommandMode);
   const addPendingCommand = useGameStore((s) => s.addPendingCommand);
@@ -63,14 +65,19 @@ export function CommandMenu(): ReactElement | null {
       if (store.selectedUnit && store.gameState) {
         const unit = store.selectedUnit;
         const stats = UNIT_STATS[unit.type];
-        const allHexes = getAllHexes(store.gameState.map.gridSize);
         const allUnits = [...store.gameState.players.player1.units, ...store.gameState.players.player2.units];
         const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
+        for (const cmd of store.pendingCommands) {
+          if (cmd.type === 'direct-move') {
+            occupiedKeys.add(hexToKey(cmd.targetHex));
+          }
+        }
         const reachable = new Set<string>();
-        for (const hex of allHexes) {
-          const key = hexToKey(hex);
+        for (const key of store.gameState.map.terrain.keys()) {
+          const [qStr, rStr] = key.split(',');
+          const hex = createHex(Number(qStr), Number(rStr));
           const dist = cubeDistance(unit.position, hex);
-          if (dist > 0 && dist <= stats.moveRange && !occupiedKeys.has(key) && store.gameState.map.terrain.has(key)) {
+          if (dist > 0 && dist <= stats.moveRange && !occupiedKeys.has(key)) {
             reachable.add(key);
           }
         }
@@ -110,7 +117,7 @@ export function CommandMenu(): ReactElement | null {
 
   if (!gameState || !selectedUnit) return null;
   if (gameState.phase !== 'battle') return null;
-  if (gameState.round.currentPlayer !== currentPlayerView) return null;
+  if (gameMode === 'online' && commandsSubmitted) return null;
   if (selectedUnit.owner !== currentPlayerView) return null;
 
   // Build a virtual command pool that accounts for pending commands

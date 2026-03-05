@@ -369,55 +369,6 @@
   color: #e8e4d8;
 }
 
-/* Turn Transition Overlay */
-
-.turn-transition {
-  position: fixed;
-  inset: 0;
-  background: rgba(26, 26, 22, 0.97);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  cursor: pointer;
-}
-
-.turn-transition h1 {
-  font-family: 'Courier New', 'Consolas', monospace;
-  font-size: 36px;
-  margin-bottom: 24px;
-  letter-spacing: 4px;
-  text-transform: uppercase;
-}
-
-.player1-text {
-  color: #6a7a5a;
-}
-
-.player2-text {
-  color: #8a5a4a;
-}
-
-.turn-transition p {
-  font-family: 'Courier New', 'Consolas', monospace;
-  font-size: 14px;
-  color: #7a7868;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.turn-transition .transition-hint {
-  font-size: 12px;
-  color: #7a7868;
-  max-width: 400px;
-  text-align: center;
-  line-height: 1.6;
-  margin-bottom: 24px;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
 /* Round Result Overlay */
 
 .round-result {

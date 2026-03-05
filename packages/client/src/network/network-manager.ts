@@ -152,12 +152,22 @@ class NetworkManager {
 
     this.socket.on(
       'game-start',
-      (data: { state: SerializableGameState; playerId: PlayerId }) => {
+      (data: {
+        state: SerializableGameState;
+        playerId: PlayerId;
+        commandsSubmitted?: boolean;
+        opponentCommandsSubmitted?: boolean;
+      }) => {
         const gameState = deserializeGameState(data.state);
         const s = store();
         s.setGameState(gameState);
         s.setMyPlayerId(data.playerId);
         s.setCurrentPlayerView(data.playerId);
+        s.setCommandsSubmitted(data.commandsSubmitted ?? false);
+        s.setOpponentCommandsSubmitted(data.opponentCommandsSubmitted ?? false);
+        if (data.commandsSubmitted) {
+          s.setWaitingForServer(true);
+        }
         s.startBuildTimer();
       },
     );
@@ -181,6 +191,20 @@ class NetworkManager {
       const s = store();
       s.stopBuildTimer();
       s.setGameState(gameState);
+      s.setCommandsSubmitted(false);
+      s.setOpponentCommandsSubmitted(false);
+    });
+
+    // -- Simultaneous submission acknowledgments ------------------------------
+
+    this.socket.on('commands-received', () => {
+      const s = store();
+      s.setCommandsSubmitted(true);
+      s.setWaitingForServer(true);
+    });
+
+    this.socket.on('opponent-commands-received', () => {
+      store().setOpponentCommandsSubmitted(true);
     });
 
     // -- Turn resolution ------------------------------------------------------
@@ -195,6 +219,8 @@ class NetworkManager {
         const s = store();
         s.setGameState(gameState);
         s.setWaitingForServer(false);
+        s.setCommandsSubmitted(false);
+        s.setOpponentCommandsSubmitted(false);
 
         if (data.events.length > 0) {
           const entries = data.events.map((e) => ({
@@ -221,6 +247,8 @@ class NetworkManager {
         const s = store();
         s.setGameState(gameState);
         s.setWaitingForServer(false);
+        s.setCommandsSubmitted(false);
+        s.setOpponentCommandsSubmitted(false);
         s.setOpponentBuildConfirmed(false);
         s.showToast(
           data.winner
