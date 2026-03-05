@@ -17,6 +17,8 @@ import type {
   CubeCoord,
   GridSize,
   ObjectiveState,
+  MegaHexInfo,
+  HexModifier,
 } from './types';
 
 // -----------------------------------------------------------------------------
@@ -42,10 +44,15 @@ interface SerializableRoundState {
 interface SerializableGameMap {
   readonly terrain: Record<string, TerrainType>;
   readonly elevation: Record<string, number>;
+  readonly modifiers: Record<string, HexModifier>;
+  readonly megaHexes: Record<string, string>;
+  readonly megaHexInfo: Record<string, MegaHexInfo>;
   readonly centralObjective: CubeCoord;
   readonly player1Deployment: CubeCoord[];
   readonly player2Deployment: CubeCoord[];
   readonly gridSize: GridSize;
+  readonly mapRadius: number;
+  readonly seed: number;
 }
 
 export interface SerializableGameState {
@@ -91,13 +98,32 @@ function serializeGameMap(map: GameMap): SerializableGameMap {
   for (const [key, value] of map.elevation) {
     elevation[key] = value;
   }
+  const modifiers: Record<string, HexModifier> = {};
+  if (map.modifiers) {
+    for (const [key, value] of map.modifiers) {
+      modifiers[key] = value;
+    }
+  }
+  const megaHexes: Record<string, string> = {};
+  for (const [key, value] of map.megaHexes) {
+    megaHexes[key] = value;
+  }
+  const megaHexInfo: Record<string, MegaHexInfo> = {};
+  for (const [key, value] of map.megaHexInfo) {
+    megaHexInfo[key] = value;
+  }
   return {
     terrain,
     elevation,
+    modifiers,
+    megaHexes,
+    megaHexInfo,
     centralObjective: map.centralObjective,
     player1Deployment: map.player1Deployment,
     player2Deployment: map.player2Deployment,
     gridSize: map.gridSize,
+    mapRadius: map.mapRadius,
+    seed: map.seed,
   };
 }
 
@@ -182,13 +208,45 @@ function deserializeGameMap(data: SerializableGameMap): GameMap {
       }
     }
   }
+  const modifiers = new Map<string, HexModifier>();
+  if ((data as Record<string, unknown>).modifiers) {
+    for (const key of Object.keys(data.modifiers)) {
+      const value = data.modifiers[key];
+      if (value !== undefined) {
+        modifiers.set(key, value);
+      }
+    }
+  }
+  const megaHexes = new Map<string, string>();
+  if (data.megaHexes) {
+    for (const key of Object.keys(data.megaHexes)) {
+      const value = data.megaHexes[key];
+      if (value !== undefined) {
+        megaHexes.set(key, value);
+      }
+    }
+  }
+  const megaHexInfo = new Map<string, MegaHexInfo>();
+  if (data.megaHexInfo) {
+    for (const key of Object.keys(data.megaHexInfo)) {
+      const value = data.megaHexInfo[key];
+      if (value !== undefined) {
+        megaHexInfo.set(key, value);
+      }
+    }
+  }
   return {
     terrain,
     elevation,
+    modifiers,
+    megaHexes,
+    megaHexInfo,
     centralObjective: data.centralObjective,
     player1Deployment: data.player1Deployment,
     player2Deployment: data.player2Deployment,
     gridSize: data.gridSize,
+    mapRadius: data.mapRadius,
+    seed: data.seed ?? 0,
   };
 }
 

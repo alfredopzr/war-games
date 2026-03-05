@@ -20,7 +20,6 @@ function makeContext(overrides: Partial<DirectiveContext> = {}): DirectiveContex
     enemyUnits: [],
     terrain,
     centralObjective: createHex(8, 2),
-    gridSize: { width: 16, height: 12 },
     cities: new Map<string, PlayerId | null>(),
     ...overrides,
   };

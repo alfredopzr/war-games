@@ -1,4 +1,4 @@
-import type { Unit, TerrainType } from './types';
+import type { Unit, TerrainType, HexModifier } from './types';
 import { cubeDistance } from './hex';
 import { getDefenseModifier } from './terrain';
 import { UNIT_STATS, getTypeAdvantage } from './units';
@@ -22,11 +22,12 @@ export function calculateDamage(
   defender: Unit,
   defenderTerrain: TerrainType,
   randomFn: () => number = (): number => 0.85 + Math.random() * 0.3,
+  defenderModifier?: HexModifier,
 ): number {
   const attackerStats = UNIT_STATS[attacker.type];
   const defenderStats = UNIT_STATS[defender.type];
   const typeMultiplier = getTypeAdvantage(attacker.type, defender.type);
-  const terrainDef = getDefenseModifier(defenderTerrain);
+  const terrainDef = getDefenseModifier(defenderTerrain, defenderModifier);
 
   // Hold directive grants +1 DEF
   const effectiveDef = defenderStats.def + (defender.directive === 'hold' ? 1 : 0);

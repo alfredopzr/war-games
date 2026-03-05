@@ -2,7 +2,7 @@
 // HexWar — A* Pathfinding for Hex Grids
 // =============================================================================
 
-import type { CubeCoord, TerrainType, UnitType, DirectiveType } from './types';
+import type { CubeCoord, TerrainType, UnitType, DirectiveType, HexModifier } from './types';
 import { hexNeighbors, hexToKey, cubeDistance } from './hex';
 import { getMoveCost } from './terrain';
 import { MinHeap } from './min-heap';
@@ -35,6 +35,7 @@ export function findPath(
   unitType: UnitType,
   occupiedHexes: Set<string>,
   directive?: DirectiveType,
+  modifiers?: Map<string, HexModifier>,
 ): CubeCoord[] | null {
   const startKey = hexToKey(start);
   const endKey = hexToKey(end);
@@ -89,7 +90,7 @@ export function findPath(
       if (terrain === undefined) continue;
 
       // Skip if impassable
-      const moveCost = getMoveCost(terrain, unitType, directive);
+      const moveCost = getMoveCost(terrain, unitType, directive, modifiers?.get(neighborKey));
       if (moveCost === Infinity) continue;
 
       // Skip if occupied (except destination)
@@ -126,6 +127,7 @@ export function pathCost(
   terrainMap: Map<string, TerrainType>,
   unitType: UnitType,
   directive?: DirectiveType,
+  modifiers?: Map<string, HexModifier>,
 ): number {
   if (path.length <= 1) return 0;
 
@@ -134,7 +136,7 @@ export function pathCost(
     const key = hexToKey(path[i]!);
     const terrain = terrainMap.get(key);
     if (terrain === undefined) return Infinity;
-    const cost = getMoveCost(terrain, unitType, directive);
+    const cost = getMoveCost(terrain, unitType, directive, modifiers?.get(key));
     if (cost === Infinity) return Infinity;
     total += cost;
   }

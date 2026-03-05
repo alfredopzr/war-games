@@ -149,6 +149,56 @@ export function startBattlePhase(state: GameState): GameState {
 }
 
 // -----------------------------------------------------------------------------
+// filterValidCommands
+// -----------------------------------------------------------------------------
+
+export function filterValidCommands(
+  state: GameState,
+  commands: Command[],
+  playerId: PlayerId,
+): Command[] {
+  const friendlyUnits = state.players[playerId].units;
+  const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
+  const enemyUnits = state.players[enemyId].units;
+  const allUnits = [...friendlyUnits, ...enemyUnits];
+
+  return commands.filter((cmd) => {
+    const unit = friendlyUnits.find((u) => u.id === cmd.unitId);
+    if (!unit) return false;
+
+    switch (cmd.type) {
+      case 'direct-move': {
+        const targetKey = hexToKey(cmd.targetHex);
+        if (!state.map.terrain.has(targetKey)) return false;
+        const occupied = allUnits.some(
+          (u) => u.id !== unit.id && hexToKey(u.position) === targetKey,
+        );
+        if (occupied) return false;
+        const stats = UNIT_STATS[unit.type];
+        if (cubeDistance(unit.position, cmd.targetHex) > stats.moveRange) return false;
+        return true;
+      }
+
+      case 'direct-attack': {
+        const target = enemyUnits.find((u) => u.id === cmd.targetUnitId);
+        if (!target) return false;
+        if (!canAttack(unit, target)) return false;
+        return true;
+      }
+
+      case 'redirect':
+        return true;
+
+      case 'retreat':
+        return true;
+
+      default:
+        return false;
+    }
+  });
+}
+
+// -----------------------------------------------------------------------------
 // executeTurn
 // -----------------------------------------------------------------------------
 
@@ -244,7 +294,6 @@ function executeUnitDirective(
     enemyUnits: [...state.players[enemyPlayer].units],
     terrain: state.map.terrain,
     centralObjective: state.map.centralObjective,
-    gridSize: state.map.gridSize,
     cities: state.cityOwnership,
   };
 
@@ -298,25 +347,19 @@ function applyCommand(
       if (!unit) return;
 
       const targetKey = hexToKey(command.targetHex);
-      if (!state.map.terrain.has(targetKey)) {
-        throw new Error('Target hex does not exist');
-      }
+      if (!state.map.terrain.has(targetKey)) return;
 
-      // Check unoccupied
+      // Check unoccupied — may have been claimed by an earlier command this turn
       const allUnits = [...state.players.player1.units, ...state.players.player2.units];
       const isOccupied = allUnits.some(
         (u) => u.id !== unit.id && hexToKey(u.position) === targetKey,
       );
-      if (isOccupied) {
-        throw new Error('Target hex is occupied');
-      }
+      if (isOccupied) return;
 
       // Validate in move range
       const stats = UNIT_STATS[unit.type];
       const dist = cubeDistance(unit.position, command.targetHex);
-      if (dist > stats.moveRange) {
-        throw new Error('Target hex is out of move range');
-      }
+      if (dist > stats.moveRange) return;
 
       unit.position = command.targetHex;
       unit.hasActed = true;
@@ -331,9 +374,7 @@ function applyCommand(
       const defender = findUnitById(enemyUnits, command.targetUnitId);
       if (!defender) return;
 
-      if (!canAttack(attacker, defender)) {
-        throw new Error('Cannot attack target');
-      }
+      if (!canAttack(attacker, defender)) return;
 
       const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
       const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn);

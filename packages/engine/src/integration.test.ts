@@ -57,7 +57,7 @@ describe('Full game simulation', () => {
     // Validate generated map
     const mapValidation = validateMap(game.map);
     expect(mapValidation.valid).toBe(true);
-    expect(mapValidation.isSymmetric).toBe(true);
+    // Symmetry is no longer enforced — hex boundary maps use fairness metrics instead
 
     let gameOver = false;
     let roundsPlayed = 0;
