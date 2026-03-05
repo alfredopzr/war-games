@@ -1,16 +1,60 @@
-import { Graphics } from 'pixi.js';
+import * as THREE from 'three';
 import type { CubeCoord, Unit } from '@hexwar/engine';
-import { hexToKey } from '@hexwar/engine';
-import { hexToPixel, hexPoints } from './hex-render';
-import { HEX_SIZE } from './constants';
-import { uiLayer } from './layers';
+import { hexToKey, hexToWorld, hexWorldVertices } from '@hexwar/engine';
+import { getThreeContext } from './three-scene';
 
-let selectionGraphics: Graphics | null = null;
+// ---------------------------------------------------------------------------
+// Selection highlights — Three.js outlines + fills
+// ---------------------------------------------------------------------------
 
-function drawHexOutline(g: Graphics, cx: number, cy: number, size: number, color: number, width: number, alpha: number): void {
-  const points = hexPoints(cx, cy, size);
-  g.poly(points, true);
-  g.stroke({ color, width, alpha });
+let selectionGroup: THREE.Group | null = null;
+
+function createHexOutline(
+  hex: CubeCoord,
+  elevation: number,
+  color: number,
+  alpha: number,
+  yOffset: number,
+): THREE.LineLoop {
+  const verts = hexWorldVertices(hex, elevation);
+  const points = verts.map((v) => new THREE.Vector3(v.x, v.y + yOffset, v.z));
+  points.push(points[0]!.clone());
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: alpha });
+  const line = new THREE.LineLoop(geometry, material);
+  line.renderOrder = 2;
+  return line;
+}
+
+function createHexFill(
+  hex: CubeCoord,
+  elevation: number,
+  color: number,
+  alpha: number,
+  yOffset: number,
+): THREE.Mesh {
+  const verts = hexWorldVertices(hex, elevation);
+  const shape = new THREE.Shape();
+  shape.moveTo(verts[0]!.x, verts[0]!.z);
+  for (let i = 1; i < 6; i++) {
+    shape.lineTo(verts[i]!.x, verts[i]!.z);
+  }
+  shape.closePath();
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(Math.PI / 2);
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: alpha,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  mesh.position.y = hexToWorld(hex, elevation).y + yOffset;
+  mesh.renderOrder = 2;
+  return mesh;
 }
 
 export function renderSelectionHighlights(
@@ -21,48 +65,53 @@ export function renderSelectionHighlights(
   allHexes: CubeCoord[],
   elevationMap: Map<string, number>,
 ): void {
-  // Remove previous selection graphics
-  if (selectionGraphics) {
-    uiLayer.removeChild(selectionGraphics);
-    selectionGraphics.destroy();
-    selectionGraphics = null;
+  const ctx = getThreeContext();
+  if (!ctx) return;
+
+  if (selectionGroup) {
+    ctx.scene.remove(selectionGroup);
+    selectionGroup.traverse((obj) => {
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.LineLoop) {
+        obj.geometry.dispose();
+        if (obj.material instanceof THREE.Material) {
+          obj.material.dispose();
+        }
+      }
+    });
   }
 
-  selectionGraphics = new Graphics();
+  selectionGroup = new THREE.Group();
+  selectionGroup.name = 'selectionGroup';
+  selectionGroup.renderOrder = 2;
 
-  // Move/attack range hex outlines
+  // Move/attack range
   if (highlightedHexes.size > 0 && highlightMode !== 'none') {
     const color = highlightMode === 'move' ? 0xe8e4d8 : 0x9a4a3a;
     const fillAlpha = highlightMode === 'move' ? 0.08 : 0.1;
 
     for (const hex of allHexes) {
       const key = hexToKey(hex);
-      if (highlightedHexes.has(key)) {
-        const elev = elevationMap.get(key) ?? 0;
-        const { x, y } = hexToPixel(hex, HEX_SIZE, elev);
-        const fillPts = hexPoints(x, y, HEX_SIZE);
-        selectionGraphics.poly(fillPts, true);
-        selectionGraphics.fill({ color, alpha: fillAlpha });
-        drawHexOutline(selectionGraphics, x, y, HEX_SIZE, color, 1.5, 0.7);
-      }
+      if (!highlightedHexes.has(key)) continue;
+      const elev = elevationMap.get(key) ?? 0;
+
+      selectionGroup.add(createHexFill(hex, elev, color, fillAlpha, 0.005));
+      selectionGroup.add(createHexOutline(hex, elev, color, 0.7, 0.006));
     }
   }
 
-  // Hovered hex: thin white wireframe outline
+  // Hovered hex: white outline
   if (hoveredHex) {
     const key = hexToKey(hoveredHex);
     const elev = elevationMap.get(key) ?? 0;
-    const { x, y } = hexToPixel(hoveredHex, HEX_SIZE, elev);
-    drawHexOutline(selectionGraphics, x, y, HEX_SIZE, 0xffffff, 1.5, 0.6);
+    selectionGroup.add(createHexOutline(hoveredHex, elev, 0xffffff, 0.6, 0.007));
   }
 
-  // Selected unit hex: cyan wireframe outline
+  // Selected unit: beige outline
   if (selectedUnit) {
     const key = hexToKey(selectedUnit.position);
     const elev = elevationMap.get(key) ?? 0;
-    const { x, y } = hexToPixel(selectedUnit.position, HEX_SIZE, elev);
-    drawHexOutline(selectionGraphics, x, y, HEX_SIZE, 0xe8e4d8, 2.5, 0.9);
+    selectionGroup.add(createHexOutline(selectedUnit.position, elev, 0xe8e4d8, 0.9, 0.008));
   }
 
-  uiLayer.addChild(selectionGraphics);
+  ctx.scene.add(selectionGroup);
 }

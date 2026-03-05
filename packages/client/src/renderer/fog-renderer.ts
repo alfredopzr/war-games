@@ -1,46 +1,73 @@
-import { Graphics } from 'pixi.js';
+import * as THREE from 'three';
 import type { CubeCoord } from '@hexwar/engine';
-import { hexToKey } from '@hexwar/engine';
-import { fogLayer } from './layers';
-import { hexToPixel, hexPoints } from './hex-render';
-import { HEX_SIZE, FOG_NEVER_SEEN } from './constants';
+import { hexToKey, hexToWorld, hexWorldVertices } from '@hexwar/engine';
+import { getThreeContext } from './three-scene';
+import { FOG_NEVER_SEEN } from './constants';
 
-/**
- * Render fog of war overlay.
- *
- * - Never-seen hexes: dark fill (FOG_NEVER_SEEN, alpha 0.85)
- * - Previously-seen (explored but not visible): desaturated overlay (FOG_NEVER_SEEN, alpha 0.5)
- * - Currently visible: no overlay
- *
- * exploredHexes is optional — when not provided, all non-visible hexes are
- * treated as never-seen (current behavior until explored tracking is added).
- */
+// ---------------------------------------------------------------------------
+// Fog of war renderer — Three.js translucent overlays
+// ---------------------------------------------------------------------------
+
+let fogGroup: THREE.Group | null = null;
+
 export function renderFog(
   allHexes: CubeCoord[],
   visibleHexes: Set<string>,
   elevationMap: Map<string, number>,
   exploredHexes?: Set<string>,
 ): void {
-  fogLayer.removeChildren();
+  const ctx = getThreeContext();
+  if (!ctx) return;
 
-  const g = new Graphics();
+  if (fogGroup) {
+    ctx.scene.remove(fogGroup);
+    fogGroup.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        if (obj.material instanceof THREE.Material) {
+          obj.material.dispose();
+        }
+      }
+    });
+  }
+
+  fogGroup = new THREE.Group();
+  fogGroup.name = 'fogGroup';
+  fogGroup.renderOrder = 3;
 
   for (const hex of allHexes) {
     const key = hexToKey(hex);
     if (visibleHexes.has(key)) continue;
 
     const elev = elevationMap.get(key) ?? 0;
-    const { x, y } = hexToPixel(hex, HEX_SIZE, elev);
-    const pts = hexPoints(x, y, HEX_SIZE);
+    const center = hexToWorld(hex, elev);
+    const alpha = (exploredHexes && exploredHexes.has(key)) ? 0.5 : 0.85;
 
-    if (exploredHexes && exploredHexes.has(key)) {
-      g.poly(pts, true);
-      g.fill({ color: FOG_NEVER_SEEN, alpha: 0.5 });
-    } else {
-      g.poly(pts, true);
-      g.fill({ color: FOG_NEVER_SEEN, alpha: 0.85 });
+    const verts = hexWorldVertices(hex, elev);
+    const shape = new THREE.Shape();
+    shape.moveTo(verts[0]!.x, verts[0]!.z);
+    for (let i = 1; i < 6; i++) {
+      shape.lineTo(verts[i]!.x, verts[i]!.z);
     }
+    shape.closePath();
+
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(Math.PI / 2);
+
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({
+        color: FOG_NEVER_SEEN,
+        transparent: true,
+        opacity: alpha,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    mesh.position.y = center.y + 0.01;
+    mesh.renderOrder = 3;
+    fogGroup.add(mesh);
   }
 
-  fogLayer.addChild(g);
+  ctx.scene.add(fogGroup);
 }

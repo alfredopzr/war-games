@@ -60,6 +60,9 @@ export { createNoiseGenerator } from './noise';
 // RNG
 export { mulberry32 } from './rng';
 
+// Data structures
+export { MinHeap } from './min-heap';
+
 // Directives
 export { executeDirective, resolveTarget } from './directives';
 
@@ -75,6 +78,13 @@ export {
 // AI
 export { aiBuildPhase, aiBattlePhase } from './ai';
 export type { AiBuildAction } from './ai';
+
+// World coordinates
+export {
+  hexToWorld, worldToHex, hexWorldVertices,
+  WORLD_HEX_SIZE, WORLD_ELEV_STEP,
+} from './world';
+export type { WorldCoord } from './world';
 
 // Serialization
 export { serializeGameState, deserializeGameState } from './serialization';
