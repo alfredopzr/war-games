@@ -1,3 +1,26 @@
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0a0a08;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid #3a3830;
+  border-top-color: #c8c4b8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .unit-info-panel {
   position: fixed;
   top: 20px;
@@ -133,7 +156,7 @@
 /* Bottom Panel */
 
 .bottom-panel {
-  flex: 0 0 180px;
+  flex: 0 0 120px;
   background: rgba(26, 26, 22, 0.95);
   border-top: 1px solid #3a3830;
   display: flex;
@@ -509,7 +532,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 10px 14px;
+  padding: 6px 14px;
   overflow: hidden;
   border-right: 1px solid #3a3830;
 }
@@ -518,7 +541,7 @@
   display: flex;
   align-items: baseline;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .unit-shop h3 {
@@ -537,7 +560,7 @@
 
 .unit-shop-cards {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-height: 0;
 }
@@ -546,12 +569,14 @@
   background: transparent;
   border: 1px solid #3a3830;
   border-radius: 2px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   cursor: pointer;
   transition: border-color 0.15s;
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -570,25 +595,28 @@
   cursor: not-allowed;
 }
 
+.unit-card-left {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .unit-card .unit-name {
   font-weight: bold;
-  font-size: 12px;
+  font-size: 11px;
   color: #c8c4b8;
   text-transform: uppercase;
   letter-spacing: 1px;
-  margin-bottom: 2px;
 }
 
 .unit-card .unit-cost {
   font-size: 11px;
   color: #a08a40;
-  margin-bottom: 4px;
 }
 
 .unit-card .unit-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  display: grid;
+  grid-template-columns: auto auto auto;
+  gap: 1px 8px;
   font-size: 10px;
   color: #7a7868;
 }
@@ -971,11 +999,11 @@
 /* Unit Shop Help Tip */
 
 .shop-help-tip {
-  flex: 0 0 200px;
+  flex: 0 0 180px;
   font-size: 10px;
   color: #7a7868;
-  line-height: 1.5;
-  padding: 10px 14px;
+  line-height: 1.4;
+  padding: 6px 14px;
   font-family: 'Courier New', 'Consolas', monospace;
   overflow-y: auto;
 }

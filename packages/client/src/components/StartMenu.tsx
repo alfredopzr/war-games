@@ -127,7 +127,7 @@ export function StartMenu(): ReactElement | null {
 
   const startGame = (mode: 'vsAI'): void => {
     setGameMode(mode);
-    const state = createGame(42);
+    const state = createGame(Math.floor(Math.random() * 2147483647));
     setGameState(state);
     startBuildTimer();
   };

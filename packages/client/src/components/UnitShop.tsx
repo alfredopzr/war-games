@@ -38,14 +38,16 @@ function UnitCard({
 
   return (
     <div className={className} onClick={handleClick}>
-      <div className="unit-name">{unitDisplayName(type)}</div>
-      <div className="unit-cost">{stats.cost}g</div>
+      <div className="unit-card-left">
+        <div className="unit-name">{unitDisplayName(type)}</div>
+        <div className="unit-cost">{stats.cost}g</div>
+      </div>
       <div className="unit-stats">
         <span>HP {stats.maxHp}</span>
         <span>ATK {stats.atk}</span>
         <span>DEF {stats.def}</span>
-        <span>Move {stats.moveRange}</span>
-        <span>Rng {stats.minAttackRange}-{stats.attackRange}</span>
+        <span>MOV {stats.moveRange}</span>
+        <span>RNG {stats.minAttackRange}-{stats.attackRange}</span>
       </div>
     </div>
   );

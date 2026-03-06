@@ -4,7 +4,7 @@
 
 import type { Room } from './types';
 
-export const BUILD_DURATION = 120; // seconds
+export const BUILD_DURATION = 600; // DEV: 10 min for testing (prod: 120)
 export const TURN_DURATION = 60; // seconds
 
 export function startBuildTimer(room: Room, onExpire: () => void): void {
