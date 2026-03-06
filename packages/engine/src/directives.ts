@@ -6,7 +6,7 @@
 // unit based on context.
 // =============================================================================
 
-import type { Unit, UnitAction, DirectiveContext, CubeCoord, ResolvedTarget, MovementDirective, AttackDirective } from './types';
+import type { Unit, UnitAction, DirectiveContext, CubeCoord, ResolvedTarget, MovementDirective, AttackDirective, TerrainType } from './types';
 import { cubeDistance, hexToKey, hexNeighbors, createHex } from './hex';
 import { canAttack } from './combat';
 import { calculateVisibility } from './vision';
@@ -173,22 +173,23 @@ function executeHold(unit: Unit, context: DirectiveContext): UnitAction {
   return { type: 'hold' };
 }
 
-function executeFlank(
-  unit: Unit,
-  context: DirectiveContext,
+/**
+ * Compute the flank waypoint — the perpendicular offset hex that a flanking
+ * unit will walk toward. Pure coordinate math, no DirectiveContext needed.
+ */
+export function computeFlankWaypoint(
+  unitPosition: CubeCoord,
+  objective: CubeCoord,
   side: 'left' | 'right',
-): UnitAction {
-  const attackAction = resolveAttackBehavior(unit, context);
-  if (attackAction) return attackAction;
-
-  const resolved = resolveTarget(unit, context);
-  const objective = resolved.hex;
-  const mapDiameter = context.mapRadius * 2;
+  mapRadius: number,
+  terrain: Map<string, TerrainType>,
+): CubeCoord {
+  const mapDiameter = mapRadius * 2;
   const flankOffset = Math.max(2, Math.floor(mapDiameter * 0.25));
 
   // Vector from unit to objective
-  const dq = objective.q - unit.position.q;
-  const dr = objective.r - unit.position.r;
+  const dq = objective.q - unitPosition.q;
+  const dr = objective.r - unitPosition.r;
 
   // Perpendicular in cube coords: rotate 60 degrees left or right
   // Left rotation: (q,r,s) -> (-r,-s,-q)
@@ -206,16 +207,29 @@ function executeFlank(
   const scale = flankOffset / len;
 
   // Validate waypoint is on map, fall back to progressively closer offsets
-  let intermediateTarget: CubeCoord = objective;
   for (let f = 1.0; f >= 0.25; f -= 0.25) {
     const cq = Math.round(objective.q + pq * scale * f);
     const cr = Math.round(objective.r + pr * scale * f);
     const candidate = createHex(cq, cr);
-    if (context.terrain.has(hexToKey(candidate))) {
-      intermediateTarget = candidate;
-      break;
+    if (terrain.has(hexToKey(candidate))) {
+      return candidate;
     }
   }
+  return objective;
+}
+
+function executeFlank(
+  unit: Unit,
+  context: DirectiveContext,
+  side: 'left' | 'right',
+): UnitAction {
+  const attackAction = resolveAttackBehavior(unit, context);
+  if (attackAction) return attackAction;
+
+  const resolved = resolveTarget(unit, context);
+  const intermediateTarget = computeFlankWaypoint(
+    unit.position, resolved.hex, side, context.mapRadius, context.terrain,
+  );
 
   return moveToward(unit, context, intermediateTarget);
 }

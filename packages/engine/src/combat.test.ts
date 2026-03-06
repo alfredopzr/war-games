@@ -131,4 +131,25 @@ describe('canAttack', () => {
     const defender = makeUnit({ type: 'infantry', owner: 'player1', position: adjacent });
     expect(canAttack(attacker, defender)).toBe(false);
   });
+
+  it('rejects when visibleHexes provided and target hex not in set', () => {
+    const attacker = makeUnit({ type: 'infantry', owner: 'player1', position: origin });
+    const defender = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent });
+    const visibleHexes = new Set<string>(); // empty — can't see anything
+    expect(canAttack(attacker, defender, visibleHexes)).toBe(false);
+  });
+
+  it('allows attack when visibleHexes provided and target hex is in set', () => {
+    const attacker = makeUnit({ type: 'infantry', owner: 'player1', position: origin });
+    const defender = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent });
+    const visibleHexes = new Set<string>(['1,0']); // defender's hex
+    expect(canAttack(attacker, defender, visibleHexes)).toBe(true);
+  });
+
+  it('skips LoS check when visibleHexes not provided', () => {
+    const attacker = makeUnit({ type: 'infantry', owner: 'player1', position: origin });
+    const defender = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent });
+    // No visibleHexes arg — range-only check, should pass
+    expect(canAttack(attacker, defender)).toBe(true);
+  });
 });

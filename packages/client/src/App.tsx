@@ -33,7 +33,7 @@ import { CommandMenu } from './components/CommandMenu';
 import { RoundResult } from './components/RoundResult';
 import { GameOverScreen } from './components/GameOverScreen';
 import { StartMenu } from './components/StartMenu';
-import { TerrainLegend } from './components/TerrainLegend';
+import { DeployManifest } from './components/DeployManifest';
 import { BattleHelp } from './components/BattleHelp';
 import { Toast } from './components/Toast';
 import { OnlineStatus } from './components/OnlineStatus';
@@ -67,6 +67,31 @@ function cityOwnershipHash(state: GameState): string {
   return parts.join('|');
 }
 
+/** Lightweight selection/hover highlight update — called from renderScene and its own useEffect. */
+function updateSelectionHighlights(state: GameState): void {
+  const store = useGameStore.getState();
+  const allHexes: CubeCoord[] = [];
+  for (const key of state.map.terrain.keys()) {
+    const [qStr, rStr] = key.split(',');
+    allHexes.push(createHex(Number(qStr), Number(rStr)));
+  }
+  const endSelection = perf.start('renderSelection');
+  renderSelectionHighlights(
+    store.selectedUnit,
+    store.hoveredHex,
+    store.highlightedHexes,
+    store.highlightMode,
+    allHexes,
+    state.map.elevation,
+    store.commandMode,
+    store.pendingCommands,
+    store.targetSelectionMode,
+    state,
+    store.currentPlayerView,
+  );
+  endSelection();
+}
+
 /** Render the full scene into Three.js. */
 function renderScene(state: GameState): void {
   clearWorldCache();
@@ -76,7 +101,6 @@ function renderScene(state: GameState): void {
   const currentPlayerView = store.currentPlayerView;
   const visibleHexes = store.visibleHexes;
   const lastKnownEnemies = store.lastKnownEnemies;
-  const selectedUnit = store.selectedUnit;
   const isBuildPhase = state.phase === 'build';
   // Build hex list from terrain map keys (hex boundary has negative coords)
   const allHexes: CubeCoord[] = [];
@@ -102,18 +126,7 @@ function renderScene(state: GameState): void {
     endDeploy();
   }
 
-  const endSelection = perf.start('renderSelection');
-  renderSelectionHighlights(
-    selectedUnit,
-    store.hoveredHex,
-    store.highlightedHexes,
-    store.highlightMode,
-    allHexes,
-    state.map.elevation,
-    store.commandMode,
-    store.pendingCommands,
-  );
-  endSelection();
+  updateSelectionHighlights(state);
 
   const endCommand = perf.start('renderCommandVisuals');
   renderCommandVisuals(store.pendingCommands, state);
@@ -168,6 +181,17 @@ export function App(): ReactElement {
   const debugFogOff = useGameStore((s) => s.debugFogOff);
   const myPlayerId = useGameStore((s) => s.myPlayerId);
   const gameMode = useGameStore((s) => s.gameMode);
+  const targetSelectionMode = useGameStore((s) => s.targetSelectionMode);
+  const hoveredHex = useGameStore((s) => s.hoveredHex);
+  const highlightedHexes = useGameStore((s) => s.highlightedHexes);
+  const highlightMode = useGameStore((s) => s.highlightMode);
+  const commandMode = useGameStore((s) => s.commandMode);
+
+  // Update selection highlights on hover/selection/target changes
+  useEffect(() => {
+    if (!gameState) return;
+    updateSelectionHighlights(gameState);
+  }, [gameState, selectedUnit, hoveredHex, targetSelectionMode, highlightedHexes, highlightMode, commandMode, pendingCommands]);
 
   // Recalculate visibility when player view changes
   useEffect(() => {
@@ -376,6 +400,10 @@ export function App(): ReactElement {
 
         placeUnit(gameState, currentPlayerView, store.placementMode, hex);
         store.exitPlacementMode();
+        const placed = gameState.players[currentPlayerView].units.find(
+          (u) => hexToKey(u.position) === hexKey,
+        );
+        if (placed) selectUnit(placed);
         store.setGameState({ ...gameState });
         perf.logAction('place:local', performance.now() - clickT0);
         return;
@@ -386,14 +414,6 @@ export function App(): ReactElement {
         const unit = findUnitAtHex(gameState, hex);
         if (unit && unit.owner === currentPlayerView) {
           selectUnit(unit);
-          const stats = UNIT_STATS[unit.type];
-          const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
-          const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
-          const reachable = getReachableHexes(
-            unit.position, stats.moveRange, gameState.map.terrain, unit.type,
-            occupiedKeys, unit.movementDirective, gameState.map.modifiers, gameState.map.elevation,
-          );
-          useGameStore.getState().setHighlightedHexes(reachable, 'move');
           perf.logAction('select:build', performance.now() - clickT0);
         } else {
           selectUnit(null);
@@ -511,14 +531,14 @@ export function App(): ReactElement {
       )}
       <div className="game-layout">
         {gameState && <BattleHUD />}
-        <div ref={containerRef} className="game-canvas" />
+        <div ref={containerRef} className={`game-canvas ${targetSelectionMode ? 'target-mode' : ''}`} />
         {gameState && (
           <>
             <BottomPanel />
             <DirectiveSelector />
             <UnitInfoPanel />
             <CommandMenu />
-            <TerrainLegend />
+            <DeployManifest />
             <BattleHelp />
             <OnlineStatus />
           </>

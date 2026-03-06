@@ -23,8 +23,8 @@
 
 .unit-info-panel {
   position: fixed;
-  top: 20px;
-  right: 20px;
+  top: 58px;
+  left: 20px;
   width: 220px;
   background: rgba(26, 26, 22, 0.92);
   border: 1px solid #3a3830;
@@ -151,6 +151,10 @@
   overflow: hidden;
   min-height: 0;
   position: relative;
+}
+
+.game-canvas.target-mode {
+  cursor: crosshair;
 }
 
 /* Bottom Panel */
@@ -360,17 +364,14 @@
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: 4px;
-  background: rgba(26, 26, 22, 0.95);
+  margin-bottom: 8px;
+  background: rgba(26, 26, 22, 0.97);
   border: 1px solid #3a3830;
   border-radius: 2px;
-  padding: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 120px;
+  padding: 16px;
+  min-width: 320px;
   z-index: 11;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
 }
 
 .directive-option {
@@ -677,7 +678,7 @@
   position: fixed;
   top: 58px;
   right: 0;
-  width: 220px;
+  width: 320px;
   background: rgba(26, 26, 22, 0.95);
   border-left: 1px solid #3a3830;
   padding: 16px;
@@ -726,6 +727,146 @@
 .directive-selector .directive-option .directive-desc {
   color: #7a7868;
   font-size: 10px;
+}
+
+/* Order Composer */
+
+.order-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.order-columns {
+  display: flex;
+  gap: 12px;
+}
+
+.order-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.order-col-label {
+  font-size: 9px;
+  color: #7a7868;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+  padding-left: 2px;
+}
+
+.order-btn {
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px solid #2a2820;
+  border-radius: 2px;
+  color: #7a7868;
+  cursor: pointer;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: border-color 0.1s, color 0.1s;
+}
+
+.order-btn:hover {
+  border-color: #5a5848;
+  color: #c8c4b8;
+}
+
+.order-btn.active {
+  border-color: #e8e4d8;
+  color: #e8e4d8;
+  background: rgba(232, 228, 216, 0.06);
+}
+
+.order-result {
+  border: 1px solid #3a3830;
+  border-radius: 2px;
+  padding: 10px 12px;
+  background: rgba(232, 228, 216, 0.03);
+  text-align: center;
+}
+
+.order-result-label {
+  font-size: 8px;
+  color: #5a5848;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin-bottom: 4px;
+}
+
+.order-result-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: #e8e4d8;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-family: 'Courier New', 'Consolas', monospace;
+}
+
+.order-specialty {
+  display: flex;
+  gap: 4px;
+}
+
+.specialty-pill {
+  flex: 1;
+  padding: 4px 0;
+  background: transparent;
+  border: 1px solid #2a2820;
+  border-radius: 2px;
+  color: #5a5848;
+  cursor: pointer;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  transition: border-color 0.1s, color 0.1s;
+}
+
+.specialty-pill:hover {
+  border-color: #5a5848;
+  color: #7a7868;
+}
+
+.specialty-pill.active {
+  border-color: #7a7868;
+  color: #c8c4b8;
+  background: rgba(232, 228, 216, 0.04);
+}
+
+.specialty-pill.locked {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.target-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 0;
+  background: transparent;
+  border: 1px solid #3a3830;
+  border-radius: 2px;
+  color: #c8c4b8;
+  cursor: pointer;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-align: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.target-btn:hover {
+  border-color: #e8e4d8;
+  color: #e8e4d8;
 }
 
 /* Start Menu */
@@ -1009,6 +1150,50 @@
 }
 
 /* Terrain Legend */
+
+/* Deploy Manifest */
+
+.deploy-manifest {
+  position: fixed;
+  bottom: 200px;
+  left: 20px;
+  background: rgba(26, 26, 22, 0.92);
+  border: 1px solid #3a3830;
+  border-radius: 2px;
+  padding: 10px 14px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
+  color: #c8c4b8;
+  z-index: 10;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+  min-width: 160px;
+}
+
+.deploy-manifest-header {
+  font-weight: bold;
+  color: #e8e4d8;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+.deploy-manifest-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.deploy-manifest-divider {
+  height: 1px;
+  background: #3a3830;
+  margin: 6px 0;
+}
+
+.deploy-manifest-total {
+  color: #e8e4d8;
+  font-weight: bold;
+}
 
 .terrain-legend {
   position: fixed;

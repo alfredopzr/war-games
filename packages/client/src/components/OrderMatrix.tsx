@@ -11,12 +11,12 @@ const MOVEMENT_LABELS: Record<MovementDirective, string> = {
   advance: 'Advance',
   'flank-left': 'Flank L',
   'flank-right': 'Flank R',
-  scout: 'Scout',
+  scout: 'Patrol',
   hold: 'Hold',
 };
 
 const ATTACK_LABELS: Record<AttackDirective, string> = {
-  'shoot-on-sight': 'Shoot',
+  'shoot-on-sight': 'Shoot on Sight',
   skirmish: 'Skirmish',
   'retreat-on-contact': 'Retreat',
   hunt: 'Hunt',
@@ -42,89 +42,68 @@ export function OrderMatrix({ onSelect }: OrderMatrixProps): ReactElement | null
   const currentAttack = selectedUnit?.attackDirective ?? 'ignore';
   const currentSpecialty = selectedUnit?.specialtyModifier ?? null;
 
-  const handleCellClick = useCallback(
-    (movement: MovementDirective, attack: AttackDirective): void => {
+  const apply = useCallback(
+    (movement: MovementDirective, attack: AttackDirective, specialty: SpecialtyModifier | null): void => {
       if (!selectedUnit) return;
       if (onSelect) {
-        onSelect(movement, attack, currentSpecialty);
+        onSelect(movement, attack, specialty);
       } else {
-        setUnitDirectives(selectedUnit.id, movement, attack, currentSpecialty);
+        setUnitDirectives(selectedUnit.id, movement, attack, specialty);
       }
     },
-    [selectedUnit, currentSpecialty, setUnitDirectives, onSelect],
-  );
-
-  const handleSpecialtyClick = useCallback(
-    (specialty: SpecialtyModifier | null): void => {
-      if (!selectedUnit) return;
-      if (onSelect) {
-        onSelect(currentMovement, currentAttack, specialty);
-      } else {
-        setUnitDirectives(selectedUnit.id, currentMovement, currentAttack, specialty);
-      }
-    },
-    [selectedUnit, currentMovement, currentAttack, setUnitDirectives, onSelect],
+    [selectedUnit, setUnitDirectives, onSelect],
   );
 
   if (!selectedUnit) return null;
 
-  return (
-    <div className="order-matrix">
-      <table className="order-matrix-table">
-        <thead>
-          <tr>
-            <th />
-            {ATTACKS.map((atk) => (
-              <th
-                key={atk}
-                className={atk === currentAttack ? 'col-active' : ''}
-              >
-                {ATTACK_LABELS[atk]}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {MOVEMENTS.map((mov) => (
-            <tr key={mov}>
-              <th className={mov === currentMovement ? 'row-active' : ''}>
-                {MOVEMENT_LABELS[mov]}
-              </th>
-              {ATTACKS.map((atk) => {
-                const isSelected = mov === currentMovement && atk === currentAttack;
-                const isRowActive = mov === currentMovement;
-                const isColActive = atk === currentAttack;
-                const cls = [
-                  'matrix-cell',
-                  isSelected ? 'selected' : '',
-                  isRowActive ? 'row-highlight' : '',
-                  isColActive ? 'col-highlight' : '',
-                ].filter(Boolean).join(' ');
+  const orderName = BEHAVIOR_NAMES[currentMovement][currentAttack];
 
-                return (
-                  <td
-                    key={`${mov}-${atk}`}
-                    className={cls}
-                    onClick={() => handleCellClick(mov, atk)}
-                    title={BEHAVIOR_NAMES[mov][atk]}
-                  >
-                    {BEHAVIOR_NAMES[mov][atk]}
-                  </td>
-                );
-              })}
-            </tr>
+  return (
+    <div className="order-composer">
+      <div className="order-columns">
+        <div className="order-col">
+          <div className="order-col-label">Movement</div>
+          {MOVEMENTS.map((mov) => (
+            <button
+              key={mov}
+              className={`order-btn ${mov === currentMovement ? 'active' : ''}`}
+              onClick={() => apply(mov, currentAttack, currentSpecialty)}
+              type="button"
+            >
+              {MOVEMENT_LABELS[mov]}
+            </button>
           ))}
-        </tbody>
-      </table>
-      <div className="specialty-row">
+        </div>
+        <div className="order-col">
+          <div className="order-col-label">Rules of Engagement</div>
+          {ATTACKS.map((atk) => (
+            <button
+              key={atk}
+              className={`order-btn ${atk === currentAttack ? 'active' : ''}`}
+              onClick={() => apply(currentMovement, atk, currentSpecialty)}
+              type="button"
+            >
+              {ATTACK_LABELS[atk]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="order-result">
+        <div className="order-result-label">Order</div>
+        <div className="order-result-name">{orderName}</div>
+      </div>
+
+      <div className="order-specialty">
         {SPECIALTIES.map((spec) => {
           const key = spec ?? '';
-          const isActive = currentSpecialty === spec;
+          const locked = spec !== null;
           return (
             <button
               key={key}
-              className={`specialty-btn ${isActive ? 'active' : ''}`}
-              onClick={() => handleSpecialtyClick(spec)}
+              className={`specialty-pill ${spec === currentSpecialty ? 'active' : ''} ${locked ? 'locked' : ''}`}
+              onClick={() => { if (!locked) apply(currentMovement, currentAttack, spec); }}
+              disabled={locked}
               type="button"
             >
               {SPECIALTY_LABELS[key]}
