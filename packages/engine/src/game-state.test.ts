@@ -360,6 +360,153 @@ describe('executeTurn', () => {
 });
 
 // ---------------------------------------------------------------------------
+// direct-move pathfinding + cost budget
+// ---------------------------------------------------------------------------
+
+describe('direct-move pathfinding', () => {
+  beforeEach(() => resetUnitIdCounter());
+
+  it('respects terrain cost budget (forest costs 2)', () => {
+    let state = setupBattleGame();
+    const unit = state.players.player1.units[0]!;
+
+    // Build a straight line of hexes: start at (0,0), path through (1,-1), (2,-2), (3,-3)
+    const start = createHex(0, 0);
+    const mid1 = createHex(1, -1);
+    const mid2 = createHex(2, -2);
+    const target = createHex(3, -3);
+
+    // Clear map and set only these hexes so pathfinder has no alternate routes
+    state.map.terrain.clear();
+    state.map.elevation.clear();
+    state.map.modifiers.clear();
+    state.map.terrain.set(hexToKey(start), 'plains');
+    state.map.terrain.set(hexToKey(mid1), 'forest');
+    state.map.terrain.set(hexToKey(mid2), 'forest');
+    state.map.terrain.set(hexToKey(target), 'forest');
+    state.map.elevation.set(hexToKey(start), 0);
+    state.map.elevation.set(hexToKey(mid1), 0);
+    state.map.elevation.set(hexToKey(mid2), 0);
+    state.map.elevation.set(hexToKey(target), 0);
+
+    unit.position = start;
+
+    // Infantry moveRange = 3, forest cost = 2 each
+    // Path: start -> mid1 (cost 2) -> mid2 (cost 2) = total 4, exceeds budget of 3
+    // Unit should only reach mid1
+    const commands: Command[] = [
+      { type: 'direct-move', unitId: unit.id, targetHex: target },
+    ];
+
+    state = executeTurn(state, commands);
+
+    const moved = state.players.player1.units.find((u) => u.id === unit.id)!;
+    expect(hexToKey(moved.position)).toBe(hexToKey(mid1));
+  });
+
+  it('blocked by river modifier (impassable)', () => {
+    let state = setupBattleGame();
+    const unit = state.players.player1.units[0]!;
+
+    const start = createHex(0, 0);
+    const riverHex = createHex(1, -1);
+    const target = createHex(2, -2);
+
+    // Clear map so pathfinder has no alternate routes around the river
+    state.map.terrain.clear();
+    state.map.elevation.clear();
+    state.map.modifiers.clear();
+    state.map.terrain.set(hexToKey(start), 'plains');
+    state.map.terrain.set(hexToKey(riverHex), 'plains');
+    state.map.terrain.set(hexToKey(target), 'plains');
+    state.map.elevation.set(hexToKey(start), 0);
+    state.map.elevation.set(hexToKey(riverHex), 0);
+    state.map.elevation.set(hexToKey(target), 0);
+    state.map.modifiers.set(hexToKey(riverHex), 'river');
+
+    unit.position = start;
+    const startKey = hexToKey(start);
+
+    const commands: Command[] = [
+      { type: 'direct-move', unitId: unit.id, targetHex: target },
+    ];
+
+    state = executeTurn(state, commands);
+
+    const moved = state.players.player1.units.find((u) => u.id === unit.id)!;
+    // Unit should stay put or path around — if no alternate path, stays at start
+    // With only 3 hexes in a line and the middle one is river, no alternate path exists
+    expect(hexToKey(moved.position)).toBe(startKey);
+  });
+
+  it('blocked by elevation for non-climbers (tank)', () => {
+    let state = makeGame(42);
+    // Place a tank
+    const tankHex = getDeploymentHex(state, 'player1', 0);
+    state = placeUnit(state, 'player1', 'tank', tankHex);
+    state = placeInfantry(state, 'player2', 0);
+    state = startBattlePhase(state);
+
+    const tank = state.players.player1.units[0]!;
+
+    const start = createHex(0, 0);
+    const cliffHex = createHex(1, -1);
+
+    state.map.terrain.set(hexToKey(start), 'plains');
+    state.map.terrain.set(hexToKey(cliffHex), 'plains');
+    state.map.elevation.set(hexToKey(start), 0);
+    state.map.elevation.set(hexToKey(cliffHex), 5); // delta 5 > CLIMB_THRESHOLD (3)
+    state.map.modifiers.delete(hexToKey(start));
+    state.map.modifiers.delete(hexToKey(cliffHex));
+
+    tank.position = start;
+
+    const commands: Command[] = [
+      { type: 'direct-move', unitId: tank.id, targetHex: cliffHex },
+    ];
+
+    state = executeTurn(state, commands);
+
+    const moved = state.players.player1.units.find((u) => u.id === tank.id)!;
+    expect(hexToKey(moved.position)).toBe(hexToKey(start));
+  });
+
+  it('paths around occupied hexes', () => {
+    let state = setupBattleGame();
+    const unit = state.players.player1.units[0]!;
+    const blocker = state.players.player2.units[0]!;
+
+    // Line: start(0,0) -> blocked(1,-1) -> target(2,-2)
+    // Alternate route exists via (1,0) -> (2,-1) -> (2,-2)
+    const start = createHex(0, 0);
+    const blockedHex = createHex(1, -1);
+    const target = createHex(2, -2);
+    const alt1 = createHex(1, 0);
+    const alt2 = createHex(2, -1);
+
+    for (const hex of [start, blockedHex, target, alt1, alt2]) {
+      state.map.terrain.set(hexToKey(hex), 'plains');
+      state.map.elevation.set(hexToKey(hex), 0);
+      state.map.modifiers.delete(hexToKey(hex));
+    }
+
+    unit.position = start;
+    blocker.position = blockedHex;
+
+    const commands: Command[] = [
+      { type: 'direct-move', unitId: unit.id, targetHex: target },
+    ];
+
+    state = executeTurn(state, commands);
+
+    const moved = state.players.player1.units.find((u) => u.id === unit.id)!;
+    // Unit should have moved toward target via alternate route
+    // With moveRange 3 and all plains (cost 1 each), the 3-step alternate route is reachable
+    expect(hexToKey(moved.position)).not.toBe(hexToKey(start));
+  });
+});
+
+// ---------------------------------------------------------------------------
 // City Capture HP Cost
 // ---------------------------------------------------------------------------
 

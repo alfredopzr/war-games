@@ -339,19 +339,48 @@ function applyCommand(
       const targetKey = hexToKey(command.targetHex);
       if (!state.map.terrain.has(targetKey)) return;
 
-      // Check unoccupied — may have been claimed by an earlier command this turn
+      // Build occupied set (exclude self)
       const allUnits = [...state.players.player1.units, ...state.players.player2.units];
-      const isOccupied = allUnits.some(
-        (u) => u.id !== unit.id && hexToKey(u.position) === targetKey,
+      const occupied = new Set(
+        allUnits.filter((u) => u.id !== unit.id).map((u) => hexToKey(u.position)),
       );
-      if (isOccupied) return;
 
-      // Validate in move range
+      // Pathfind with full terrain/elevation/modifier awareness
+      const path = findPath(
+        unit.position,
+        command.targetHex,
+        state.map.terrain,
+        unit.type,
+        occupied,
+        unit.directive,
+        state.map.modifiers,
+        state.map.elevation,
+      );
+      if (!path || path.length <= 1) return;
+
+      // Walk path spending cost budget (same as retreat/directives)
       const stats = UNIT_STATS[unit.type];
-      const dist = cubeDistance(unit.position, command.targetHex);
-      if (dist > stats.moveRange) return;
-
-      unit.position = command.targetHex;
+      let costBudget = stats.moveRange;
+      let lastValid = 0;
+      for (let i = 1; i < path.length; i++) {
+        const prevKey = hexToKey(path[i - 1]!);
+        const curKey = hexToKey(path[i]!);
+        const terrain = state.map.terrain.get(curKey);
+        if (!terrain) break;
+        const stepCost = getMoveCost(
+          terrain, unit.type, unit.directive,
+          state.map.modifiers.get(curKey),
+          state.map.elevation.get(prevKey),
+          state.map.elevation.get(curKey),
+        );
+        if (stepCost === Infinity) break;
+        costBudget -= stepCost;
+        if (costBudget < 0) break;
+        lastValid = i;
+      }
+      if (lastValid > 0) {
+        unit.position = path[lastValid]!;
+      }
       unit.hasActed = true;
       break;
     }
