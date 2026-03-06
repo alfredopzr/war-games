@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Command, GameState } from '@hexwar/engine';
-import { findPath, hexToKey, hexToWorld } from '@hexwar/engine';
+import { findPath, hexToKey } from '@hexwar/engine';
+import { cachedHexToWorld } from './render-cache';
 import { getThreeContext } from './three-scene';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +57,7 @@ export function renderCommandVisuals(
 
       const points = path.map((hex) => {
         const elev = state.map.elevation.get(hexToKey(hex)) ?? 0;
-        const w = hexToWorld(hex, elev);
+        const w = cachedHexToWorld(hex, elev);
         return new THREE.Vector3(w.x, w.y + 0.15, w.z);
       });
 
@@ -76,7 +77,7 @@ export function renderCommandVisuals(
       if (!target) continue;
 
       const elev = state.map.elevation.get(hexToKey(target.position)) ?? 0;
-      const w = hexToWorld(target.position, elev);
+      const w = cachedHexToWorld(target.position, elev);
       const y = w.y + 0.3;
       const s = 0.35;
 

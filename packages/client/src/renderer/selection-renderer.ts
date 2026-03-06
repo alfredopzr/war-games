@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { CubeCoord, Unit } from '@hexwar/engine';
-import { hexToKey, hexToWorld, hexWorldVertices } from '@hexwar/engine';
+import { hexToKey, hexWorldVertices } from '@hexwar/engine';
+import { cachedHexToWorld } from './render-cache';
 import { getThreeContext } from './three-scene';
 
 // ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ function createHexFill(
       side: THREE.DoubleSide,
     }),
   );
-  mesh.position.y = hexToWorld(hex, elevation).y + yOffset;
+  mesh.position.y = cachedHexToWorld(hex, elevation).y + yOffset;
   mesh.renderOrder = 2;
   return mesh;
 }

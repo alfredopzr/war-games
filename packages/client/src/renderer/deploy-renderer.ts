@@ -1,13 +1,72 @@
 import * as THREE from 'three';
-import type { GameState, PlayerId } from '@hexwar/engine';
-import { hexToKey, hexToWorld, hexWorldVertices } from '@hexwar/engine';
+import type { GameState, PlayerId, CubeCoord } from '@hexwar/engine';
+import { hexToKey, hexWorldVertices } from '@hexwar/engine';
+import { cachedHexToWorld } from './render-cache';
 import { getThreeContext } from './three-scene';
 
 // ---------------------------------------------------------------------------
-// Deploy zone renderer — Three.js overlays
+// Deploy zone renderer — batched into 4 draw calls
 // ---------------------------------------------------------------------------
 
 let deployGroup: THREE.Group | null = null;
+
+function buildZoneFillGeometry(
+  hexes: CubeCoord[],
+  elevation: Map<string, number>,
+): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const indices: number[] = [];
+
+  for (const hex of hexes) {
+    const key = hexToKey(hex);
+    const elev = elevation.get(key) ?? 0;
+    const center = cachedHexToWorld(hex, elev);
+    const verts = hexWorldVertices(hex, elev);
+    const y = center.y + 0.003;
+    const base = positions.length / 3;
+
+    // Center vertex + 6 corner vertices
+    positions.push(center.x, y, center.z);
+    for (let i = 0; i < 6; i++) {
+      positions.push(verts[i]!.x, y, verts[i]!.z);
+    }
+
+    // 6 triangles (fan from center)
+    for (let i = 0; i < 6; i++) {
+      indices.push(base, base + 1 + i, base + 1 + ((i + 1) % 6));
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  return geo;
+}
+
+function buildZoneStrokeGeometry(
+  hexes: CubeCoord[],
+  elevation: Map<string, number>,
+): THREE.BufferGeometry {
+  const positions: number[] = [];
+
+  for (const hex of hexes) {
+    const key = hexToKey(hex);
+    const elev = elevation.get(key) ?? 0;
+    const verts = hexWorldVertices(hex, elev);
+
+    // 6 line segments forming the hex outline
+    for (let i = 0; i < 6; i++) {
+      const a = verts[i]!;
+      const b = verts[(i + 1) % 6]!;
+      positions.push(a.x, a.y + 0.004, a.z);
+      positions.push(b.x, b.y + 0.004, b.z);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  return geo;
+}
 
 export function renderDeployZones(state: GameState, currentPlayerView: PlayerId): void {
   const ctx = getThreeContext();
@@ -16,7 +75,7 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
   if (deployGroup) {
     ctx.scene.remove(deployGroup);
     deployGroup.traverse((obj) => {
-      if (obj instanceof THREE.Mesh || obj instanceof THREE.LineLoop) {
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments) {
         obj.geometry.dispose();
         if (obj.material instanceof THREE.Material) {
           obj.material.dispose();
@@ -41,77 +100,47 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
     ? state.map.player2Deployment
     : state.map.player1Deployment;
 
-  const friendlyKeys = new Set<string>();
-  for (const h of friendlyZone) friendlyKeys.add(hexToKey(h));
+  const isP1 = currentPlayerView === 'player1';
 
-  const enemyKeys = new Set<string>();
-  for (const h of enemyZone) enemyKeys.add(hexToKey(h));
+  // Friendly fill (1 draw call)
+  const friendlyFillGeo = buildZoneFillGeometry(friendlyZone, state.map.elevation);
+  const friendlyFill = new THREE.Mesh(friendlyFillGeo, new THREE.MeshBasicMaterial({
+    color: isP1 ? 0x4a5a3a : 0x6a3a2a,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  }));
+  friendlyFill.renderOrder = 1;
+  deployGroup.add(friendlyFill);
 
-  // Only iterate deploy zone hexes, not entire grid
-  const zoneEntries: { hex: typeof friendlyZone[0]; fillColor: number; fillAlpha: number; strokeColor: number; strokeAlpha: number }[] = [];
+  // Enemy fill (1 draw call)
+  const enemyFillGeo = buildZoneFillGeometry(enemyZone, state.map.elevation);
+  const enemyFill = new THREE.Mesh(enemyFillGeo, new THREE.MeshBasicMaterial({
+    color: isP1 ? 0x5a2a1a : 0x2a3a1a,
+    transparent: true,
+    opacity: 0.35,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  }));
+  enemyFill.renderOrder = 1;
+  deployGroup.add(enemyFill);
 
-  for (const hex of friendlyZone) {
-    zoneEntries.push({
-      hex,
-      fillColor: currentPlayerView === 'player1' ? 0x4a5a3a : 0x6a3a2a,
-      fillAlpha: 0.45,
-      strokeColor: currentPlayerView === 'player1' ? 0x8a9a7a : 0xaa7a6a,
-      strokeAlpha: 1,
-    });
-  }
+  // Friendly stroke (1 draw call)
+  const friendlyStrokeGeo = buildZoneStrokeGeometry(friendlyZone, state.map.elevation);
+  const friendlyStroke = new THREE.LineSegments(friendlyStrokeGeo, new THREE.LineBasicMaterial({
+    color: isP1 ? 0x8a9a7a : 0xaa7a6a,
+  }));
+  friendlyStroke.renderOrder = 1;
+  deployGroup.add(friendlyStroke);
 
-  for (const hex of enemyZone) {
-    zoneEntries.push({
-      hex,
-      fillColor: currentPlayerView === 'player1' ? 0x5a2a1a : 0x2a3a1a,
-      fillAlpha: 0.35,
-      strokeColor: currentPlayerView === 'player1' ? 0x8a5a4a : 0x6a7a5a,
-      strokeAlpha: 1,
-    });
-  }
-
-  for (const { hex, fillColor, fillAlpha, strokeColor, strokeAlpha } of zoneEntries) {
-    const hexKey = hexToKey(hex);
-    const elev = state.map.elevation.get(hexKey) ?? 0;
-    const center = hexToWorld(hex, elev);
-    const verts = hexWorldVertices(hex, elev);
-
-    // Fill
-    const shape = new THREE.Shape();
-    shape.moveTo(verts[0]!.x, verts[0]!.z);
-    for (let i = 1; i < 6; i++) {
-      shape.lineTo(verts[i]!.x, verts[i]!.z);
-    }
-    shape.closePath();
-    const geo = new THREE.ShapeGeometry(shape);
-    geo.rotateX(Math.PI / 2);
-    const mesh = new THREE.Mesh(
-      geo,
-      new THREE.MeshBasicMaterial({
-        color: fillColor,
-        transparent: true,
-        opacity: fillAlpha,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      }),
-    );
-    mesh.position.y = center.y + 0.003;
-    mesh.renderOrder = 1;
-    deployGroup.add(mesh);
-
-    // Outline
-    const points = verts.map((v) => new THREE.Vector3(v.x, v.y + 0.004, v.z));
-    points.push(points[0]!.clone());
-    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-    const lineMat = new THREE.LineBasicMaterial({
-      color: strokeColor,
-      transparent: true,
-      opacity: strokeAlpha,
-    });
-    const line = new THREE.LineLoop(lineGeo, lineMat);
-    line.renderOrder = 1;
-    deployGroup.add(line);
-  }
+  // Enemy stroke (1 draw call)
+  const enemyStrokeGeo = buildZoneStrokeGeometry(enemyZone, state.map.elevation);
+  const enemyStroke = new THREE.LineSegments(enemyStrokeGeo, new THREE.LineBasicMaterial({
+    color: isP1 ? 0x8a5a4a : 0x6a7a5a,
+  }));
+  enemyStroke.renderOrder = 1;
+  deployGroup.add(enemyStroke);
 
   ctx.scene.add(deployGroup);
 }

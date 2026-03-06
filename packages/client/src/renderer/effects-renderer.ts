@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { getThreeContext } from './three-scene';
+import { getThreeContext, markLabelsDirty } from './three-scene';
 
 // ---------------------------------------------------------------------------
 // Effects renderer — CSS2D damage numbers, Three.js lines
@@ -130,11 +130,13 @@ export function updateEffects(deltaSec: number): void {
   const group = effectsGroup;
   if (!group) return;
 
+  let hasCss2d = false;
   for (let i = activeEffects.length - 1; i >= 0; i--) {
     const effect = activeEffects[i]!;
 
     switch (effect.kind) {
       case 'damage-number': {
+        hasCss2d = true;
         effect.object.position.y += effect.speed * deltaSec;
         const currentOpacity = parseFloat(effect.element.style.opacity || '1');
         const newOpacity = currentOpacity - effect.fadeRate * deltaSec;
@@ -176,6 +178,7 @@ export function updateEffects(deltaSec: number): void {
       }
     }
   }
+  if (hasCss2d) markLabelsDirty();
 }
 
 /** Clear all active effects immediately. */
