@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { hexToWorld, createHex } from '@hexwar/engine';
+import { perf } from '../perf-monitor';
 
 // ---------------------------------------------------------------------------
 // Three.js context — scene, camera, renderers
@@ -15,6 +16,19 @@ export interface ThreeContext {
 
 let ctx: ThreeContext | null = null;
 let animFrameId: number | null = null;
+let labelsDirty = true;
+let labelsEnabled = true;
+
+/** Mark CSS2D labels as needing a render pass (camera moved or scene changed). */
+export function markLabelsDirty(): void {
+  labelsDirty = true;
+}
+
+/** Enable/disable CSS2D label rendering (disable during camera animation). */
+export function setLabelsEnabled(enabled: boolean): void {
+  labelsEnabled = enabled;
+  if (enabled) labelsDirty = true;
+}
 
 export function getThreeContext(): ThreeContext | null {
   return ctx;
@@ -24,7 +38,7 @@ export function getThreeContext(): ThreeContext | null {
  * Camera tilt angle in degrees from vertical.
  * ~35° gives a natural isometric look with true hex geometry.
  */
-const CAMERA_TILT_DEG = 50;
+const CAMERA_TILT_DEG = 60;
 const CAMERA_TILT_RAD = (CAMERA_TILT_DEG * Math.PI) / 180;
 
 export function createThreeContext(parentDiv: HTMLDivElement): ThreeContext {
@@ -41,6 +55,16 @@ export function createThreeContext(parentDiv: HTMLDivElement): ThreeContext {
   canvas.style.top = '0';
   canvas.style.left = '0';
   parentDiv.appendChild(canvas);
+
+  // Handle WebGL context loss — prevent crash, allow recovery
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    console.warn('[three-scene] WebGL context lost — pausing render loop');
+    stopRenderLoop();
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    console.warn('[three-scene] WebGL context restored');
+  });
 
   // CSS2D renderer — HP bars, labels as HTML divs
   const labelRenderer = new CSS2DRenderer();
@@ -75,17 +99,22 @@ export function createThreeContext(parentDiv: HTMLDivElement): ThreeContext {
 // ---------------------------------------------------------------------------
 
 const PADDING = 1.0; // world units of padding around the map
+const ZOOM = 1.2; // >1 = zoomed in (frustum shrinks)
 
-/**
- * Fit the orthographic camera to show the entire hex grid.
- * Camera is tilted CAMERA_TILT_DEG from vertical (looking down at the XZ plane).
- */
-export function fitCameraToMap(
-  elevationMap: Map<string, number>,
-): void {
-  if (!ctx) return;
+// Cached bounding box — recomputed only when elevation map changes
+interface MapBounds {
+  centerX: number;
+  centerZ: number;
+  centerY: number;
+  worldWidth: number;
+  worldDepth: number;
+  maxY: number;
+}
 
-  // Compute world-space bounding box from actual terrain hex keys
+let cachedBounds: MapBounds | null = null;
+let cachedElevationMap: Map<string, number> | null = null;
+
+function computeMapBounds(elevationMap: Map<string, number>): MapBounds {
   let minX = Infinity, maxX = -Infinity;
   let minZ = Infinity, maxZ = -Infinity;
   let maxY = 0;
@@ -101,58 +130,93 @@ export function fitCameraToMap(
     maxY = Math.max(maxY, w.y);
   }
 
-  // Expand by hex radius + padding
   minX -= 1.0 + PADDING;
   maxX += 1.0 + PADDING;
   minZ -= 1.0 + PADDING;
   maxZ += 1.0 + PADDING;
 
-  const centerX = (minX + maxX) / 2;
-  const centerZ = (minZ + maxZ) / 2;
-  const centerY = maxY / 2;
+  return {
+    centerX: (minX + maxX) / 2,
+    centerZ: (minZ + maxZ) / 2,
+    centerY: maxY / 2,
+    worldWidth: maxX - minX,
+    worldDepth: maxZ - minZ,
+    maxY,
+  };
+}
+
+/**
+ * Fit the orthographic camera to show the entire hex grid.
+ * Camera is tilted CAMERA_TILT_DEG from vertical (looking down at the XZ plane).
+ */
+export function fitCameraToMap(
+  elevationMap: Map<string, number>,
+  rotationRad: number = 0,
+  zoomOverride: number = ZOOM,
+  stableFrustum: boolean = false,
+  tiltOverride: number = CAMERA_TILT_RAD,
+  panX: number = 0,
+  panZ: number = 0,
+): void {
+  if (!ctx) return;
+
+  // Recompute bounds only when the map changes
+  if (elevationMap !== cachedElevationMap) {
+    cachedBounds = computeMapBounds(elevationMap);
+    cachedElevationMap = elevationMap;
+  }
+  const { centerX, centerZ, centerY, worldWidth, worldDepth, maxY } = cachedBounds!;
 
   // scene.scale.z flips the board for player perspective — camera must follow
-  const vizCenterZ = centerZ * ctx.scene.scale.z;
+  const focusX = centerX + panX;
+  const focusZ = (centerZ + panZ) * ctx.scene.scale.z;
 
   // Camera distance along its look direction (arbitrary, ortho doesn't care)
   const dist = 50;
-  // Camera offset: tilted from vertical by CAMERA_TILT_RAD
-  // Camera looks toward -Y tilted toward +Z
+  const sinTilt = Math.sin(tiltOverride);
+  const cosTilt = Math.cos(tiltOverride);
   ctx.camera.position.set(
-    centerX,
-    centerY + dist * Math.cos(CAMERA_TILT_RAD),
-    vizCenterZ + dist * Math.sin(CAMERA_TILT_RAD),
+    focusX + dist * sinTilt * Math.sin(rotationRad),
+    centerY + dist * cosTilt,
+    focusZ + dist * sinTilt * Math.cos(rotationRad),
   );
-  ctx.camera.lookAt(centerX, centerY, vizCenterZ);
+  ctx.camera.lookAt(focusX, centerY, focusZ);
 
-  // Compute frustum to fit the map
-  // Project map corners onto the camera's view plane
-  const worldWidth = maxX - minX;
-  // The Z extent gets foreshortened by the tilt angle
-  const worldDepth = maxZ - minZ;
-  const projectedDepth = worldDepth * Math.cos(CAMERA_TILT_RAD) + maxY * Math.sin(CAMERA_TILT_RAD);
+  // Compute frustum to fit the rotated view of the bounding box.
+  // When stableFrustum is true, use the max extent at any angle (diagonal)
+  // to prevent zoom bouncing during continuous rotation.
+  let projectedWidth: number, projectedDepth: number;
+  if (stableFrustum) {
+    const diagonal = Math.sqrt(worldWidth * worldWidth + worldDepth * worldDepth);
+    projectedWidth = diagonal;
+    projectedDepth = diagonal * cosTilt + maxY * sinTilt;
+  } else {
+    const cosR = Math.abs(Math.cos(rotationRad));
+    const sinR = Math.abs(Math.sin(rotationRad));
+    projectedWidth = worldWidth * cosR + worldDepth * sinR;
+    const depthAlongLook = worldWidth * sinR + worldDepth * cosR;
+    projectedDepth = depthAlongLook * cosTilt + maxY * sinTilt;
+  }
 
   const screenW = ctx.renderer.domElement.clientWidth;
   const screenH = ctx.renderer.domElement.clientHeight;
   const aspect = screenW / screenH;
 
-  // Fit the larger dimension
   let halfW: number, halfH: number;
-  if (worldWidth / projectedDepth > aspect) {
-    // Width-constrained
-    halfW = worldWidth / 2;
+  if (projectedWidth / projectedDepth > aspect) {
+    halfW = projectedWidth / 2;
     halfH = halfW / aspect;
   } else {
-    // Height-constrained
     halfH = projectedDepth / 2;
     halfW = halfH * aspect;
   }
 
-  ctx.camera.left = -halfW;
-  ctx.camera.right = halfW;
-  ctx.camera.top = halfH;
-  ctx.camera.bottom = -halfH;
+  ctx.camera.left = -halfW / zoomOverride;
+  ctx.camera.right = halfW / zoomOverride;
+  ctx.camera.top = halfH / zoomOverride;
+  ctx.camera.bottom = -halfH / zoomOverride;
   ctx.camera.updateProjectionMatrix();
+  labelsDirty = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,8 +238,22 @@ export function setMapFlip(player1View: boolean): void {
 
 export function renderThreeScene(): void {
   if (!ctx) return;
+  const endWebgl = perf.start('webgl');
   ctx.renderer.render(ctx.scene, ctx.camera);
-  ctx.labelRenderer.render(ctx.scene, ctx.camera);
+  endWebgl();
+  const info = ctx.renderer.info;
+  perf.setGpuInfo({
+    calls: info.render.calls,
+    triangles: info.render.triangles,
+    geometries: info.memory.geometries,
+    textures: info.memory.textures,
+  });
+  if (labelsDirty && labelsEnabled) {
+    const endLabel = perf.start('labelRender');
+    ctx.labelRenderer.render(ctx.scene, ctx.camera);
+    endLabel();
+    labelsDirty = false;
+  }
 }
 
 /**
@@ -187,10 +265,12 @@ export function startRenderLoop(onTick: (deltaSec: number) => void): void {
 
   function loop(now: number): void {
     animFrameId = requestAnimationFrame(loop);
+    perf.markFrameStart();
     const dt = (now - lastTime) / 1000;
     lastTime = now;
     onTick(dt);
     renderThreeScene();
+    perf.markFrameEnd();
   }
   animFrameId = requestAnimationFrame(loop);
 }
@@ -210,6 +290,7 @@ export function resizeThreeRenderers(w: number, h: number): void {
   if (!ctx) return;
   ctx.renderer.setSize(w, h);
   ctx.labelRenderer.setSize(w, h);
+  labelsDirty = true;
 }
 
 export function disposeThreeContext(): void {
@@ -220,4 +301,6 @@ export function disposeThreeContext(): void {
   ctx.renderer.dispose();
   ctx.scene.clear();
   ctx = null;
+  cachedBounds = null;
+  cachedElevationMap = null;
 }
