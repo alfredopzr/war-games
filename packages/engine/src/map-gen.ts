@@ -5,6 +5,8 @@
 import type { GameMap, MapValidation, TerrainType, CubeCoord, MegaHexInfo } from './types';
 import { createHex, hexToKey, cubeDistance, hexesInRadius, hexNeighbors, CUBE_DIRECTIONS } from './hex';
 import { findPath } from './pathfinding';
+import { getMoveCost } from './terrain';
+import { MinHeap } from './min-heap';
 import { hexToWorld } from './world';
 import { createNoiseGenerator } from './noise';
 import { mulberry32 } from './rng';
@@ -19,6 +21,7 @@ import {
   MTN_FALLOFF_EXP, MTN_DIR_AMP,
   MTN_SLOPE_ROUGHNESS, MTN_SLOPE_MOMENTUM, MTN_SLOPE_NOISE_FREQ,
   PLAINS_ELEV_RANGE, FOREST_ELEV_RANGE, CITY_ELEV_RANGE, ELEV_NOISE_FREQ,
+  ELEV_BOUNDARY_SMOOTH_PASSES, ELEV_BOUNDARY_SMOOTH_DEPTH,
   MAX_REROLL,
   FAIR_CITY_DIST_THRESHOLD,
   RIVER_ENABLED, RIVER_COUNT, BRIDGES_PER_RIVER, BRIDGE_MIN_SPACING,
@@ -27,6 +30,7 @@ import {
   RIVER_LAKE_RADIUS, RIVER_DELTA_BRANCHES, RIVER_DELTA_MAX_LENGTH,
   RIVER_DELTA_ELEV_THRESHOLD,
   HIGHWAY_ENABLED, HIGHWAY_COUNT,
+  HIGHWAY_MAX_SLOPE, HIGHWAY_MAX_ELEVATION, HIGHWAY_SMOOTH_PASSES,
 } from './map-gen-params';
 
 // -----------------------------------------------------------------------------
@@ -305,6 +309,111 @@ function generateNonMountainElevation(
     if (terrainType === 'city') {
       elevation.set(key, Math.min(CITY_ELEV_MAX, elev));
     } else {
+      elevation.set(key, elev);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Elevation Boundary Smoothing
+// -----------------------------------------------------------------------------
+
+/**
+ * Smooth elevation at macro-hex boundaries to remove sheer cliff walls.
+ *
+ * Finds hexes within SMOOTH_DEPTH of a macro-hex boundary, then runs
+ * SMOOTH_PASSES of weighted averaging with neighbors. Hexes closer to
+ * the boundary get more smoothing; interior hexes are untouched.
+ *
+ * Result: cliffs still exist but taper at the foot instead of a vertical wall.
+ */
+function smoothBoundaryElevation(
+  allHexes: Map<string, CubeCoord>,
+  megaHexes: Map<string, string>,
+  elevation: Map<string, number>,
+  protectedKeys: Set<string>,
+): void {
+  if (ELEV_BOUNDARY_SMOOTH_PASSES <= 0 || ELEV_BOUNDARY_SMOOTH_DEPTH <= 0) return;
+
+  // 1. Find boundary hexes: any hex with a neighbor in a different macro-hex
+  const boundaryKeys = new Set<string>();
+  for (const [key, hex] of allHexes) {
+    const myMacro = megaHexes.get(key);
+    for (const n of hexNeighbors(hex)) {
+      const nKey = hexToKey(n);
+      const nMacro = megaHexes.get(nKey);
+      if (nMacro !== undefined && nMacro !== myMacro) {
+        boundaryKeys.add(key);
+        break;
+      }
+    }
+  }
+
+  // 2. Expand boundary set by SMOOTH_DEPTH rings to find all affected hexes
+  //    Track each hex's distance to the nearest boundary hex
+  const affected = new Map<string, number>(); // key -> distance to boundary
+  for (const key of boundaryKeys) {
+    affected.set(key, 0);
+  }
+
+  // Remove protected hexes from boundary set
+  for (const key of protectedKeys) {
+    boundaryKeys.delete(key);
+    affected.delete(key);
+  }
+
+  let frontier = [...boundaryKeys];
+  for (let depth = 1; depth <= ELEV_BOUNDARY_SMOOTH_DEPTH; depth++) {
+    const nextFrontier: string[] = [];
+    for (const key of frontier) {
+      const hex = allHexes.get(key);
+      if (!hex) continue;
+      for (const n of hexNeighbors(hex)) {
+        const nKey = hexToKey(n);
+        if (!allHexes.has(nKey)) continue;
+        if (affected.has(nKey)) continue;
+        if (protectedKeys.has(nKey)) continue;
+        affected.set(nKey, depth);
+        nextFrontier.push(nKey);
+      }
+    }
+    frontier = nextFrontier;
+  }
+
+  // 3. Run smoothing passes — only on affected hexes
+  for (let pass = 0; pass < ELEV_BOUNDARY_SMOOTH_PASSES; pass++) {
+    const updates = new Map<string, number>();
+
+    for (const [key, dist] of affected) {
+      const hex = allHexes.get(key);
+      if (!hex) continue;
+
+      const myElev = elevation.get(key) ?? 0;
+
+      // Collect neighbor elevations
+      let sum = 0;
+      let count = 0;
+      for (const n of hexNeighbors(hex)) {
+        const nKey = hexToKey(n);
+        const nElev = elevation.get(nKey);
+        if (nElev !== undefined) {
+          sum += nElev;
+          count++;
+        }
+      }
+      if (count === 0) continue;
+
+      const neighborAvg = sum / count;
+
+      // Blend strength: boundary hexes (dist=0) get full blend,
+      // deeper hexes get less. This preserves interior mountain shape.
+      const strength = 0.4 * (1 - dist / (ELEV_BOUNDARY_SMOOTH_DEPTH + 1));
+      const blended = myElev + (neighborAvg - myElev) * strength;
+
+      updates.set(key, blended);
+    }
+
+    for (const [key, elev] of updates) {
       elevation.set(key, elev);
     }
   }
@@ -680,70 +789,245 @@ function placeBridges(
 // -----------------------------------------------------------------------------
 
 /**
- * Generate highways connecting cities.
- * Uses A* between city centers, stamps 'highway' on path hexes.
- * If a highway crosses a river hex, that hex becomes a 'bridge'.
+ * Find all hexes on the map boundary (fewer than 6 on-map neighbors).
+ */
+function findEdgeHexes(allHexes: Map<string, CubeCoord>): CubeCoord[] {
+  const edges: CubeCoord[] = [];
+  for (const hex of allHexes.values()) {
+    const onMap = hexNeighbors(hex).filter((n) => allHexes.has(hexToKey(n)));
+    if (onMap.length < 6) edges.push(hex);
+  }
+  return edges;
+}
+
+/**
+ * A* pathfinder for highways that rejects hexes above HIGHWAY_MAX_ELEVATION
+ * and penalizes elevation changes to produce low-slope routes.
+ */
+function findHighwayPath(
+  start: CubeCoord,
+  end: CubeCoord,
+  terrainMap: Map<string, TerrainType>,
+  elevation: Map<string, number>,
+  modifiers: Map<string, HexModifier>,
+  excludedKeys: Set<string>,
+): CubeCoord[] | null {
+  const startKey = hexToKey(start);
+  const endKey = hexToKey(end);
+  if (!terrainMap.has(startKey) || !terrainMap.has(endKey)) return null;
+  if (startKey === endKey) return [start];
+
+  interface Node { coord: CubeCoord; g: number; f: number; parent: Node | null; }
+  const heap = new MinHeap<Node>((a, b) => a.f - b.f);
+  const closed = new Set<string>();
+  const bestG = new Map<string, number>();
+
+  heap.push({ coord: start, g: 0, f: cubeDistance(start, end), parent: null });
+  bestG.set(startKey, 0);
+
+  while (heap.size > 0) {
+    const cur = heap.pop()!;
+    const curKey = hexToKey(cur.coord);
+    if (closed.has(curKey)) continue;
+    if (curKey === endKey) {
+      const path: CubeCoord[] = [];
+      let n: Node | null = cur;
+      while (n) { path.push(n.coord); n = n.parent; }
+      return path.reverse();
+    }
+    closed.add(curKey);
+
+    const curElev = elevation.get(curKey) ?? 0;
+
+    for (const nb of hexNeighbors(cur.coord)) {
+      const nbKey = hexToKey(nb);
+      if (closed.has(nbKey)) continue;
+      if (excludedKeys.has(nbKey)) continue;
+
+      const t = terrainMap.get(nbKey);
+      if (t === undefined) continue;
+
+      const nbElev = elevation.get(nbKey) ?? 0;
+
+      // Hard reject: too high
+      if (nbElev > HIGHWAY_MAX_ELEVATION) continue;
+
+      // Base terrain cost (tanks can't enter mountains → Infinity)
+      const baseCost = getMoveCost(t, 'tank', undefined, modifiers.get(nbKey));
+      if (baseCost === Infinity) continue;
+
+      // Slope penalty: heavily penalize elevation changes
+      const slope = Math.abs(nbElev - curElev);
+      const slopePenalty = slope > HIGHWAY_MAX_SLOPE ? slope * 10 : slope * 2;
+
+      const g = cur.g + baseCost + slopePenalty;
+      const prev = bestG.get(nbKey);
+      if (prev !== undefined && g >= prev) continue;
+
+      bestG.set(nbKey, g);
+      heap.push({ coord: nb, g, f: g + cubeDistance(nb, end), parent: cur });
+    }
+  }
+  return null;
+}
+
+/**
+ * After a highway route is chosen, flatten elevation along it so the road
+ * doesn't have abrupt bumps, then smooth the 1-ring border to avoid cliff walls.
+ */
+function flattenHighwayElevation(
+  path: CubeCoord[],
+  elevation: Map<string, number>,
+  protectedKeys: Set<string>,
+): void {
+  const pathKeys = path.map((h) => hexToKey(h));
+
+  // Forward pass: clamp each hex so it's within MAX_SLOPE of previous
+  for (let i = 1; i < pathKeys.length; i++) {
+    const prevElev = elevation.get(pathKeys[i - 1]!) ?? 0;
+    const curElev = elevation.get(pathKeys[i]!) ?? 0;
+    if (curElev > prevElev + HIGHWAY_MAX_SLOPE) {
+      elevation.set(pathKeys[i]!, prevElev + HIGHWAY_MAX_SLOPE);
+    } else if (curElev < prevElev - HIGHWAY_MAX_SLOPE) {
+      elevation.set(pathKeys[i]!, prevElev - HIGHWAY_MAX_SLOPE);
+    }
+  }
+
+  // Backward pass: same constraint from the other direction
+  for (let i = pathKeys.length - 2; i >= 0; i--) {
+    const nextElev = elevation.get(pathKeys[i + 1]!) ?? 0;
+    const curElev = elevation.get(pathKeys[i]!) ?? 0;
+    if (curElev > nextElev + HIGHWAY_MAX_SLOPE) {
+      elevation.set(pathKeys[i]!, nextElev + HIGHWAY_MAX_SLOPE);
+    } else if (curElev < nextElev - HIGHWAY_MAX_SLOPE) {
+      elevation.set(pathKeys[i]!, nextElev - HIGHWAY_MAX_SLOPE);
+    }
+  }
+
+  // Smooth passes: average each highway hex with its path neighbors
+  for (let pass = 0; pass < HIGHWAY_SMOOTH_PASSES; pass++) {
+    for (let i = 1; i < pathKeys.length - 1; i++) {
+      const prev = elevation.get(pathKeys[i - 1]!) ?? 0;
+      const cur = elevation.get(pathKeys[i]!) ?? 0;
+      const next = elevation.get(pathKeys[i + 1]!) ?? 0;
+      elevation.set(pathKeys[i]!, (prev + cur + next) / 3);
+    }
+  }
+
+  // Smooth 1-ring border hexes toward the road to avoid cliff walls
+  const pathKeySet = new Set(pathKeys);
+  for (const hex of path) {
+    const roadElev = elevation.get(hexToKey(hex)) ?? 0;
+    for (const nb of hexNeighbors(hex)) {
+      const nbKey = hexToKey(nb);
+      if (pathKeySet.has(nbKey)) continue;
+      if (protectedKeys.has(nbKey)) continue;
+      const nbElev = elevation.get(nbKey);
+      if (nbElev === undefined) continue;
+      elevation.set(nbKey, (nbElev + roadElev) / 2);
+    }
+  }
+}
+
+/**
+ * Generate highways as edge-to-edge routes through at least 2 cities.
+ * Uses elevation-aware pathfinding, then flattens the route.
+ * Stamps 'highway' on path hexes. River crossings become bridges.
  */
 function generateHighways(
+  allHexes: Map<string, CubeCoord>,
   terrain: Map<string, TerrainType>,
   modifiers: Map<string, HexModifier>,
+  elevation: Map<string, number>,
   macroCenters: CubeCoord[],
   landUse: Map<string, TerrainType>,
+  protectedKeys: Set<string>,
+  rng: () => number,
 ): void {
   if (!HIGHWAY_ENABLED || HIGHWAY_COUNT <= 0) return;
 
-  // Find city macro-hex centers
   const cityCenters = macroCenters.filter((mc) => landUse.get(hexToKey(mc)) === 'city');
   if (cityCenters.length < 2) return;
 
-  // Build candidate city pairs sorted by distance
-  const pairs: { a: CubeCoord; b: CubeCoord; dist: number }[] = [];
-  for (let i = 0; i < cityCenters.length; i++) {
-    for (let j = i + 1; j < cityCenters.length; j++) {
-      pairs.push({
-        a: cityCenters[i]!,
-        b: cityCenters[j]!,
-        dist: cubeDistance(cityCenters[i]!, cityCenters[j]!),
-      });
-    }
-  }
-  pairs.sort((a, b) => a.dist - b.dist);
+  const edgeHexes = findEdgeHexes(allHexes);
+  if (edgeHexes.length < 2) return;
 
-  // For pathfinding, temporarily treat rivers as passable so highways can cross them
-  const tempTerrain = new Map(terrain);
-  const occupiedHexes = new Set<string>();
-
-  const usedCities = new Set<string>();
   let highwaysPlaced = 0;
 
-  for (const pair of pairs) {
-    if (highwaysPlaced >= HIGHWAY_COUNT) break;
+  for (let attempt = 0; attempt < HIGHWAY_COUNT * 5 && highwaysPlaced < HIGHWAY_COUNT; attempt++) {
+    const startIdx = Math.floor(rng() * edgeHexes.length);
+    const startEdge = edgeHexes[startIdx]!;
 
-    const aKey = hexToKey(pair.a);
-    const bKey = hexToKey(pair.b);
+    const minEdgeDist = Math.floor(edgeHexes.length > 50 ? 20 : 10);
+    const farEdges = edgeHexes.filter((e) => cubeDistance(e, startEdge) >= minEdgeDist);
+    if (farEdges.length === 0) continue;
+    const endEdge = farEdges[Math.floor(rng() * farEdges.length)]!;
 
-    // Prefer connecting different cities each time (not required though)
-    if (highwaysPlaced > 0 && usedCities.has(aKey) && usedCities.has(bKey)) continue;
+    const routeDx = endEdge.q - startEdge.q;
+    const routeDr = endEdge.r - startEdge.r;
+    const routeLen = Math.sqrt(routeDx * routeDx + routeDr * routeDr);
 
-    // Find path ignoring river modifiers (highways bridge over rivers)
-    const path = findPath(pair.a, pair.b, tempTerrain, 'tank', occupiedHexes, undefined, undefined);
-    if (!path) continue;
+    const scoredCities = cityCenters.map((city) => {
+      const cx = city.q - startEdge.q;
+      const cr = city.r - startEdge.r;
+      const crossDist = Math.abs(cx * routeDr - cr * routeDx) / (routeLen || 1);
+      const dotAlongRoute = (cx * routeDx + cr * routeDr) / (routeLen * routeLen || 1);
+      const midBonus = 1 - Math.abs(dotAlongRoute - 0.5) * 2;
+      return { city, score: -crossDist + midBonus * 5 };
+    });
+    scoredCities.sort((a, b) => b.score - a.score);
 
-    // Stamp highway on each hex in the path
-    for (const hex of path) {
+    const waypoints = scoredCities.slice(0, Math.max(2, Math.min(3, scoredCities.length))).map((s) => s.city);
+
+    waypoints.sort((a, b) => {
+      const da = (a.q - startEdge.q) * routeDx + (a.r - startEdge.r) * routeDr;
+      const db = (b.q - startEdge.q) * routeDx + (b.r - startEdge.r) * routeDr;
+      return da - db;
+    });
+
+    // Build full path using elevation-aware A*
+    const segments = [startEdge, ...waypoints, endEdge];
+    const fullPath: CubeCoord[] = [];
+    let pathValid = true;
+
+    for (let i = 0; i < segments.length - 1; i++) {
+      const segPath = findHighwayPath(segments[i]!, segments[i + 1]!, terrain, elevation, modifiers, protectedKeys);
+      if (!segPath) {
+        pathValid = false;
+        break;
+      }
+      if (i === 0) {
+        fullPath.push(...segPath);
+      } else {
+        fullPath.push(...segPath.slice(1));
+      }
+    }
+
+    if (!pathValid || fullPath.length < 10) continue;
+
+    // Verify at least 2 cities are on or adjacent to the path
+    const pathKeys = new Set(fullPath.map((h) => hexToKey(h)));
+    const citiesHit = cityCenters.filter((c) => {
+      const ck = hexToKey(c);
+      if (pathKeys.has(ck)) return true;
+      return hexNeighbors(c).some((n) => pathKeys.has(hexToKey(n)));
+    });
+    if (citiesHit.length < 2) continue;
+
+    // Flatten elevation along the route
+    flattenHighwayElevation(fullPath, elevation, protectedKeys);
+
+    // Stamp highway on path
+    for (const hex of fullPath) {
       const key = hexToKey(hex);
       const existing = modifiers.get(key);
-      if (existing === 'river') {
-        // Highway crosses river — becomes a bridge
+      if (existing === 'river' || existing === 'lake') {
         modifiers.set(key, 'bridge');
       } else if (!existing) {
         modifiers.set(key, 'highway');
       }
-      // If already 'bridge' or 'highway', leave it
     }
 
-    usedCities.add(aKey);
-    usedCities.add(bKey);
     highwaysPlaced++;
   }
 }
@@ -964,6 +1248,9 @@ function generateMapAttempt(seed: number): { map: GameMap; fairness: FairnessRes
     }
   }
 
+  // 7.5. Smooth elevation at macro-hex boundaries (taper cliff feet)
+  smoothBoundaryElevation(allHexes, megaHexes, elevation, deployHexKeys);
+
   // 8. Bounding grid size
   const gridSize = computeBoundingGridSize(allHexes);
 
@@ -983,7 +1270,7 @@ function generateMapAttempt(seed: number): { map: GameMap; fairness: FairnessRes
     p1Corner, p2Corner, rng,
   );
 
-  generateHighways(terrain, modifiers, macroCenters, landUse);
+  generateHighways(allHexes, terrain, modifiers, elevation, macroCenters, landUse, deployHexKeys, rng);
 
   // 10.6. Path existence check — rivers must not partition the map
   const pathsValid = validatePathExistence(
@@ -1073,9 +1360,10 @@ export function validateMap(map: GameMap): MapValidation {
     }
   }
 
-  // Check elevation range [0, MTN_PEAK_MAX]
+  // Check elevation range [PLAINS_ELEV_RANGE[0], MTN_PEAK_MAX]
+  const minElev = PLAINS_ELEV_RANGE[0];
   for (const [key, elev] of map.elevation) {
-    if (elev < 0 || elev > MTN_PEAK_MAX) {
+    if (elev < minElev - 0.1 || elev > MTN_PEAK_MAX + 0.1) {
       errors.push(`Elevation at ${key} is out of range: ${elev}`);
       break;
     }
@@ -1086,17 +1374,6 @@ export function validateMap(map: GameMap): MapValidation {
     errors.push(
       `MegaHex assignment count (${map.megaHexes.size}) != terrain count (${map.terrain.size})`,
     );
-  }
-
-  // Check mountain elevation ≥ MTN_BASE_ELEV
-  for (const [key, t] of map.terrain) {
-    if (t === 'mountain') {
-      const elev = map.elevation.get(key) ?? 0;
-      if (elev < MTN_BASE_ELEV - 0.01) {
-        errors.push(`Mountain hex ${key} has elevation ${elev} < ${MTN_BASE_ELEV}`);
-        break;
-      }
-    }
   }
 
   return {

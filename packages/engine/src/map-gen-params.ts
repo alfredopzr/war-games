@@ -128,7 +128,7 @@ export const MTN_SLOPE_NOISE_FREQ = 0.4;
 // -----------------------------------------------------------------------------
 
 /** [min, max] elevation for plains mini-hexes. */
-export const PLAINS_ELEV_RANGE: readonly [number, number] = [0, 1.0];
+export const PLAINS_ELEV_RANGE: readonly [number, number] = [-0.5, 0.5];
 
 /** [min, max] elevation for forest mini-hexes. */
 export const FOREST_ELEV_RANGE: readonly [number, number] = [0.5, 3.0];
@@ -138,6 +138,16 @@ export const CITY_ELEV_RANGE: readonly [number, number] = [0, 1.0];
 
 /** Spatial frequency for non-mountain elevation noise. */
 export const ELEV_NOISE_FREQ = 0.14;
+
+/**
+ * Smoothing iterations for elevation at macro-hex boundaries.
+ * Each iteration blends boundary hexes toward their neighbors' average.
+ * Low = sharp cliffs with slight taper. High = gradual foothills.
+ */
+export const ELEV_BOUNDARY_SMOOTH_PASSES = 4;
+
+/** How many hex rings from a macro-hex boundary are affected by smoothing. */
+export const ELEV_BOUNDARY_SMOOTH_DEPTH = 3;
 
 // -----------------------------------------------------------------------------
 // §9 Fairness Metrics
@@ -202,10 +212,46 @@ export const RIVER_DELTA_BRANCHES = 3;
 export const RIVER_DELTA_MAX_LENGTH = 4;
 
 /** Elevation threshold below which river terminates as delta. */
-export const RIVER_DELTA_ELEV_THRESHOLD = 1.5;
+export const RIVER_DELTA_ELEV_THRESHOLD = 0;
 
 /** Enable highway generation. */
 export const HIGHWAY_ENABLED = true;
 
 /** Number of city-to-city highway routes. */
 export const HIGHWAY_COUNT = 2;
+
+/** Max elevation delta between adjacent highway hexes. */
+export const HIGHWAY_MAX_SLOPE = 0.5;
+
+// -----------------------------------------------------------------------------
+// §10 Elevation Movement
+// -----------------------------------------------------------------------------
+
+/** Extra movement cost per unit of uphill elevation delta. */
+export const CLIMB_COST_PER_ELEV = 0.5;
+
+/** Max elevation delta per step that any unit can traverse without climbing. */
+export const CLIMB_THRESHOLD = 3;
+
+/** Downhill cost multiplier (0 = free, 1 = same as flat). */
+export const DOWNHILL_COST_MULT = 0;
+
+// -----------------------------------------------------------------------------
+// §11 Movement Range Scaling
+// -----------------------------------------------------------------------------
+
+/**
+ * Movement range divisors per unit type.
+ * moveRange = floor(mapDiameter / divisor)
+ * Tuned so units feel distinct but none crosses the full map in one turn.
+ */
+export const MOVE_DIVISOR_INFANTRY = 8;
+export const MOVE_DIVISOR_TANK = 7;
+export const MOVE_DIVISOR_ARTILLERY = 12;
+export const MOVE_DIVISOR_RECON = 5;
+
+/** Highways won't route through hexes above this elevation. */
+export const HIGHWAY_MAX_ELEVATION = 2.0;
+
+/** Smoothing passes to flatten highway hexes after route selection. */
+export const HIGHWAY_SMOOTH_PASSES = 3;
