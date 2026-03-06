@@ -50,8 +50,8 @@ const FINAL_ZOOM = 1.4;
 const FINAL_TILT_DEG = 71;
 const FINAL_TILT_RAD = (FINAL_TILT_DEG * Math.PI) / 180;
 
-/** Extra downward pan to compensate for UI panels covering the bottom of the viewport. */
-const FINAL_PAN_BIAS_Z = -4;
+/** Upward pan bias so the intro lands with more battlefield visible above deploy zone. */
+const FINAL_PAN_BIAS_Z = 33.98;
 
 /** Default tilt from three-scene (60°). */
 const DEFAULT_TILT_RAD = (60 * Math.PI) / 180;
