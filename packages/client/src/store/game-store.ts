@@ -62,6 +62,7 @@ interface GameStore {
 
   // Fog of war
   visibleHexes: Set<string>;
+  exploredHexes: Set<string>;
   lastKnownEnemies: Map<string, { type: UnitType; position: CubeCoord }>;
 
   // Range highlights
@@ -162,6 +163,7 @@ export const useGameStore = create<GameStore>((set) => ({
   commandMode: 'none',
   placementMode: null,
   visibleHexes: new Set<string>(),
+  exploredHexes: new Set<string>(),
   lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
   highlightedHexes: new Set<string>(),
   highlightMode: 'none',
@@ -474,6 +476,7 @@ export const useGameStore = create<GameStore>((set) => ({
       commandMode: 'none',
       placementMode: null,
       visibleHexes: new Set<string>(),
+      exploredHexes: new Set<string>(),
       lastKnownEnemies: new Map<string, { type: UnitType; position: CubeCoord }>(),
       highlightedHexes: new Set<string>(),
       highlightMode: 'none',

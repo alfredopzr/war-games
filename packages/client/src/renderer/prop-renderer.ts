@@ -300,7 +300,7 @@ function computeChunkSphere(positions: { x: number; y: number; z: number }[]): T
 // Rendering
 // ---------------------------------------------------------------------------
 
-export function renderProps(state: GameState, visibleHexes?: Set<string>): void {
+export function renderProps(state: GameState, visibleHexes?: Set<string>, exploredHexes?: Set<string>): void {
   const ctx = getThreeContext();
   if (!ctx) return;
 
@@ -327,8 +327,8 @@ export function renderProps(state: GameState, visibleHexes?: Set<string>): void 
   }
 
   for (const [key, terrain] of state.map.terrain) {
-    // Skip fogged hexes — props hidden by fog of war
-    if (visibleHexes && !visibleHexes.has(key)) continue;
+    // Skip unexplored hexes — props visible on explored + visible hexes
+    if (visibleHexes && !visibleHexes.has(key) && !(exploredHexes && exploredHexes.has(key))) continue;
 
     const [qStr, rStr] = key.split(',');
     const q = Number(qStr);

@@ -122,17 +122,18 @@ function renderScene(state: GameState): void {
   endUnits();
 
   const debugFogOff = store.debugFogOff;
+  const exploredHexes = store.exploredHexes;
 
   if (!debugFogOff) {
     const endProps = perf.start('renderProps');
-    renderProps(state, visibleHexes);
+    renderProps(state, visibleHexes, exploredHexes);
     endProps();
 
     const endFog = perf.start('renderFog');
-    renderFog(allHexes, visibleHexes, state.map.elevation);
+    renderFog(allHexes, visibleHexes, exploredHexes, state.map.elevation);
     endFog();
 
-    renderTopoLines(allHexes, state.map.elevation, visibleHexes);
+    renderTopoLines(allHexes, state.map.elevation, visibleHexes, exploredHexes);
   } else {
     clearFog();
     clearTopoLines();
@@ -161,6 +162,7 @@ export function App(): ReactElement {
   const setHoveredHex = useGameStore((s) => s.setHoveredHex);
 
   const pendingCommands = useGameStore((s) => s.pendingCommands);
+  const exploredHexes = useGameStore((s) => s.exploredHexes);
   const debugFogOff = useGameStore((s) => s.debugFogOff);
   const myPlayerId = useGameStore((s) => s.myPlayerId);
   const gameMode = useGameStore((s) => s.gameMode);
@@ -175,6 +177,16 @@ export function App(): ReactElement {
     const vis = calculateVisibility(friendly, gameState.map.terrain, gameState.map.elevation);
     endCalc();
     setVisibleHexes(vis);
+
+    // Accumulate explored hexes — persists across rounds, but only during combat
+    if (gameState.phase !== 'build') {
+      const prevExplored = useGameStore.getState().exploredHexes;
+      const merged = new Set(prevExplored);
+      for (const k of vis) merged.add(k);
+      if (merged.size !== prevExplored.size) {
+        useGameStore.setState({ exploredHexes: merged });
+      }
+    }
 
     const enemyPlayer = getEnemyPlayer(viewPlayer);
     const enemies = getPlayerUnits(gameState, enemyPlayer);
@@ -274,7 +286,7 @@ export function App(): ReactElement {
         if (gs) {
           syncUnitModels(gs, useGameStore.getState().currentPlayerView, useGameStore.getState().visibleHexes);
           const endRenderProps = perf.start('renderProps');
-          renderProps(gs, useGameStore.getState().visibleHexes);
+          renderProps(gs, useGameStore.getState().visibleHexes, useGameStore.getState().exploredHexes);
           endRenderProps();
         }
         if (!introPlayedRef.current) {
@@ -287,7 +299,7 @@ export function App(): ReactElement {
     const endSync = perf.start('syncUnitModels');
     syncUnitModels(gameState, currentPlayerView, useGameStore.getState().visibleHexes);
     endSync();
-  }, [gameState, selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies, pendingCommands, debugFogOff]);
+  }, [gameState, selectedUnit, currentPlayerView, visibleHexes, exploredHexes, lastKnownEnemies, pendingCommands, debugFogOff]);
 
   // Click handler
   const handleClick = useCallback(

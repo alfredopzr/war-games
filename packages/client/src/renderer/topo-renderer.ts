@@ -26,6 +26,7 @@ export function renderTopoLines(
   allHexes: CubeCoord[],
   elevationMap: Map<string, number>,
   visibleHexes?: Set<string>,
+  exploredHexes?: Set<string>,
 ): void {
   const ctx = getThreeContext();
   if (!ctx) return;
@@ -62,8 +63,10 @@ export function renderTopoLines(
 
       if (neighborElev === undefined) continue;
 
-      // Only draw on fogged terrain
-      if (visibleHexes && visibleHexes.has(key) && visibleHexes.has(neighborKey)) continue;
+      // Only draw topo on unexplored terrain — skip if both hexes are known
+      const hexKnown = visibleHexes?.has(key) || exploredHexes?.has(key);
+      const neighborKnown = visibleHexes?.has(neighborKey) || exploredHexes?.has(neighborKey);
+      if (hexKnown && neighborKnown) continue;
 
       // Deduplicate edges
       const edgeId = key < neighborKey ? `${key}|${neighborKey}` : `${neighborKey}|${key}`;
