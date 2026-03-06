@@ -2,7 +2,7 @@
 // HexWar — A* Pathfinding for Hex Grids
 // =============================================================================
 
-import type { CubeCoord, TerrainType, UnitType, DirectiveType, HexModifier } from './types';
+import type { CubeCoord, TerrainType, UnitType, MovementDirective, HexModifier } from './types';
 import { hexNeighbors, hexToKey, cubeDistance } from './hex';
 import { getMoveCost } from './terrain';
 import { MinHeap } from './min-heap';
@@ -34,7 +34,7 @@ export function findPath(
   terrainMap: Map<string, TerrainType>,
   unitType: UnitType,
   occupiedHexes: Set<string>,
-  directive?: DirectiveType,
+  movementDirective?: MovementDirective,
   modifiers?: Map<string, HexModifier>,
   elevationMap?: Map<string, number>,
 ): CubeCoord[] | null {
@@ -93,7 +93,7 @@ export function findPath(
       // Skip if impassable
       const elevFrom = elevationMap?.get(currentKey);
       const elevTo = elevationMap?.get(neighborKey);
-      const moveCost = getMoveCost(terrain, unitType, directive, modifiers?.get(neighborKey), elevFrom, elevTo);
+      const moveCost = getMoveCost(terrain, unitType, movementDirective, modifiers?.get(neighborKey), elevFrom, elevTo);
       if (moveCost === Infinity) continue;
 
       // Skip if occupied (except destination)
@@ -129,7 +129,7 @@ export function pathCost(
   path: CubeCoord[],
   terrainMap: Map<string, TerrainType>,
   unitType: UnitType,
-  directive?: DirectiveType,
+  movementDirective?: MovementDirective,
   modifiers?: Map<string, HexModifier>,
   elevationMap?: Map<string, number>,
 ): number {
@@ -143,7 +143,7 @@ export function pathCost(
     if (terrain === undefined) return Infinity;
     const elevFrom = elevationMap?.get(prevKey);
     const elevTo = elevationMap?.get(key);
-    const cost = getMoveCost(terrain, unitType, directive, modifiers?.get(key), elevFrom, elevTo);
+    const cost = getMoveCost(terrain, unitType, movementDirective, modifiers?.get(key), elevFrom, elevTo);
     if (cost === Infinity) return Infinity;
     total += cost;
   }
@@ -164,7 +164,7 @@ export function getReachableHexes(
   terrainMap: Map<string, TerrainType>,
   unitType: UnitType,
   occupiedHexes: Set<string>,
-  directive?: DirectiveType,
+  movementDirective?: MovementDirective,
   modifiers?: Map<string, HexModifier>,
   elevationMap?: Map<string, number>,
 ): Set<string> {
@@ -194,7 +194,7 @@ export function getReachableHexes(
 
       const elevFrom = elevationMap?.get(currentKey);
       const elevTo = elevationMap?.get(neighborKey);
-      const cost = getMoveCost(terrain, unitType, directive, modifiers?.get(neighborKey), elevFrom, elevTo);
+      const cost = getMoveCost(terrain, unitType, movementDirective, modifiers?.get(neighborKey), elevFrom, elevTo);
       if (cost === Infinity) continue;
 
       const totalCost = current.g + cost;

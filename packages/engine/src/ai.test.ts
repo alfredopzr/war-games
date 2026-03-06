@@ -16,7 +16,7 @@ describe('aiBuildPhase', () => {
     const game = createGame(42);
     const placements = aiBuildPhase(game, 'player2');
     for (const p of placements) {
-      expect(p.directive).toBeTruthy();
+      expect(p.movementDirective).toBeTruthy();
     }
   });
 

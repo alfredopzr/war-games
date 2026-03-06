@@ -30,13 +30,13 @@ function setupGameWithUnits(): GameState {
   const p1Zone = state.map.player1Deployment;
   const p2Zone = state.map.player2Deployment;
 
-  placeUnit(state, 'player1', 'infantry', p1Zone[0]!, 'advance');
-  placeUnit(state, 'player1', 'recon', p1Zone[1]!, 'scout');
-  placeUnit(state, 'player1', 'tank', p1Zone[2]!, 'hold');
+  placeUnit(state, 'player1', 'infantry', p1Zone[0]!, 'advance', 'shoot-on-sight');
+  placeUnit(state, 'player1', 'recon', p1Zone[1]!, 'scout', 'ignore');
+  placeUnit(state, 'player1', 'tank', p1Zone[2]!, 'hold', 'shoot-on-sight');
 
-  placeUnit(state, 'player2', 'infantry', p2Zone[0]!, 'flank-left');
-  placeUnit(state, 'player2', 'artillery', p2Zone[1]!, 'support');
-  placeUnit(state, 'player2', 'recon', p2Zone[2]!, 'flank-right');
+  placeUnit(state, 'player2', 'infantry', p2Zone[0]!, 'flank-left', 'shoot-on-sight');
+  placeUnit(state, 'player2', 'artillery', p2Zone[1]!, 'advance', 'ignore', 'support');
+  placeUnit(state, 'player2', 'recon', p2Zone[2]!, 'flank-right', 'shoot-on-sight');
 
   return state;
 }
@@ -70,7 +70,7 @@ describe('filterStateForPlayer — build phase', () => {
     expect(filtered.players.player1.units).toHaveLength(3);
 
     // Verify directives are preserved for own units
-    const directives = filtered.players.player1.units.map((u) => u.directive);
+    const directives = filtered.players.player1.units.map((u) => u.movementDirective);
     expect(directives).toContain('advance');
     expect(directives).toContain('scout');
     expect(directives).toContain('hold');
@@ -123,7 +123,7 @@ describe('filterStateForPlayer — battle phase', () => {
     // Move a player2 unit close to player1 so it's visible
     const p1Pos = state.players.player1.units[0]!.position;
     const enemyUnit = state.players.player2.units[0]!;
-    enemyUnit.directive = 'flank-left';
+    enemyUnit.movementDirective = 'flank-left';
 
     // Place enemy adjacent to player1's first unit
     enemyUnit.position = {
@@ -146,11 +146,11 @@ describe('filterStateForPlayer — battle phase', () => {
 
     // ALL enemy unit directives must be 'advance' (stripped)
     for (const unit of visibleEnemies) {
-      expect(unit.directive).toBe('advance');
+      expect(unit.movementDirective).toBe('advance');
     }
 
     // The actual server-side directive should still be 'flank-left'
-    expect(state.players.player2.units[0]!.directive).toBe('flank-left');
+    expect(state.players.player2.units[0]!.movementDirective).toBe('flank-left');
   });
 
   it('should preserve own unit directives in battle phase', () => {
@@ -161,7 +161,7 @@ describe('filterStateForPlayer — battle phase', () => {
 
     // Own units keep their real directives
     const ownDirectives = filtered.players.player1.units.map(
-      (u) => u.directive,
+      (u) => u.movementDirective,
     );
     expect(ownDirectives).toContain('advance');
     expect(ownDirectives).toContain('scout');
@@ -325,8 +325,8 @@ describe('filterStateForPlayer — serialization', () => {
     expect(p2View.players.player1.units).toHaveLength(0);
 
     // The own-unit directives should differ
-    const p1Directives = p1View.players.player1.units.map((u) => u.directive);
-    const p2Directives = p2View.players.player2.units.map((u) => u.directive);
+    const p1Directives = p1View.players.player1.units.map((u) => u.movementDirective);
+    const p2Directives = p2View.players.player2.units.map((u) => u.movementDirective);
     expect(p1Directives).not.toEqual(p2Directives);
   });
 });
@@ -340,7 +340,7 @@ describe('filterStateForPlayer — mutation safety', () => {
     const state = setupGameWithUnits();
     const originalP2UnitCount = state.players.player2.units.length;
     const originalP2Directives = state.players.player2.units.map(
-      (u) => u.directive,
+      (u) => u.movementDirective,
     );
 
     filterStateForPlayer(state, 'player1');
@@ -348,7 +348,7 @@ describe('filterStateForPlayer — mutation safety', () => {
     // Original state must be unchanged
     expect(state.players.player2.units).toHaveLength(originalP2UnitCount);
     const afterDirectives = state.players.player2.units.map(
-      (u) => u.directive,
+      (u) => u.movementDirective,
     );
     expect(afterDirectives).toEqual(originalP2Directives);
   });

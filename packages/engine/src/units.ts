@@ -1,4 +1,4 @@
-import type { UnitType, UnitStats, Unit, PlayerId, CubeCoord, DirectiveType, DirectiveTarget } from './types';
+import type { UnitType, UnitStats, Unit, PlayerId, CubeCoord, MovementDirective, AttackDirective, SpecialtyModifier, DirectiveTarget } from './types';
 import {
   MOVE_DIVISOR_INFANTRY, MOVE_DIVISOR_TANK,
   MOVE_DIVISOR_ARTILLERY, MOVE_DIVISOR_RECON,
@@ -93,7 +93,9 @@ export function createUnit(
   type: UnitType,
   owner: PlayerId,
   position: CubeCoord,
-  directive: DirectiveType = 'advance',
+  movementDirective: MovementDirective = 'advance',
+  attackDirective: AttackDirective = 'ignore',
+  specialtyModifier: SpecialtyModifier | null = null,
   directiveTarget: DirectiveTarget = { type: 'central-objective' },
 ): Unit {
   unitIdCounter += 1;
@@ -103,7 +105,9 @@ export function createUnit(
     owner,
     hp: UNIT_STATS[type].maxHp,
     position,
-    directive,
+    movementDirective,
+    attackDirective,
+    specialtyModifier,
     directiveTarget,
     hasActed: false,
   };

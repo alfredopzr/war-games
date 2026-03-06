@@ -148,7 +148,13 @@ beforeAll(
 
         socket.on(
           'place-unit',
-          (data: { unitType: string; position: { q: number; r: number; s: number }; directive: string }) => {
+          (data: {
+            unitType: string;
+            position: { q: number; r: number; s: number };
+            movementDirective: string;
+            attackDirective: string;
+            specialtyModifier: string | null;
+          }) => {
             const found = getRoomBySocket(socket.id);
             if (!found) return;
             try {
@@ -157,7 +163,9 @@ beforeAll(
                 found.playerId,
                 data.unitType as Parameters<typeof handlePlaceUnit>[2],
                 data.position,
-                data.directive as Parameters<typeof handlePlaceUnit>[4],
+                data.movementDirective as Parameters<typeof handlePlaceUnit>[4],
+                data.attackDirective as Parameters<typeof handlePlaceUnit>[5],
+                data.specialtyModifier as Parameters<typeof handlePlaceUnit>[6],
                 ioServer,
               );
             } catch (err) {
@@ -182,7 +190,12 @@ beforeAll(
           }
         });
 
-        socket.on('set-directive', (data: { unitId: string; directive: string }) => {
+        socket.on('set-directive', (data: {
+          unitId: string;
+          movementDirective: string;
+          attackDirective: string;
+          specialtyModifier: string | null;
+        }) => {
           const found = getRoomBySocket(socket.id);
           if (!found) return;
           try {
@@ -190,7 +203,9 @@ beforeAll(
               found.room,
               found.playerId,
               data.unitId,
-              data.directive as Parameters<typeof handleSetDirective>[3],
+              data.movementDirective as Parameters<typeof handleSetDirective>[3],
+              data.attackDirective as Parameters<typeof handleSetDirective>[4],
+              data.specialtyModifier as Parameters<typeof handleSetDirective>[5],
               ioServer,
             );
           } catch (err) {
@@ -423,7 +438,9 @@ describe('Build Phase', () => {
       client1.emit('place-unit', {
         unitType: 'infantry',
         position: deployHex,
-        directive: 'advance',
+        movementDirective: 'advance',
+        attackDirective: 'ignore',
+        specialtyModifier: null,
       });
       const update = await stateUpdate;
       expect(update.state).toBeTruthy();

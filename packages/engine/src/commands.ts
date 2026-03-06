@@ -1,4 +1,4 @@
-import type { Command, CommandPool, DirectiveType, DirectiveTarget } from './types';
+import type { Command, CommandPool, MovementDirective, DirectiveTarget } from './types';
 
 export const CP_PER_ROUND = 4;
 
@@ -9,16 +9,12 @@ export function createCommandPool(): CommandPool {
   };
 }
 
-function getUnitId(command: Command): string {
-  return command.unitId;
-}
-
 export function spendCommand(pool: CommandPool, command: Command): CommandPool {
   if (pool.remaining <= 0) {
     throw new Error('No command points remaining');
   }
 
-  const unitId = getUnitId(command);
+  const unitId = command.unitId;
 
   if (pool.commandedUnitIds.has(unitId)) {
     throw new Error(`Unit ${unitId} already commanded this turn`);
@@ -38,13 +34,12 @@ export function canIssueCommand(pool: CommandPool, unitId: string): boolean {
 }
 
 export function validateDirectiveTarget(
-  directive: DirectiveType,
+  movementDirective: MovementDirective,
   target: DirectiveTarget,
 ): void {
-  if (directive === 'hunt' && target.type !== 'enemy-unit') {
-    throw new Error('Hunt directive requires an enemy-unit target');
-  }
-  if (directive === 'capture' && target.type !== 'city') {
-    throw new Error('Capture directive requires a city target');
-  }
+  // No directive-specific target validation needed anymore.
+  // Capture was removed as a directive, hunt target is validated on Command's DirectiveTarget.
+  // Keep function signature for future validation needs.
+  void movementDirective;
+  void target;
 }

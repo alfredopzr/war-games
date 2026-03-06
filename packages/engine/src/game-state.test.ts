@@ -167,9 +167,9 @@ describe('placeUnit', () => {
   it('places unit with custom directive', () => {
     let state = makeGame();
     const hex = getDeploymentHex(state, 'player1', 0);
-    state = placeUnit(state, 'player1', 'infantry', hex, 'hold');
+    state = placeUnit(state, 'player1', 'infantry', hex, 'hold', 'ignore', null);
 
-    expect(state.players.player1.units[0]!.directive).toBe('hold');
+    expect(state.players.player1.units[0]!.movementDirective).toBe('hold');
   });
 });
 
@@ -247,25 +247,23 @@ describe('startBattlePhase', () => {
 describe('executeTurn', () => {
   beforeEach(() => resetUnitIdCounter());
 
-  it('commanded units execute their move commands', () => {
+  it('commanded units execute their redirect commands', () => {
     let state = setupBattleGame();
     const unit = state.players.player1.units[0]!;
     const unitId = unit.id;
 
-    // Find a valid adjacent hex that's on the map and unoccupied
-    const targetHex = findValidMoveTarget(state, unit);
-    if (!targetHex) return; // Skip if no valid target (unlikely)
-
+    // Redirect the unit to hold and shoot-on-sight
     const commands: Command[] = [
-      { type: 'direct-move', unitId, targetHex },
+      { type: 'redirect', unitId, newMovementDirective: 'hold', newAttackDirective: 'shoot-on-sight', newSpecialtyModifier: null },
     ];
 
     state = executeTurn(state, commands);
 
-    // Unit should have moved
-    const movedUnit = state.players.player1.units.find((u) => u.id === unitId);
-    expect(movedUnit).toBeDefined();
-    expect(hexToKey(movedUnit!.position)).toBe(hexToKey(targetHex));
+    // Unit should have its directive updated
+    const updated = state.players.player1.units.find((u) => u.id === unitId);
+    expect(updated).toBeDefined();
+    expect(updated!.movementDirective).toBe('hold');
+    expect(updated!.attackDirective).toBe('shoot-on-sight');
   });
 
   it('non-commanded units execute directives', () => {
@@ -300,9 +298,9 @@ describe('executeTurn', () => {
     attacker.position = createHex(4, 0);
     defender.position = createHex(5, 0);
 
-    // Verify they can attack each other
+    // Redirect attacker to hunt the defender
     const commands: Command[] = [
-      { type: 'direct-attack', unitId: attacker.id, targetUnitId: defender.id },
+      { type: 'redirect', unitId: attacker.id, newMovementDirective: attacker.movementDirective, newAttackDirective: 'hunt', newSpecialtyModifier: null, target: { type: 'enemy-unit', unitId: defender.id } },
     ];
 
     const defenderHpBefore = defender.hp;
@@ -346,164 +344,16 @@ describe('executeTurn', () => {
   it('redirect command changes unit directive', () => {
     let state = setupBattleGame();
     const unit = state.players.player1.units[0]!;
-    expect(unit.directive).toBe('advance');
+    expect(unit.movementDirective).toBe('advance');
 
     const commands: Command[] = [
-      { type: 'redirect', unitId: unit.id, newDirective: 'hold' },
+      { type: 'redirect', unitId: unit.id, newMovementDirective: 'hold', newAttackDirective: 'ignore', newSpecialtyModifier: null },
     ];
 
     state = executeTurn(state, commands);
     // Directive should be changed
     const updated = state.players.player1.units.find((u) => u.id === unit.id);
-    expect(updated?.directive).toBe('hold');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// direct-move pathfinding + cost budget
-// ---------------------------------------------------------------------------
-
-describe('direct-move pathfinding', () => {
-  beforeEach(() => resetUnitIdCounter());
-
-  it('respects terrain cost budget (forest costs 2)', () => {
-    let state = setupBattleGame();
-    const unit = state.players.player1.units[0]!;
-
-    // Build a straight line of hexes: start at (0,0), path through (1,-1), (2,-2), (3,-3)
-    const start = createHex(0, 0);
-    const mid1 = createHex(1, -1);
-    const mid2 = createHex(2, -2);
-    const target = createHex(3, -3);
-
-    // Clear map and set only these hexes so pathfinder has no alternate routes
-    state.map.terrain.clear();
-    state.map.elevation.clear();
-    state.map.modifiers.clear();
-    state.map.terrain.set(hexToKey(start), 'plains');
-    state.map.terrain.set(hexToKey(mid1), 'forest');
-    state.map.terrain.set(hexToKey(mid2), 'forest');
-    state.map.terrain.set(hexToKey(target), 'forest');
-    state.map.elevation.set(hexToKey(start), 0);
-    state.map.elevation.set(hexToKey(mid1), 0);
-    state.map.elevation.set(hexToKey(mid2), 0);
-    state.map.elevation.set(hexToKey(target), 0);
-
-    unit.position = start;
-    state.unitStats = { ...UNIT_STATS };
-
-    // Infantry moveRange = 3, forest cost = 2 each
-    // Path: start -> mid1 (cost 2) -> mid2 (cost 2) = total 4, exceeds budget of 3
-    // Unit should only reach mid1
-    const commands: Command[] = [
-      { type: 'direct-move', unitId: unit.id, targetHex: target },
-    ];
-
-    state = executeTurn(state, commands);
-
-    const moved = state.players.player1.units.find((u) => u.id === unit.id)!;
-    expect(hexToKey(moved.position)).toBe(hexToKey(mid1));
-  });
-
-  it('blocked by river modifier (impassable)', () => {
-    let state = setupBattleGame();
-    const unit = state.players.player1.units[0]!;
-
-    const start = createHex(0, 0);
-    const riverHex = createHex(1, -1);
-    const target = createHex(2, -2);
-
-    // Clear map so pathfinder has no alternate routes around the river
-    state.map.terrain.clear();
-    state.map.elevation.clear();
-    state.map.modifiers.clear();
-    state.map.terrain.set(hexToKey(start), 'plains');
-    state.map.terrain.set(hexToKey(riverHex), 'plains');
-    state.map.terrain.set(hexToKey(target), 'plains');
-    state.map.elevation.set(hexToKey(start), 0);
-    state.map.elevation.set(hexToKey(riverHex), 0);
-    state.map.elevation.set(hexToKey(target), 0);
-    state.map.modifiers.set(hexToKey(riverHex), 'river');
-
-    unit.position = start;
-    const startKey = hexToKey(start);
-
-    const commands: Command[] = [
-      { type: 'direct-move', unitId: unit.id, targetHex: target },
-    ];
-
-    state = executeTurn(state, commands);
-
-    const moved = state.players.player1.units.find((u) => u.id === unit.id)!;
-    // Unit should stay put or path around — if no alternate path, stays at start
-    // With only 3 hexes in a line and the middle one is river, no alternate path exists
-    expect(hexToKey(moved.position)).toBe(startKey);
-  });
-
-  it('blocked by elevation for non-climbers (tank)', () => {
-    let state = makeGame(42);
-    // Place a tank
-    const tankHex = getDeploymentHex(state, 'player1', 0);
-    state = placeUnit(state, 'player1', 'tank', tankHex);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const tank = state.players.player1.units[0]!;
-
-    const start = createHex(0, 0);
-    const cliffHex = createHex(1, -1);
-
-    state.map.terrain.set(hexToKey(start), 'plains');
-    state.map.terrain.set(hexToKey(cliffHex), 'plains');
-    state.map.elevation.set(hexToKey(start), 0);
-    state.map.elevation.set(hexToKey(cliffHex), 5); // delta 5 > CLIMB_THRESHOLD (3)
-    state.map.modifiers.delete(hexToKey(start));
-    state.map.modifiers.delete(hexToKey(cliffHex));
-
-    tank.position = start;
-
-    const commands: Command[] = [
-      { type: 'direct-move', unitId: tank.id, targetHex: cliffHex },
-    ];
-
-    state = executeTurn(state, commands);
-
-    const moved = state.players.player1.units.find((u) => u.id === tank.id)!;
-    expect(hexToKey(moved.position)).toBe(hexToKey(start));
-  });
-
-  it('paths around occupied hexes', () => {
-    let state = setupBattleGame();
-    const unit = state.players.player1.units[0]!;
-    const blocker = state.players.player2.units[0]!;
-
-    // Line: start(0,0) -> blocked(1,-1) -> target(2,-2)
-    // Alternate route exists via (1,0) -> (2,-1) -> (2,-2)
-    const start = createHex(0, 0);
-    const blockedHex = createHex(1, -1);
-    const target = createHex(2, -2);
-    const alt1 = createHex(1, 0);
-    const alt2 = createHex(2, -1);
-
-    for (const hex of [start, blockedHex, target, alt1, alt2]) {
-      state.map.terrain.set(hexToKey(hex), 'plains');
-      state.map.elevation.set(hexToKey(hex), 0);
-      state.map.modifiers.delete(hexToKey(hex));
-    }
-
-    unit.position = start;
-    blocker.position = blockedHex;
-
-    const commands: Command[] = [
-      { type: 'direct-move', unitId: unit.id, targetHex: target },
-    ];
-
-    state = executeTurn(state, commands);
-
-    const moved = state.players.player1.units.find((u) => u.id === unit.id)!;
-    // Unit should have moved toward target via alternate route
-    // With moveRange 3 and all plains (cost 1 each), the 3-step alternate route is reachable
-    expect(hexToKey(moved.position)).not.toBe(hexToKey(start));
+    expect(updated?.movementDirective).toBe('hold');
   });
 });
 
@@ -651,8 +501,8 @@ describe('scout units execute first', () => {
     // Place a scout and an advance unit
     const scoutHex = getDeploymentHex(state, 'player1', 0);
     const advanceHex = getDeploymentHex(state, 'player1', 1);
-    state = placeUnit(state, 'player1', 'recon', scoutHex, 'scout');
-    state = placeUnit(state, 'player1', 'infantry', advanceHex, 'advance');
+    state = placeUnit(state, 'player1', 'recon', scoutHex, 'scout', 'ignore', null);
+    state = placeUnit(state, 'player1', 'infantry', advanceHex, 'advance', 'ignore', null);
     state = placeInfantry(state, 'player2', 0);
     state = startBattlePhase(state);
 
@@ -677,8 +527,8 @@ describe('support directive heals adjacent', () => {
     // Place support unit and a damaged friendly adjacent to each other
     const supportHex = getDeploymentHex(state, 'player1', 0);
     const damagedHex = getDeploymentHex(state, 'player1', 1);
-    state = placeUnit(state, 'player1', 'infantry', supportHex, 'support');
-    state = placeUnit(state, 'player1', 'infantry', damagedHex, 'advance');
+    state = placeUnit(state, 'player1', 'infantry', supportHex, 'hold', 'ignore', 'support');
+    state = placeUnit(state, 'player1', 'infantry', damagedHex, 'advance', 'ignore', null);
     state = placeInfantry(state, 'player2', 0);
     state = startBattlePhase(state);
 
@@ -1172,24 +1022,3 @@ function findCoordForKey(_state: GameState, key: string): CubeCoord | null {
   return createHex(parts[0]!, parts[1]!);
 }
 
-function findValidMoveTarget(state: GameState, unit: { position: CubeCoord; type: string }): CubeCoord | null {
-  const neighbors = [
-    createHex(unit.position.q + 1, unit.position.r),
-    createHex(unit.position.q - 1, unit.position.r),
-    createHex(unit.position.q, unit.position.r + 1),
-    createHex(unit.position.q, unit.position.r - 1),
-    createHex(unit.position.q + 1, unit.position.r - 1),
-    createHex(unit.position.q - 1, unit.position.r + 1),
-  ];
-
-  const allUnits = [...state.players.player1.units, ...state.players.player2.units];
-  const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
-
-  for (const hex of neighbors) {
-    const key = hexToKey(hex);
-    if (state.map.terrain.has(key) && !occupiedKeys.has(key)) {
-      return hex;
-    }
-  }
-  return null;
-}

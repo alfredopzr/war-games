@@ -74,9 +74,11 @@ export interface UnitStats {
   readonly canClimb: boolean;
 }
 
-export type DirectiveType = 'advance' | 'hold' | 'flank-left' | 'flank-right' | 'scout' | 'support' | 'hunt' | 'capture';
+export type MovementDirective = 'advance' | 'flank-left' | 'flank-right' | 'scout' | 'hold';
+export type AttackDirective = 'shoot-on-sight' | 'skirmish' | 'retreat-on-contact' | 'hunt' | 'ignore';
+export type SpecialtyModifier = 'support' | 'engineer' | 'sniper';
 
-export type DirectiveTargetType = 'central-objective' | 'city' | 'enemy-unit' | 'friendly-unit' | 'hex';
+export type DirectiveTargetType = 'central-objective' | 'city' | 'enemy-unit' | 'friendly-unit' | 'hex' | 'deployment-zone';
 
 export interface DirectiveTarget {
   readonly type: DirectiveTargetType;
@@ -93,7 +95,9 @@ export interface Unit {
   readonly owner: PlayerId;
   hp: number;
   position: CubeCoord;
-  directive: DirectiveType;
+  movementDirective: MovementDirective;
+  attackDirective: AttackDirective;
+  specialtyModifier: SpecialtyModifier | null;
   directiveTarget: DirectiveTarget;
   hasActed: boolean;
 }
@@ -107,11 +111,14 @@ export type UnitAction =
   | { type: 'attack'; targetUnitId: string }
   | { type: 'hold' };
 
-export type Command =
-  | { type: 'redirect'; unitId: string; newDirective: DirectiveType; target?: DirectiveTarget }
-  | { type: 'direct-move'; unitId: string; targetHex: CubeCoord }
-  | { type: 'direct-attack'; unitId: string; targetUnitId: string }
-  | { type: 'retreat'; unitId: string };
+export interface Command {
+  type: 'redirect';
+  unitId: string;
+  newMovementDirective: MovementDirective;
+  newAttackDirective: AttackDirective;
+  newSpecialtyModifier: SpecialtyModifier | null;
+  target?: DirectiveTarget;
+}
 
 export interface CommandPool {
   remaining: number;
@@ -217,6 +224,8 @@ export interface DirectiveContext {
   centralObjective: CubeCoord;
   cities: Map<string, PlayerId | null>;
   unitStats: Record<UnitType, UnitStats>;
+  mapRadius: number;
+  deploymentZone: CubeCoord[];
 }
 
 export interface ResolvedTarget {
@@ -276,7 +285,9 @@ export interface ClientPlaceUnit {
   readonly type: 'place-unit';
   readonly unitType: UnitType;
   readonly position: CubeCoord;
-  readonly directive: DirectiveType;
+  readonly movementDirective: MovementDirective;
+  readonly attackDirective: AttackDirective;
+  readonly specialtyModifier: SpecialtyModifier | null;
   readonly target?: DirectiveTarget;
 }
 
@@ -288,7 +299,9 @@ export interface ClientRemoveUnit {
 export interface ClientSetDirective {
   readonly type: 'set-directive';
   readonly unitId: string;
-  readonly directive: DirectiveType;
+  readonly movementDirective: MovementDirective;
+  readonly attackDirective: AttackDirective;
+  readonly specialtyModifier: SpecialtyModifier | null;
   readonly target?: DirectiveTarget;
 }
 

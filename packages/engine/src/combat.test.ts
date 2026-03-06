@@ -15,7 +15,9 @@ function makeUnit(
     owner: overrides.owner,
     hp: overrides.hp ?? 10,
     position: overrides.position,
-    directive: overrides.directive ?? 'advance',
+    movementDirective: overrides.movementDirective ?? 'advance',
+    attackDirective: overrides.attackDirective ?? 'ignore',
+    specialtyModifier: overrides.specialtyModifier ?? null,
     directiveTarget: overrides.directiveTarget ?? { type: 'central-objective' },
     hasActed: overrides.hasActed ?? false,
   };
@@ -69,8 +71,8 @@ describe('calculateDamage', () => {
     // Use mountain (defMod=0.4): without hold = max(1,floor(6-2*0.4))=max(1,5)=5
     //                             with hold = max(1,floor(6-3*0.4))=max(1,4)=4
     const attacker = makeUnit({ type: 'tank', owner: 'player1', position: origin });
-    const defenderNoHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, directive: 'advance' });
-    const defenderHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, directive: 'hold' });
+    const defenderNoHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, movementDirective: 'advance' });
+    const defenderHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, movementDirective: 'hold' });
 
     const damageNoHold = calculateDamage(attacker, defenderNoHold, 'mountain', () => 1.0);
     const damageHold = calculateDamage(attacker, defenderHold, 'mountain', () => 1.0);

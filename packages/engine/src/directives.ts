@@ -1,8 +1,9 @@
 // =============================================================================
 // HexWar — Directive AI System
 // =============================================================================
-// Each unit has a directive that determines its autonomous behavior.
-// executeDirective() returns a UnitAction for the given unit based on context.
+// Each unit has a movement directive + attack directive that determines its
+// autonomous behavior. executeDirective() returns a UnitAction for the given
+// unit based on context.
 // =============================================================================
 
 import type { Unit, UnitAction, DirectiveContext, CubeCoord, ResolvedTarget } from './types';
@@ -69,6 +70,18 @@ export function resolveTarget(unit: Unit, context: DirectiveContext): ResolvedTa
       unit.directiveTarget = { type: 'central-objective' };
       return { hex: context.centralObjective, isValid: false };
     }
+
+    case 'deployment-zone': {
+      const nearest = context.deploymentZone
+        .filter(hex => {
+          const key = hexToKey(hex);
+          const occupied = context.friendlyUnits.some(u => u.id !== unit.id && hexToKey(u.position) === key)
+            || context.enemyUnits.some(u => hexToKey(u.position) === key);
+          return !occupied;
+        })
+        .sort((a, b) => cubeDistance(unit.position, a) - cubeDistance(unit.position, b))[0];
+      return { hex: nearest ?? unit.position, isValid: !!nearest };
+    }
   }
 }
 
@@ -76,23 +89,48 @@ export function resolveTarget(unit: Unit, context: DirectiveContext): ResolvedTa
  * Execute a unit's directive, returning the action it should take this turn.
  */
 export function executeDirective(unit: Unit, context: DirectiveContext): UnitAction {
-  switch (unit.directive) {
-    case 'advance':
-      return executeAdvance(unit, context);
-    case 'hold':
-      return executeHold(unit, context);
-    case 'flank-left':
-      return executeFlank(unit, context, 'left');
-    case 'flank-right':
-      return executeFlank(unit, context, 'right');
-    case 'scout':
-      return executeScout(unit, context);
-    case 'support':
-      return executeSupport(unit, context);
-    case 'hunt':
-      return executeHunt(unit, context);
-    case 'capture':
-      return executeCapture(unit, context);
+  // Specialty modifiers with custom behavior (TEMPORARY: overrides movement.
+  // When combat timeline lands, these move to Phase 8 and movement always runs.)
+  if (unit.specialtyModifier === 'support') return executeSupport(unit, context);
+  // 'engineer' and 'sniper' are no-ops, fall through to movement
+
+  switch (unit.movementDirective) {
+    case 'advance': return executeAdvance(unit, context);
+    case 'hold': return executeHold(unit, context);
+    case 'flank-left': return executeFlank(unit, context, 'left');
+    case 'flank-right': return executeFlank(unit, context, 'right');
+    case 'scout': return executeScout(unit, context);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Attack Layer Wiring
+// -----------------------------------------------------------------------------
+
+/**
+ * Check the attack layer and return an action if engagement should occur.
+ * Returns null if attack layer is 'ignore' or no valid target exists.
+ */
+export function resolveAttackBehavior(unit: Unit, context: DirectiveContext): UnitAction | null {
+  if (unit.attackDirective === 'ignore') return null;
+
+  const nearest = findClosestAttackableEnemy(unit, context);
+  if (!nearest) return null;
+
+  switch (unit.attackDirective) {
+    case 'shoot-on-sight':
+    case 'hunt':       // temporary: same as shoot-on-sight until vision gating
+    case 'skirmish':   // temporary: same as shoot-on-sight until combat timeline
+      if (canAttack(unit, nearest)) return { type: 'attack', targetUnitId: nearest.id };
+      return null;
+    case 'retreat-on-contact': {
+      // Enemy in detection range -> flee toward deployment zone
+      const nearestEnemy = findNearestEnemy(unit, context);
+      if (nearestEnemy && cubeDistance(unit.position, nearestEnemy.position) <= context.unitStats[unit.type].visionRange) {
+        return retreatFrom(unit, context, nearestEnemy);
+      }
+      return null;
+    }
   }
 }
 
@@ -101,7 +139,7 @@ export function executeDirective(unit: Unit, context: DirectiveContext): UnitAct
 // -----------------------------------------------------------------------------
 
 function executeAdvance(unit: Unit, context: DirectiveContext): UnitAction {
-  const attackAction = tryAttackClosest(unit, context);
+  const attackAction = resolveAttackBehavior(unit, context);
   if (attackAction) return attackAction;
 
   const resolved = resolveTarget(unit, context);
@@ -109,7 +147,7 @@ function executeAdvance(unit: Unit, context: DirectiveContext): UnitAction {
 }
 
 function executeHold(unit: Unit, context: DirectiveContext): UnitAction {
-  const attackAction = tryAttackClosest(unit, context);
+  const attackAction = resolveAttackBehavior(unit, context);
   if (attackAction) return attackAction;
 
   const resolved = resolveTarget(unit, context);
@@ -126,45 +164,53 @@ function executeFlank(
   context: DirectiveContext,
   side: 'left' | 'right',
 ): UnitAction {
-  const attackAction = tryAttackClosest(unit, context);
+  const attackAction = resolveAttackBehavior(unit, context);
   if (attackAction) return attackAction;
 
   const resolved = resolveTarget(unit, context);
   const objective = resolved.hex;
+  const mapDiameter = context.mapRadius * 2;
+  const flankOffset = Math.max(2, Math.floor(mapDiameter * 0.25));
 
-  // Compute an intermediate waypoint offset from the objective.
-  // "Left" = lower q, "Right" = higher q.
-  // We pick a point that's laterally offset from the objective so the unit
-  // arcs around instead of going straight.
-  const offsets = side === 'left' ? [-5, -4, -3] : [5, 4, 3];
+  // Vector from unit to objective
+  const dq = objective.q - unit.position.q;
+  const dr = objective.r - unit.position.r;
 
+  // Perpendicular in cube coords: rotate 60 degrees left or right
+  // Left rotation: (q,r,s) -> (-r,-s,-q)
+  // Right rotation: (q,r,s) -> (-s,-q,-r)
+  const ds = -dq - dr;
+  let pq: number, pr: number;
+  if (side === 'left') {
+    pq = -dr; pr = -ds;
+  } else {
+    pq = -ds; pr = -dq;
+  }
+
+  // Normalize perpendicular to unit length, scale by flankOffset
+  const len = Math.max(Math.abs(pq), Math.abs(pr), Math.abs(pq + pr)) || 1;
+  const scale = flankOffset / len;
+
+  // Validate waypoint is on map, fall back to progressively closer offsets
   let intermediateTarget: CubeCoord = objective;
-  for (const offset of offsets) {
-    const candidate = createHex(objective.q + offset, objective.r);
-    const key = hexToKey(candidate);
-    // Must be on-map and not the unit's current position
-    if (
-      context.terrain.has(key) &&
-      !(candidate.q === unit.position.q && candidate.r === unit.position.r)
-    ) {
+  for (let f = 1.0; f >= 0.25; f -= 0.25) {
+    const cq = Math.round(objective.q + pq * scale * f);
+    const cr = Math.round(objective.r + pr * scale * f);
+    const candidate = createHex(cq, cr);
+    if (context.terrain.has(hexToKey(candidate))) {
       intermediateTarget = candidate;
       break;
     }
-  }
-
-  // If the intermediate target is the same as our position, just go to objective
-  if (
-    intermediateTarget.q === unit.position.q &&
-    intermediateTarget.r === unit.position.r
-  ) {
-    intermediateTarget = objective;
   }
 
   return moveToward(unit, context, intermediateTarget);
 }
 
 function executeScout(unit: Unit, context: DirectiveContext): UnitAction {
-  // Check for adjacent enemies (distance 1)
+  const attackAction = resolveAttackBehavior(unit, context);
+  if (attackAction) return attackAction;
+
+  // Check for adjacent enemies (distance 1) — scout-specific retreat behavior
   const nearestEnemy = findNearestEnemy(unit, context);
   if (nearestEnemy && cubeDistance(unit.position, nearestEnemy.position) === 1) {
     // Retreat: move to neighbor hex that maximizes distance from nearest enemy
@@ -183,7 +229,7 @@ function executeScout(unit: Unit, context: DirectiveContext): UnitAction {
 }
 
 function executeSupport(unit: Unit, context: DirectiveContext): UnitAction {
-  const attackAction = tryAttackClosest(unit, context);
+  const attackAction = resolveAttackBehavior(unit, context);
   if (attackAction) return attackAction;
 
   if (unit.directiveTarget.type === 'friendly-unit') {
@@ -216,52 +262,14 @@ function executeSupport(unit: Unit, context: DirectiveContext): UnitAction {
   return moveToward(unit, context, nearbyFriendly.position);
 }
 
-function executeHunt(unit: Unit, context: DirectiveContext): UnitAction {
-  const resolved = resolveTarget(unit, context);
-
-  const targetEnemy = context.enemyUnits.find((e) => e.id === unit.directiveTarget.unitId);
-  if (targetEnemy && canAttack(unit, targetEnemy)) {
-    return { type: 'attack', targetUnitId: targetEnemy.id };
-  }
-
-  const attackAction = tryAttackClosest(unit, context);
-  if (attackAction) return attackAction;
-
-  return moveToward(unit, context, resolved.hex);
-}
-
-function executeCapture(unit: Unit, context: DirectiveContext): UnitAction {
-  const resolved = resolveTarget(unit, context);
-  const dist = cubeDistance(unit.position, resolved.hex);
-
-  if (dist === 0) {
-    const cityKey = `${resolved.hex.q},${resolved.hex.r}`;
-    const owner = context.cities.get(cityKey);
-    if (owner === unit.owner) {
-      const nextCity = findNearestEnemyCity(unit, context);
-      if (nextCity) {
-        unit.directiveTarget = { type: 'city', cityId: nextCity.key };
-        return moveToward(unit, context, nextCity.hex);
-      }
-      return { type: 'hold' };
-    }
-    return { type: 'hold' };
-  }
-
-  const attackAction = tryAttackClosest(unit, context);
-  if (attackAction) return attackAction;
-
-  return moveToward(unit, context, resolved.hex);
-}
-
 // -----------------------------------------------------------------------------
 // Shared Helpers
 // -----------------------------------------------------------------------------
 
 /**
- * Try to attack the closest enemy in range. If tied on distance, prefer lower HP.
+ * Find the closest enemy in attack range. If tied on distance, prefer lower HP.
  */
-function tryAttackClosest(unit: Unit, context: DirectiveContext): UnitAction | null {
+function findClosestAttackableEnemy(unit: Unit, context: DirectiveContext): Unit | null {
   const targets: { enemy: Unit; distance: number }[] = [];
 
   for (const enemy of context.enemyUnits) {
@@ -280,7 +288,7 @@ function tryAttackClosest(unit: Unit, context: DirectiveContext): UnitAction | n
     return a.enemy.hp - b.enemy.hp;
   });
 
-  return { type: 'attack', targetUnitId: targets[0]!.enemy.id };
+  return targets[0]!.enemy;
 }
 
 /**
@@ -314,7 +322,7 @@ function moveToward(
     context.terrain,
     unit.type,
     occupied,
-    unit.directive,
+    unit.movementDirective,
     context.modifiers,
     context.elevation,
   );
@@ -332,7 +340,7 @@ function moveToward(
     const terrain = context.terrain.get(curKey);
     if (!terrain) break;
     const stepCost = getMoveCost(
-      terrain, unit.type, unit.directive,
+      terrain, unit.type, unit.movementDirective,
       context.modifiers.get(curKey),
       context.elevation.get(prevKey),
       context.elevation.get(curKey),
@@ -441,8 +449,8 @@ function retreatFrom(
   }
 
   // All retreat paths blocked — attack if possible as last resort
-  const attackAction = tryAttackClosest(unit, context);
-  if (attackAction) return attackAction;
+  const enemy = findClosestAttackableEnemy(unit, context);
+  if (enemy) return { type: 'attack', targetUnitId: enemy.id };
 
   return { type: 'hold' };
 }
@@ -490,7 +498,7 @@ function scoutExplore(unit: Unit, context: DirectiveContext): UnitAction {
     context.terrain,
     unit.type,
     occupied,
-    unit.directive,
+    unit.movementDirective,
     context.modifiers,
     context.elevation,
   );
@@ -508,7 +516,7 @@ function scoutExplore(unit: Unit, context: DirectiveContext): UnitAction {
     const terrain = context.terrain.get(curKey);
     if (!terrain) break;
     const stepCost = getMoveCost(
-      terrain, unit.type, unit.directive,
+      terrain, unit.type, unit.movementDirective,
       context.modifiers.get(curKey),
       context.elevation.get(prevKey),
       context.elevation.get(curKey),

@@ -171,7 +171,9 @@ function serializeUnit(unit: Unit): Unit {
     owner: unit.owner,
     hp: unit.hp,
     position: { q: unit.position.q, r: unit.position.r, s: unit.position.s },
-    directive: unit.directive,
+    movementDirective: unit.movementDirective,
+    attackDirective: unit.attackDirective,
+    specialtyModifier: unit.specialtyModifier,
     directiveTarget: {
       ...unit.directiveTarget,
       hex: unit.directiveTarget.hex ? { ...unit.directiveTarget.hex } : undefined,
@@ -215,7 +217,9 @@ function stripDirective(unit: Unit): Unit {
     owner: unit.owner,
     hp: unit.hp,
     position: { q: unit.position.q, r: unit.position.r, s: unit.position.s },
-    directive: 'advance',
+    movementDirective: 'advance',
+    attackDirective: 'ignore',
+    specialtyModifier: null,
     directiveTarget: { type: 'central-objective' },
     hasActed: unit.hasActed,
   };

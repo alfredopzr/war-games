@@ -1,4 +1,4 @@
-import type { TerrainType, TerrainDefinition, UnitType, DirectiveType, HexModifier } from './types';
+import type { TerrainType, TerrainDefinition, UnitType, MovementDirective, HexModifier } from './types';
 import { UNIT_STATS } from './units';
 import { CLIMB_COST_PER_ELEV, CLIMB_THRESHOLD, DOWNHILL_COST_MULT } from './map-gen-params';
 
@@ -32,7 +32,7 @@ export const TERRAIN: Record<TerrainType, TerrainDefinition> = {
 export function getMoveCost(
   terrain: TerrainType,
   unitType: UnitType,
-  directive?: DirectiveType,
+  movementDirective?: MovementDirective,
   modifier?: HexModifier,
   elevFrom?: number,
   elevTo?: number,
@@ -50,7 +50,7 @@ export function getMoveCost(
 
   // Flank directives reduce forest cost to 1
   let baseCost = def.moveCost;
-  if (terrain === 'forest' && (directive === 'flank-left' || directive === 'flank-right')) {
+  if (terrain === 'forest' && (movementDirective === 'flank-left' || movementDirective === 'flank-right')) {
     baseCost = 1;
   }
 

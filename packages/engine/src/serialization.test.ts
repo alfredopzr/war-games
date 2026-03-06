@@ -123,7 +123,7 @@ describe('serialization', () => {
 
     it('round-trips unit with directiveTarget', () => {
       const state = createGame();
-      placeUnit(state, 'player1', 'infantry', state.map.player1Deployment[0]!, 'hunt', {
+      placeUnit(state, 'player1', 'infantry', state.map.player1Deployment[0]!, 'advance', 'ignore', null, {
         type: 'enemy-unit',
         unitId: 'target-id',
       });

@@ -11,7 +11,9 @@ import type {
   PlayerId,
   UnitType,
   CubeCoord,
-  DirectiveType,
+  MovementDirective,
+  AttackDirective,
+  SpecialtyModifier,
   Command,
   Unit,
   CommandPool,
@@ -31,7 +33,9 @@ import { getDefenseModifier } from './terrain';
 export interface AiBuildAction {
   unitType: UnitType;
   position: CubeCoord;
-  directive: DirectiveType;
+  movementDirective: MovementDirective;
+  attackDirective: AttackDirective;
+  specialtyModifier: SpecialtyModifier | null;
   cost: number;
 }
 
@@ -41,10 +45,16 @@ export interface AiBuildAction {
 
 type BudgetAllocation = { unitType: UnitType; fraction: number };
 
+interface DirectiveCombo {
+  movementDirective: MovementDirective;
+  attackDirective: AttackDirective;
+  specialtyModifier: SpecialtyModifier | null;
+}
+
 interface BuildPreset {
   name: string;
   allocation: BudgetAllocation[];
-  directiveFn: (unitType: UnitType, index: number) => DirectiveType;
+  directiveFn: (unitType: UnitType, index: number) => DirectiveCombo;
 }
 
 const BUILD_PRESETS: BuildPreset[] = [
@@ -59,10 +69,13 @@ const BUILD_PRESETS: BuildPreset[] = [
     ],
     directiveFn: (unitType, index) => {
       switch (unitType) {
-        case 'tank': return 'advance';
-        case 'infantry': return index % 3 === 0 ? 'flank-left' : index % 3 === 1 ? 'flank-right' : 'advance';
-        case 'artillery': return 'support';
-        case 'recon': return 'scout';
+        case 'tank': return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
+        case 'infantry': {
+          const md: MovementDirective = index % 3 === 0 ? 'flank-left' : index % 3 === 1 ? 'flank-right' : 'advance';
+          return { movementDirective: md, attackDirective: 'shoot-on-sight', specialtyModifier: null };
+        }
+        case 'artillery': return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: 'support' };
+        case 'recon': return { movementDirective: 'scout', attackDirective: 'retreat-on-contact', specialtyModifier: null };
       }
     },
   },
@@ -74,8 +87,8 @@ const BUILD_PRESETS: BuildPreset[] = [
       { unitType: 'recon', fraction: 0.20 },
     ],
     directiveFn: (unitType, index) => {
-      if (unitType === 'recon') return 'scout';
-      return index % 2 === 0 ? 'advance' : 'capture';
+      if (unitType === 'recon') return { movementDirective: 'scout', attackDirective: 'retreat-on-contact', specialtyModifier: null };
+      return { movementDirective: 'advance', attackDirective: index % 2 === 0 ? 'shoot-on-sight' : 'ignore', specialtyModifier: null };
     },
   },
   {
@@ -88,10 +101,10 @@ const BUILD_PRESETS: BuildPreset[] = [
     ],
     directiveFn: (unitType) => {
       switch (unitType) {
-        case 'tank': return 'advance';
-        case 'artillery': return 'support';
-        case 'recon': return 'scout';
-        default: return 'advance';
+        case 'tank': return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
+        case 'artillery': return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: 'support' };
+        case 'recon': return { movementDirective: 'scout', attackDirective: 'retreat-on-contact', specialtyModifier: null };
+        default: return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
       }
     },
   },
@@ -104,13 +117,13 @@ const BUILD_PRESETS: BuildPreset[] = [
       { unitType: 'tank', fraction: 0.20 },
     ],
     directiveFn: (unitType, index) => {
-      if (unitType === 'artillery') return 'support';
-      if (unitType === 'infantry') return index % 2 === 0 ? 'hold' : 'advance';
-      return 'advance';
+      if (unitType === 'artillery') return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: 'support' };
+      if (unitType === 'infantry') return { movementDirective: index % 2 === 0 ? 'hold' : 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
+      return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
     },
   },
   {
-    // Flanker — fast units on the sides, infantry capturing
+    // Flanker — fast units on the sides, infantry advancing to cities
     name: 'flanker',
     allocation: [
       { unitType: 'recon', fraction: 0.30 },
@@ -118,9 +131,9 @@ const BUILD_PRESETS: BuildPreset[] = [
       { unitType: 'tank', fraction: 0.30 },
     ],
     directiveFn: (unitType, index) => {
-      if (unitType === 'recon') return index % 2 === 0 ? 'flank-left' : 'flank-right';
-      if (unitType === 'infantry') return 'capture';
-      return 'advance';
+      if (unitType === 'recon') return { movementDirective: index % 2 === 0 ? 'flank-left' : 'flank-right', attackDirective: 'skirmish', specialtyModifier: null };
+      if (unitType === 'infantry') return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
+      return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
     },
   },
   {
@@ -131,8 +144,9 @@ const BUILD_PRESETS: BuildPreset[] = [
       { unitType: 'infantry', fraction: 0.50 },
     ],
     directiveFn: (unitType, index) => {
-      if (unitType === 'tank') return 'advance';
-      return index % 3 === 0 ? 'flank-left' : index % 3 === 1 ? 'flank-right' : 'capture';
+      if (unitType === 'tank') return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
+      const md: MovementDirective = index % 3 === 0 ? 'flank-left' : index % 3 === 1 ? 'flank-right' : 'advance';
+      return { movementDirective: md, attackDirective: 'shoot-on-sight', specialtyModifier: null };
     },
   },
 ];
@@ -197,10 +211,17 @@ export function aiBuildPhase(state: GameState, playerId: PlayerId): AiBuildActio
       const key = hexToKey(hex);
       if (!occupied.has(key)) {
         const count = typeCounters.get(unitType) ?? 0;
-        const directive = preset.directiveFn(unitType, count);
+        const combo = preset.directiveFn(unitType, count);
         typeCounters.set(unitType, count + 1);
 
-        results.push({ unitType, position: hex, directive, cost });
+        results.push({
+          unitType,
+          position: hex,
+          movementDirective: combo.movementDirective,
+          attackDirective: combo.attackDirective,
+          specialtyModifier: combo.specialtyModifier,
+          cost,
+        });
         occupied.add(key);
         remaining -= cost;
         break;
@@ -299,11 +320,8 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
   const allUnits = [...myUnits, ...enemyUnits];
   const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
 
-  // Track hexes claimed by move commands this turn
-  const claimedHexes = new Set<string>();
-
   // -------------------------------------------------------------------------
-  // Priority 1: Score all possible attacks and pick the best ones
+  // Priority 1: Redirect units that can attack into shoot-on-sight
   // -------------------------------------------------------------------------
   const allAttacks: ScoredAttack[] = [];
 
@@ -318,7 +336,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
   // Sort by score descending
   allAttacks.sort((a, b) => b.score - a.score);
 
-  // Greedily pick best non-conflicting attacks
+  // Greedily pick best non-conflicting attacks — redirect to shoot-on-sight
   for (const atk of allAttacks) {
     if (commands.length >= CP_PER_ROUND) break;
     if (usedUnitIds.has(atk.attacker.id)) continue;
@@ -328,21 +346,28 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
     const committed = damageCommitted.get(atk.target.id) ?? 0;
     if (committed >= atk.target.hp) continue;
 
-    commands.push({ type: 'direct-attack', unitId: atk.attacker.id, targetUnitId: atk.target.id });
-    pool = { ...pool, remaining: pool.remaining - 1, commandedUnitIds: new Set([...pool.commandedUnitIds, atk.attacker.id]) };
-    usedUnitIds.add(atk.attacker.id);
+    // Only redirect if the unit isn't already set to shoot-on-sight
+    if (atk.attacker.attackDirective !== 'shoot-on-sight') {
+      commands.push({
+        type: 'redirect',
+        unitId: atk.attacker.id,
+        newMovementDirective: atk.attacker.movementDirective,
+        newAttackDirective: 'shoot-on-sight',
+        newSpecialtyModifier: atk.attacker.specialtyModifier,
+        target: { type: 'enemy-unit', unitId: atk.target.id },
+      });
+      pool = { ...pool, remaining: pool.remaining - 1, commandedUnitIds: new Set([...pool.commandedUnitIds, atk.attacker.id]) };
+      usedUnitIds.add(atk.attacker.id);
+    }
     damageCommitted.set(atk.target.id, committed + atk.expectedDamage);
   }
 
   if (commands.length >= CP_PER_ROUND) return commands;
 
   // -------------------------------------------------------------------------
-  // Priority 2: Move units toward high-value targets
+  // Priority 2: Redirect units toward high-value targets
   // -------------------------------------------------------------------------
-  // Units that couldn't attack — move them into range or toward objective/cities
-
   const objective = state.map.centralObjective;
-  const objectiveKey = hexToKey(objective);
 
   // Find unowned or enemy-owned cities
   const valuableCityHexes: CubeCoord[] = [];
@@ -356,10 +381,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
   // Sort candidate movers by strategic value
   const moveCandidates = myUnits
     .filter((u) => !usedUnitIds.has(u.id) && canIssueCommand(pool, u.id))
-    .sort((a, b) => {
-      // Prioritize units closer to the objective
-      return cubeDistance(a.position, objective) - cubeDistance(b.position, objective);
-    });
+    .sort((a, b) => cubeDistance(a.position, objective) - cubeDistance(b.position, objective));
 
   for (const unit of moveCandidates) {
     if (commands.length >= CP_PER_ROUND) break;
@@ -367,71 +389,54 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
     if (!canIssueCommand(pool, unit.id)) continue;
 
     const scaledStats = state.unitStats[unit.type];
-    const unitKey = hexToKey(unit.position);
 
-    // Artillery shouldn't move if it can already hit someone (min range 2)
+    // Artillery shouldn't move if it can already hit someone
     if (unit.type === 'artillery') {
       const canHitSomeone = enemyUnits.some((e) => canAttack(unit, e));
       if (canHitSomeone) continue;
     }
 
-    // Find best move target
+    // Find best destination
     let bestTarget: CubeCoord | null = null;
     let bestScore = -Infinity;
 
-    // Gather potential destinations within move range
-    const reachableHexes: CubeCoord[] = [];
-
     for (const hex of hexesInRadius(unit.position, scaledStats.moveRange)) {
       const key = hexToKey(hex);
-      if (key === unitKey) continue;
+      if (key === hexToKey(unit.position)) continue;
       if (occupiedKeys.has(key)) continue;
-      if (claimedHexes.has(key)) continue;
       if (!state.map.terrain.has(key)) continue;
 
-      // Verify pathable
       const path = findPath(unit.position, hex, state.map.terrain, unit.type, occupiedKeys, undefined, state.map.modifiers, state.map.elevation);
       if (!path) continue;
 
-      reachableHexes.push(hex);
-    }
-
-    for (const hex of reachableHexes) {
-      const key = hexToKey(hex);
       let score = 0;
 
-      // Proximity to objective
       const distToObj = cubeDistance(hex, objective);
       score += (10 - distToObj) * 5;
 
-      // Bonus for being ON the objective
-      if (key === objectiveKey) score += 50;
+      if (hexToKey(hex) === hexToKey(objective)) score += 50;
 
-      // Bonus for being on/near enemy units (for melee units)
       if (scaledStats.attackRange === 1) {
         for (const enemy of enemyUnits) {
           const distToEnemy = cubeDistance(hex, enemy.position);
-          if (distToEnemy === 1) score += 25; // Can attack next turn
+          if (distToEnemy === 1) score += 25;
           else if (distToEnemy === 2) score += 10;
         }
       }
 
-      // For artillery, prefer staying at range 2-3 from enemies
       if (unit.type === 'artillery') {
         for (const enemy of enemyUnits) {
           const distToEnemy = cubeDistance(hex, enemy.position);
           if (distToEnemy >= scaledStats.minAttackRange && distToEnemy <= scaledStats.attackRange) {
-            score += 30; // Can attack from this position
+            score += 30;
           }
         }
       }
 
-      // Bonus for cities
       for (const cityHex of valuableCityHexes) {
         if (hexToKey(cityHex) === key) score += 35;
       }
 
-      // Terrain defense bonus
       const terrain = state.map.terrain.get(key);
       if (terrain) {
         score += getDefenseModifier(terrain) * 10;
@@ -444,14 +449,16 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
     }
 
     if (bestTarget && bestScore > 0) {
-      const targetKey = hexToKey(bestTarget);
-      commands.push({ type: 'direct-move', unitId: unit.id, targetHex: bestTarget });
+      commands.push({
+        type: 'redirect',
+        unitId: unit.id,
+        newMovementDirective: 'advance',
+        newAttackDirective: 'shoot-on-sight',
+        newSpecialtyModifier: unit.specialtyModifier,
+        target: { type: 'hex', hex: bestTarget },
+      });
       pool = { ...pool, remaining: pool.remaining - 1, commandedUnitIds: new Set([...pool.commandedUnitIds, unit.id]) };
       usedUnitIds.add(unit.id);
-      claimedHexes.add(targetKey);
-      // Update occupied for subsequent pathfinding
-      occupiedKeys.delete(unitKey);
-      occupiedKeys.add(targetKey);
     }
   }
 
@@ -465,7 +472,6 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
     if (usedUnitIds.has(unit.id)) continue;
     if (!canIssueCommand(pool, unit.id)) continue;
 
-    // Only retreat if HP is 1 and there's an adjacent enemy that can kill us
     if (unit.hp > 1) continue;
 
     const adjacentThreat = enemyUnits.some((e) => {
@@ -476,15 +482,14 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
 
     if (!adjacentThreat) continue;
 
-    // Check retreat is possible
-    const deploymentZone = playerId === 'player1'
-      ? state.map.player1Deployment
-      : state.map.player2Deployment;
-
-    const hasRetreatHex = deploymentZone.some((h) => !occupiedKeys.has(hexToKey(h)));
-    if (!hasRetreatHex) continue;
-
-    commands.push({ type: 'retreat', unitId: unit.id });
+    commands.push({
+      type: 'redirect',
+      unitId: unit.id,
+      newMovementDirective: 'advance',
+      newAttackDirective: 'retreat-on-contact',
+      newSpecialtyModifier: unit.specialtyModifier,
+      target: { type: 'deployment-zone' },
+    });
     pool = { ...pool, remaining: pool.remaining - 1, commandedUnitIds: new Set([...pool.commandedUnitIds, unit.id]) };
     usedUnitIds.add(unit.id);
   }

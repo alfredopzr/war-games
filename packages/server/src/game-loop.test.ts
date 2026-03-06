@@ -145,7 +145,9 @@ describe('handlePlaceUnit', () => {
       'infantry',
       pos,
       'advance',
-      io as unknown as Parameters<typeof handlePlaceUnit>[5],
+      'ignore',
+      null,
+      io as unknown as Parameters<typeof handlePlaceUnit>[7],
     );
 
     expect(room.gameState!.players.player1.units).toHaveLength(1);
@@ -165,7 +167,9 @@ describe('handlePlaceUnit', () => {
       'infantry',
       pos,
       'advance',
-      io as unknown as Parameters<typeof handlePlaceUnit>[5],
+      'ignore',
+      null,
+      io as unknown as Parameters<typeof handlePlaceUnit>[7],
     );
 
     const updates = io.emitted.filter((e) => e.event === 'state-update');
@@ -190,7 +194,9 @@ describe('handleRemoveUnit', () => {
       'infantry',
       pos,
       'advance',
-      io as unknown as Parameters<typeof handlePlaceUnit>[5],
+      'ignore',
+      null,
+      io as unknown as Parameters<typeof handlePlaceUnit>[7],
     );
 
     const resourcesAfterPlace = room.gameState!.players.player1.resources;
@@ -227,7 +233,9 @@ describe('handleSetDirective', () => {
       'infantry',
       pos,
       'advance',
-      io as unknown as Parameters<typeof handlePlaceUnit>[5],
+      'ignore',
+      null,
+      io as unknown as Parameters<typeof handlePlaceUnit>[7],
     );
 
     const unitId = room.gameState!.players.player1.units[0]!.id;
@@ -237,10 +245,12 @@ describe('handleSetDirective', () => {
       'player1',
       unitId,
       'hold',
-      io as unknown as Parameters<typeof handleSetDirective>[4],
+      'shoot-on-sight',
+      null,
+      io as unknown as Parameters<typeof handleSetDirective>[6],
     );
 
-    expect(room.gameState!.players.player1.units[0]!.directive).toBe('hold');
+    expect(room.gameState!.players.player1.units[0]!.movementDirective).toBe('hold');
   });
 });
 
@@ -323,8 +333,8 @@ describe('handleSubmitCommands', () => {
     // Place at least one unit per player so elimination doesn't trigger immediately
     const p1Zone = room.gameState!.map.player1Deployment;
     const p2Zone = room.gameState!.map.player2Deployment;
-    handlePlaceUnit(room, 'player1', 'infantry', p1Zone[0]!, 'hold', io as unknown as Parameters<typeof handlePlaceUnit>[5]);
-    handlePlaceUnit(room, 'player2', 'infantry', p2Zone[0]!, 'hold', io as unknown as Parameters<typeof handlePlaceUnit>[5]);
+    handlePlaceUnit(room, 'player1', 'infantry', p1Zone[0]!, 'hold', 'ignore', null, io as unknown as Parameters<typeof handlePlaceUnit>[7]);
+    handlePlaceUnit(room, 'player2', 'infantry', p2Zone[0]!, 'hold', 'ignore', null, io as unknown as Parameters<typeof handlePlaceUnit>[7]);
 
     handleConfirmBuild(room, 'player1', io as unknown as Parameters<typeof handleConfirmBuild>[2]);
     handleConfirmBuild(room, 'player2', io as unknown as Parameters<typeof handleConfirmBuild>[2]);

@@ -87,14 +87,24 @@ describe('createUnit', () => {
     expect(unit.hp).toBe(UNIT_STATS.tank.maxHp);
   });
 
-  it('defaults directive to advance', () => {
+  it('defaults movementDirective to advance', () => {
     const unit = createUnit('recon', 'player1', pos);
-    expect(unit.directive).toBe('advance');
+    expect(unit.movementDirective).toBe('advance');
   });
 
-  it('accepts a custom directive', () => {
+  it('defaults attackDirective to ignore', () => {
+    const unit = createUnit('recon', 'player1', pos);
+    expect(unit.attackDirective).toBe('ignore');
+  });
+
+  it('defaults specialtyModifier to null', () => {
+    const unit = createUnit('recon', 'player1', pos);
+    expect(unit.specialtyModifier).toBeNull();
+  });
+
+  it('accepts a custom movementDirective', () => {
     const unit = createUnit('infantry', 'player1', pos, 'hold');
-    expect(unit.directive).toBe('hold');
+    expect(unit.movementDirective).toBe('hold');
   });
 
   it('creates unit with default directiveTarget of central-objective', () => {
@@ -104,7 +114,7 @@ describe('createUnit', () => {
 
   it('creates unit with custom directiveTarget', () => {
     const target: DirectiveTarget = { type: 'city', cityId: 'city-1' };
-    const unit = createUnit('infantry', 'player1', pos, 'advance', target);
+    const unit = createUnit('infantry', 'player1', pos, 'advance', 'ignore', null, target);
     expect(unit.directiveTarget).toEqual(target);
   });
 

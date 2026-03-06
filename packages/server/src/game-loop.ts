@@ -11,7 +11,9 @@ import type {
   PlayerId,
   CubeCoord,
   UnitType,
-  DirectiveType,
+  MovementDirective,
+  AttackDirective,
+  SpecialtyModifier,
   DirectiveTarget,
   Command,
   GameState,
@@ -192,7 +194,9 @@ export function handlePlaceUnit(
   playerId: PlayerId,
   unitType: UnitType,
   position: CubeCoord,
-  directive: DirectiveType,
+  movementDirective: MovementDirective,
+  attackDirective: AttackDirective,
+  specialtyModifier: SpecialtyModifier | null,
   io: Server,
   target?: DirectiveTarget,
 ): void {
@@ -206,7 +210,7 @@ export function handlePlaceUnit(
     throw new Error('Build already confirmed');
   }
 
-  placeUnit(room.gameState, playerId, unitType, position, directive, target);
+  placeUnit(room.gameState, playerId, unitType, position, movementDirective, attackDirective, specialtyModifier, target);
 
   for (const [pid, player] of room.players) {
     const filtered = filterStateForPlayer(room.gameState, pid);
@@ -258,7 +262,9 @@ export function handleSetDirective(
   room: Room,
   playerId: PlayerId,
   unitId: string,
-  directive: DirectiveType,
+  movementDirective: MovementDirective,
+  attackDirective: AttackDirective,
+  specialtyModifier: SpecialtyModifier | null,
   io: Server,
   target?: DirectiveTarget,
 ): void {
@@ -278,7 +284,9 @@ export function handleSetDirective(
     throw new Error('Unit does not belong to this player');
   }
 
-  unit.directive = directive;
+  unit.movementDirective = movementDirective;
+  unit.attackDirective = attackDirective;
+  unit.specialtyModifier = specialtyModifier;
   if (target) {
     unit.directiveTarget = target;
   }

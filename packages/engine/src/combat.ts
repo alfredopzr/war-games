@@ -30,7 +30,7 @@ export function calculateDamage(
   const terrainDef = getDefenseModifier(defenderTerrain, defenderModifier);
 
   // Hold directive grants +1 DEF
-  const effectiveDef = defenderStats.def + (defender.directive === 'hold' ? 1 : 0);
+  const effectiveDef = defenderStats.def + (defender.movementDirective === 'hold' ? 1 : 0);
 
   const randomFactor = randomFn();
   const baseDamage = attackerStats.atk * typeMultiplier * randomFactor;

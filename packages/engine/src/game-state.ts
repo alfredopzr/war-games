@@ -10,7 +10,9 @@ import type {
   PlayerId,
   UnitType,
   CubeCoord,
-  DirectiveType,
+  MovementDirective,
+  AttackDirective,
+  SpecialtyModifier,
   DirectiveTarget,
   Command,
   RoundEndResult,
@@ -24,9 +26,7 @@ import { canAfford, calculateIncome, applyCarryover, applyMaintenance } from './
 import { createCommandPool, spendCommand } from './commands';
 import { hexToKey, cubeDistance, hexNeighbors } from './hex';
 import { canAttack, calculateDamage } from './combat';
-import { findPath } from './pathfinding';
 import { executeDirective } from './directives';
-import { getMoveCost } from './terrain';
 
 // -----------------------------------------------------------------------------
 // createGame
@@ -87,7 +87,9 @@ export function placeUnit(
   playerId: PlayerId,
   unitType: UnitType,
   position: CubeCoord,
-  directive: DirectiveType = 'advance',
+  movementDirective: MovementDirective = 'advance',
+  attackDirective: AttackDirective = 'ignore',
+  specialtyModifier: SpecialtyModifier | null = null,
   directiveTarget?: DirectiveTarget,
 ): GameState {
   if (state.phase !== 'build') {
@@ -116,7 +118,7 @@ export function placeUnit(
     throw new Error('Cannot afford unit');
   }
 
-  const unit = createUnit(unitType, playerId, position, directive, directiveTarget);
+  const unit = createUnit(unitType, playerId, position, movementDirective, attackDirective, specialtyModifier, directiveTarget);
   state.players[playerId].resources -= cost;
   state.players[playerId].units.push(unit);
 
@@ -160,43 +162,12 @@ export function filterValidCommands(
   playerId: PlayerId,
 ): Command[] {
   const friendlyUnits = state.players[playerId].units;
-  const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
-  const enemyUnits = state.players[enemyId].units;
-  const allUnits = [...friendlyUnits, ...enemyUnits];
 
   return commands.filter((cmd) => {
     const unit = friendlyUnits.find((u) => u.id === cmd.unitId);
     if (!unit) return false;
-
-    switch (cmd.type) {
-      case 'direct-move': {
-        const targetKey = hexToKey(cmd.targetHex);
-        if (!state.map.terrain.has(targetKey)) return false;
-        const occupied = allUnits.some(
-          (u) => u.id !== unit.id && hexToKey(u.position) === targetKey,
-        );
-        if (occupied) return false;
-        const stats = UNIT_STATS[unit.type];
-        if (cubeDistance(unit.position, cmd.targetHex) > stats.moveRange) return false;
-        return true;
-      }
-
-      case 'direct-attack': {
-        const target = enemyUnits.find((u) => u.id === cmd.targetUnitId);
-        if (!target) return false;
-        if (!canAttack(unit, target)) return false;
-        return true;
-      }
-
-      case 'redirect':
-        return true;
-
-      case 'retreat':
-        return true;
-
-      default:
-        return false;
-    }
+    // Only redirect commands exist — just verify unit is alive
+    return cmd.type === 'redirect';
   });
 }
 
@@ -239,13 +210,13 @@ export function executeTurn(
   // Execute directive AI for non-commanded friendly units
   // Pass 1: Scout units act first
   for (const unit of [...friendlyUnits]) {
-    if (unit.directive !== 'scout') continue;
+    if (unit.movementDirective !== 'scout') continue;
     executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
   }
 
   // Pass 2: All other non-commanded units
   for (const unit of [...friendlyUnits]) {
-    if (unit.directive === 'scout') continue;
+    if (unit.movementDirective === 'scout') continue;
     executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
   }
 
@@ -285,14 +256,16 @@ function executeUnitDirective(
     centralObjective: state.map.centralObjective,
     cities: state.cityOwnership,
     unitStats: state.unitStats,
+    mapRadius: state.map.mapRadius,
+    deploymentZone: currentPlayer === 'player1' ? state.map.player1Deployment : state.map.player2Deployment,
   };
 
   const action = executeDirective(unit, context);
   applyDirectiveAction(state, unit, action, currentPlayer, enemyPlayer, randomFn);
   unit.hasActed = true;
 
-  // Support directive: heal adjacent friendly with lowest HP (below maxHp)
-  if (unit.directive === 'support') {
+  // Support specialty: heal adjacent friendly with lowest HP (below maxHp)
+  if (unit.specialtyModifier === 'support') {
     const neighbors = hexNeighbors(unit.position);
     const neighborKeys = new Set(neighbors.map(hexToKey));
     let bestTarget: Unit | null = null;
@@ -322,171 +295,23 @@ function executeUnitDirective(
 function applyCommand(
   state: GameState,
   command: Command,
-  currentPlayer: PlayerId,
-  enemyPlayer: PlayerId,
-  randomFn?: () => number,
+  _currentPlayer: PlayerId,
+  _enemyPlayer: PlayerId,
+  _randomFn?: () => number,
 ): void {
-  const friendlyUnits = state.players[currentPlayer].units;
+  const friendlyUnits = state.players[_currentPlayer].units;
 
-  // Stale unit refs: unit may have died between command submission and execution.
-  // Soft-fail (return) instead of throwing. Non-issue once we switch to
-  // resolve-all-turns-simultaneously mode — commands will reference live state.
-  switch (command.type) {
-    case 'direct-move': {
-      const unit = findUnitById(friendlyUnits, command.unitId);
-      if (!unit) return;
+  const unit = findUnitById(friendlyUnits, command.unitId);
+  if (!unit) return;
 
-      const targetKey = hexToKey(command.targetHex);
-      if (!state.map.terrain.has(targetKey)) return;
-
-      // Build occupied set (exclude self)
-      const allUnits = [...state.players.player1.units, ...state.players.player2.units];
-      const occupied = new Set(
-        allUnits.filter((u) => u.id !== unit.id).map((u) => hexToKey(u.position)),
-      );
-
-      // Pathfind with full terrain/elevation/modifier awareness
-      const path = findPath(
-        unit.position,
-        command.targetHex,
-        state.map.terrain,
-        unit.type,
-        occupied,
-        unit.directive,
-        state.map.modifiers,
-        state.map.elevation,
-      );
-      if (!path || path.length <= 1) return;
-
-      // Walk path spending cost budget (same as retreat/directives)
-      let costBudget = state.unitStats[unit.type].moveRange;
-      let lastValid = 0;
-      for (let i = 1; i < path.length; i++) {
-        const prevKey = hexToKey(path[i - 1]!);
-        const curKey = hexToKey(path[i]!);
-        const terrain = state.map.terrain.get(curKey);
-        if (!terrain) break;
-        const stepCost = getMoveCost(
-          terrain, unit.type, unit.directive,
-          state.map.modifiers.get(curKey),
-          state.map.elevation.get(prevKey),
-          state.map.elevation.get(curKey),
-        );
-        if (stepCost === Infinity) break;
-        costBudget -= stepCost;
-        if (costBudget < 0) break;
-        lastValid = i;
-      }
-      if (lastValid > 0) {
-        unit.position = path[lastValid]!;
-      }
-      unit.hasActed = true;
-      break;
-    }
-
-    case 'direct-attack': {
-      const attacker = findUnitById(friendlyUnits, command.unitId);
-      if (!attacker) return;
-
-      const enemyUnits = state.players[enemyPlayer].units;
-      const defender = findUnitById(enemyUnits, command.targetUnitId);
-      if (!defender) return;
-
-      if (!canAttack(attacker, defender)) return;
-
-      const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
-      const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn);
-      defender.hp -= damage;
-
-      if (defender.hp <= 0) {
-        removeUnit(state.players[enemyPlayer].units, defender.id);
-        state.round.unitsKilledThisRound[currentPlayer] += 1;
-      }
-
-      attacker.hasActed = true;
-      break;
-    }
-
-    case 'redirect': {
-      const unit = findUnitById(friendlyUnits, command.unitId);
-      if (!unit) return;
-      unit.directive = command.newDirective;
-      if (command.target) {
-        unit.directiveTarget = command.target;
-      }
-      unit.hasActed = true;
-      break;
-    }
-
-    case 'retreat': {
-      const unit = findUnitById(friendlyUnits, command.unitId);
-      if (!unit) return;
-
-      const deploymentZone = currentPlayer === 'player1'
-        ? state.map.player1Deployment
-        : state.map.player2Deployment;
-
-      // Find closest deployment zone hex
-      const allUnits = [...state.players.player1.units, ...state.players.player2.units];
-      const occupied = new Set(
-        allUnits.filter((u) => u.id !== unit.id).map((u) => hexToKey(u.position)),
-      );
-
-      let bestHex: CubeCoord | null = null;
-      let bestDist = Infinity;
-
-      for (const dzHex of deploymentZone) {
-        const key = hexToKey(dzHex);
-        if (occupied.has(key)) continue;
-        const dist = cubeDistance(unit.position, dzHex);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestHex = dzHex;
-        }
-      }
-
-      if (bestHex) {
-        // Move toward best hex, limited by move cost budget
-        const stats = UNIT_STATS[unit.type];
-        const path = findPath(
-          unit.position,
-          bestHex,
-          state.map.terrain,
-          unit.type,
-          occupied,
-          unit.directive,
-          state.map.modifiers,
-          state.map.elevation,
-        );
-        if (path && path.length > 1) {
-          let costBudget = stats.moveRange;
-          let lastValid = 0;
-          for (let i = 1; i < path.length; i++) {
-            const prevKey = hexToKey(path[i - 1]!);
-            const curKey = hexToKey(path[i]!);
-            const terrain = state.map.terrain.get(curKey);
-            if (!terrain) break;
-            const stepCost = getMoveCost(
-              terrain, unit.type, unit.directive,
-              state.map.modifiers.get(curKey),
-              state.map.elevation.get(prevKey),
-              state.map.elevation.get(curKey),
-            );
-            if (stepCost === Infinity) break;
-            costBudget -= stepCost;
-            if (costBudget < 0) break;
-            lastValid = i;
-          }
-          if (lastValid > 0) {
-            unit.position = path[lastValid]!;
-          }
-        }
-      }
-
-      unit.hasActed = true;
-      break;
-    }
+  unit.movementDirective = command.newMovementDirective;
+  unit.attackDirective = command.newAttackDirective;
+  unit.specialtyModifier = command.newSpecialtyModifier;
+  if (command.target) {
+    unit.directiveTarget = command.target;
   }
+  // DO NOT set hasActed — directive AI runs this unit with new directive this turn.
+  // Behavioral change from old code: DESIGN.md:168 + 175 imply unit acts same turn.
 }
 
 // -----------------------------------------------------------------------------
@@ -812,6 +637,10 @@ function updateCityOwnership(state: GameState): void {
             message: `${label} ${unitName} took 1 damage capturing a city (${unit.hp} HP left)`,
           });
         }
+      }
+      // City auto-hold: if the unit's target was this city, switch to hold
+      if (unit.directiveTarget.type === 'city' && unit.directiveTarget.cityId === cityKey) {
+        unit.movementDirective = 'hold';
       }
       // If city already owned by this player, no HP cost
     }

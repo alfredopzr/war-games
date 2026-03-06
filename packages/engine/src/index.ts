@@ -6,7 +6,7 @@
 export type {
   CubeCoord, AxialCoord, GridSize,
   TerrainType, TerrainDefinition, HexTile, HexModifier, MegaHexInfo,
-  UnitType, UnitStats, Unit, DirectiveType, DirectiveTarget, DirectiveTargetType, PlayerId,
+  UnitType, UnitStats, Unit, MovementDirective, AttackDirective, SpecialtyModifier, DirectiveTarget, DirectiveTargetType, PlayerId,
   UnitAction, Command, CommandPool,
   GamePhase, ObjectiveState, PlayerState, RoundState, GameState, GameMap,
   IncomeParams, MapValidation, RoundEndResult, DirectiveContext, ResolvedTarget,
@@ -64,7 +64,7 @@ export { mulberry32 } from './rng';
 export { MinHeap } from './min-heap';
 
 // Directives
-export { executeDirective, resolveTarget } from './directives';
+export { executeDirective, resolveTarget, resolveAttackBehavior } from './directives';
 
 // Commands
 export { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND, validateDirectiveTarget } from './commands';

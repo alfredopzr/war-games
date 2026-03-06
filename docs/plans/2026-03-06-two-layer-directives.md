@@ -1,7 +1,7 @@
-# Two-Layer Directive System — Implementation Plan (v3)
+# Two-Layer Directive System — Implementation Plan (v4)
 
 Branch: `layered-directives` (off `Chack-Atacc`)
-Supersedes: GAME_MATH_ENGINE.md §A10, RESOLUTION_PIPELINE.md §Two-Layer Directive Model (where they conflict with this plan)
+Source of truth for directive system design. RESOLUTION_PIPELINE.md and GAME_MATH_ENGINE.md §A10 to be updated to match.
 
 ---
 
@@ -24,10 +24,6 @@ Commands exist only as "I read the opponent wrong, so I pay the tax to change my
 Ref: DESIGN.md:168 — "Redirect: Change a unit's directive mid-battle. The unit follows the new directive for the rest of the round."
 Ref: DESIGN.md:175 — "Commands are issued during your turn before directive AI resolves."
 
-### Spec divergence: commands
-
-DESIGN.md:167-171 defines four command types: Direct Move, Direct Attack, Redirect, and Retreat. This plan **deliberately eliminates three of them**. The rationale: the two-layer directive model makes every possible unit behavior expressible as a directive combo. Separate move/attack/retreat commands are redundant with redirect, and having both creates a confusing UI where there are two ways to do the same thing. This is a design decision, not a bug.
-
 ---
 
 ## Current -> Target
@@ -37,7 +33,7 @@ DESIGN.md:167-171 defines four command types: Direct Move, Direct Attack, Redire
 
 **Target:**
 ```
-movementDirective: MovementDirective = 'advance' | 'flank-left' | 'flank-right' | 'scout' | 'hold' | 'capture'
+movementDirective: MovementDirective = 'advance' | 'flank-left' | 'flank-right' | 'scout' | 'hold'
 attackDirective: AttackDirective = 'shoot-on-sight' | 'skirmish' | 'retreat-on-contact' | 'hunt' | 'ignore'
 specialtyModifier: SpecialtyModifier | null = 'support' | 'engineer' | 'sniper' | null
 ```
@@ -45,32 +41,29 @@ specialtyModifier: SpecialtyModifier | null = 'support' | 'engineer' | 'sniper' 
 
 ### Layer definitions
 
-**Move layer** — WHERE you go and HOW you move (6 values):
+**Move layer** — WHERE you go and HOW you move (5 values):
 
 | Value | Behavior |
 |-------|----------|
 | `advance` | Move toward target hex via shortest path |
 | `flank-left` | Move toward target via left-offset flanking arc |
 | `flank-right` | Move toward target via right-offset flanking arc |
-| `scout` | Probe target area, reveal terrain/enemies, keep 2-3 hex distance. Ref: DESIGN.md:138 |
+| `scout` | Orbit target area at observation radius (~2-3 hexes), reveal terrain/enemies. Patrol pattern, not approach. Ref: DESIGN.md:138 |
 | `hold` | Move to target, then dig in (+DEF bonus) |
-| `capture` | Move to target city, occupy, auto-hold after capture. Ref: DESIGN.md:141 |
+
+**Capture is not a movement directive.** City capture is automatic: any unit standing on an enemy city flips it (Phase 9). To capture a city, set `advance(target: city)`. When the unit arrives and the city flips, auto-hold applies (see Design Decisions). No unique movement pattern exists — capture was derivative of advance with a city target.
 
 **Attack layer** — WHAT you do when you encounter enemies (5 values, default: `ignore`):
 
 | Value | Behavior |
 |-------|----------|
-| `shoot-on-sight` | Aggressive — fire at anything in range, stop to engage. Maps to spec `assault`. Ref: RESOLUTION_PIPELINE.md:55 |
-| `skirmish` | Hit once, keep moving (fire while passing). Ref: RESOLUTION_PIPELINE.md:56 |
-| `retreat-on-contact` | Back off when enemy contact occurs. Ref: DESIGN.md:138 scout retreat behavior |
-| `hunt` | Pursue visible targets only. Conditioned on LoS/scout reveal — no blind chasing. Ref: DESIGN.md:140 |
-| `ignore` | Complete movement regardless of contact, do not fire. Default. Ref: RESOLUTION_PIPELINE.md:58 |
+| `shoot-on-sight` | Aggressive — fire at anything in range, stop to engage |
+| `skirmish` | Hit once, keep moving (fire while passing) |
+| `retreat-on-contact` | Back off when enemy contact occurs |
+| `hunt` | Pursue visible targets only. Conditioned on LoS/scout reveal — no blind chasing |
+| `ignore` | Complete movement regardless of contact, do not fire. Default |
 
-Ref: RESOLUTION_PIPELINE.md:81 — only `shoot-on-sight` (assault) and `skirmish` units generate intercept events.
-
-### Spec divergence: attack layer names
-
-RESOLUTION_PIPELINE.md uses `assault`, `skirmish`, `cautious`, `ignore`. This plan renames `assault` -> `shoot-on-sight` (clearer for players), replaces `cautious` with `retreat-on-contact` (different behavior: flee vs stop), and adds `hunt` (resurrected from DESIGN.md:140). The spec's `cautious` ("stop if threatened, do not initiate") has no direct equivalent — see counter-fire gap in Open Debt.
+Only `shoot-on-sight` and `skirmish` units generate intercept events (when combat timeline is implemented).
 
 **Special layer** — locked/placeholder until buff system (3 values + null):
 
@@ -79,6 +72,49 @@ RESOLUTION_PIPELINE.md uses `assault`, `skirmish`, `cautious`, `ignore`. This pl
 | `support` | Follow/heal friendly (current behavior). Ref: RESOLUTION_PIPELINE.md:293 |
 | `engineer` | Build structures (locked, no-op) |
 | `sniper` | Mountain perch, long-range shot (locked, no-op) |
+
+---
+
+## Behavior Matrix
+
+The 5×5 intersection of movement × attack produces 25 distinct tactical orders. The matrix IS the UI — players see the full table and select their order by picking a row (movement) and column (attack). The intersection lights up as the active order.
+
+| | **shoot-on-sight** | **skirmish** | **retreat-on-contact** | **hunt** | **ignore** |
+|---|---|---|---|---|---|
+| **advance** | Assault | Advance in Contact | Probe | Search and Destroy | March |
+| **flank-left** | Envelop Left | Harass Left | Feint Left | Pursue Left | Bypass Left |
+| **flank-right** | Envelop Right | Harass Right | Feint Right | Pursue Right | Bypass Right |
+| **scout** | Recon in Force | Armed Recon | Recon | Track | Silent Recon |
+| **hold** | Defend | Harassing Defense | Tripwire | Ambush | Dig In |
+
+Each cell name reads as a military order. The building blocks (row/column headers) are mechanical — the intersection is the intent.
+
+### UI Interaction
+
+The matrix is presented as a clickable table in both the planning phase directive selector and the battle phase redirect picker.
+
+1. **Click a row header** (movement) — entire row highlights. The 5 cells in that row show the possible orders for that movement type.
+2. **Click a column header** (attack) — entire column highlights. The 5 cells in that column show the possible orders for that engagement posture.
+3. **When both row and column are selected** — the intersection cell locks in with a brighter/accent color. The order name displays prominently (e.g., "ASSAULT", "FEINT LEFT", "AMBUSH").
+4. **Click a cell directly** — selects both row and column at once.
+5. **Specialty modifier** — shown below the matrix as a separate toggle row (support / engineer / sniper / none). Does not affect the order name.
+6. **Target selector** — appears contextually after order selection when the movement type requires a target (advance, flank, scout need a destination; hold does not).
+
+### Order Name Resolution
+
+```typescript
+const BEHAVIOR_NAMES: Record<MovementDirective, Record<AttackDirective, string>> = {
+  advance:      { 'shoot-on-sight': 'Assault',        skirmish: 'Advance in Contact', 'retreat-on-contact': 'Probe',       hunt: 'Search and Destroy', ignore: 'March' },
+  'flank-left': { 'shoot-on-sight': 'Envelop Left',   skirmish: 'Harass Left',        'retreat-on-contact': 'Feint Left',  hunt: 'Pursue Left',        ignore: 'Bypass Left' },
+  'flank-right':{ 'shoot-on-sight': 'Envelop Right',  skirmish: 'Harass Right',       'retreat-on-contact': 'Feint Right', hunt: 'Pursue Right',       ignore: 'Bypass Right' },
+  scout:        { 'shoot-on-sight': 'Recon in Force',  skirmish: 'Armed Recon',        'retreat-on-contact': 'Recon',       hunt: 'Track',              ignore: 'Silent Recon' },
+  hold:         { 'shoot-on-sight': 'Defend',          skirmish: 'Harassing Defense',  'retreat-on-contact': 'Tripwire',    hunt: 'Ambush',             ignore: 'Dig In' },
+};
+```
+
+This constant lives in the engine (shared types or a dedicated `behavior-names.ts`) so both client and server can resolve the label from the two directive values.
+
+---
 
 ## Flank Design
 
@@ -105,7 +141,7 @@ The flank waypoint calculation also needs rework: the current code offsets only 
 | `scout`       | `scout`           | `ignore`        | `null`            |
 | `support`     | `advance`         | `ignore`        | `support`         |
 | `hunt`        | `advance`         | `hunt`          | `null`            |
-| `capture`     | `capture`         | `ignore`        | `null`            |
+| `capture`     | `advance`(target: city) | `ignore`  | `null`            |
 
 Default attackDirective is `ignore`, not `shoot-on-sight`. Old advance had implicit "attack enemies along the way" behavior — that was directive AI calling `tryAttackClosest()` unconditionally. The attack layer now makes this explicit: set `shoot-on-sight` if you want a unit to engage.
 
@@ -148,10 +184,11 @@ case 'deployment-zone': {
 - **Hold DEF bonus stays on `movementDirective === 'hold'`**, not attack layer. It's a positional bonus (dug in), not an engagement posture.
 - **Attack layer defaults to `ignore`** — units don't engage unless explicitly told to. This strengthens the "commitment under uncertainty" design: you must plan engagement behavior, not just movement.
 - **Attack layer gates `tryAttackClosest()`** — see "Attack Layer Wiring" section below. Every movement directive function checks the attack layer before engaging. This is the core of the two-layer model: movement and engagement are independent.
-- **Capture auto-hold** — when `executeCapture()` detects the unit is on a captured city, it mutates `unit.movementDirective = 'hold'` and returns `{ type: 'hold' }`. One-time state transition: capture fulfills its purpose, unit switches to hold with DEF bonus. Ref: DESIGN.md:141 "occupy it...then hold position with DEF bonus."
-- **Hunt conditioned on visibility.** Hunt only pursues units in LoS or revealed by scout. Ref: DESIGN.md:140 "pursue a specific enemy unit" (implies known target). Temporary: hunt behaves like shoot-on-sight until vision checks are implemented in directive execution.
-- **Scout is a movement directive**, not a specialty modifier. It defines HOW the unit moves (probe, keep distance, reveal). Ref: DESIGN.md:138.
-- **Capture is a movement directive** — it defines WHERE you go (city) and WHAT happens on arrival (occupy, auto-hold). Ref: DESIGN.md:141.
+- **City auto-hold** — when any unit arrives at a city target and the city flips (Phase 9), the engine mutates `unit.movementDirective = 'hold'`. One-time transition: the unit dug in after capturing. Ref: DESIGN.md:141 "occupy it...then hold position with DEF bonus." This is a general rule on city capture, not a separate directive.
+- **Capture is not a movement directive.** City capture is automatic in Phase 9 when any unit stands on an enemy city. To capture, set `advance(target: city)`. No distinct movement pattern — capture was derivative of advance.
+- **Fortify is dropped.** Hold already provides the DEF bonus (dug in). Engineer covers building permanent defenses. Fortify was a no-op placeholder with no distinct behavior that hold doesn't already provide.
+- **Scout is a movement directive** — it defines a distinct movement pattern: orbit at observation radius around target, patrol arc, do not approach. This is NOT advance + retreat-on-contact.
+- **Hunt conditioned on visibility.** Hunt only pursues units in LoS or revealed by scout — no blind chasing. Temporary: hunt behaves like shoot-on-sight until vision checks are implemented in directive execution.
 - **Engineer/sniper are locked no-ops.** Valid type values, no behavior until buff system exists.
 
 ### Behavioral change: redirect no longer consumes action
@@ -209,7 +246,7 @@ function executeAdvance(unit: Unit, context: DirectiveContext): UnitAction {
 }
 ```
 
-This pattern applies to: `executeAdvance`, `executeHold`, `executeFlank`, `executeScout`, `executeCapture`. All replace `tryAttackClosest()` with `resolveAttackBehavior()`.
+This pattern applies to: `executeAdvance`, `executeHold`, `executeFlank`, `executeScout`. All replace `tryAttackClosest()` with `resolveAttackBehavior()`.
 
 `retreatFrom()` already exists in `directives.ts` (used by current `executeScout`). It computes a flee path away from the enemy. With the `deployment-zone` target type, `retreat-on-contact` can flee toward the deployment zone instead of just "away from enemy."
 
@@ -223,7 +260,7 @@ This pattern applies to: `executeAdvance`, `executeHold`, `executeFlank`, `execu
 
 Replace `DirectiveType` (line 77):
 ```typescript
-export type MovementDirective = 'advance' | 'flank-left' | 'flank-right' | 'scout' | 'hold' | 'capture';
+export type MovementDirective = 'advance' | 'flank-left' | 'flank-right' | 'scout' | 'hold';
 export type AttackDirective = 'shoot-on-sight' | 'skirmish' | 'retreat-on-contact' | 'hunt' | 'ignore';
 export type SpecialtyModifier = 'support' | 'engineer' | 'sniper';
 ```
@@ -286,7 +323,7 @@ Hold bonus: `defender.directive === 'hold'` -> `defender.movementDirective === '
 
 ### 6. commands.ts
 
-`validateDirectiveTarget()`: change signature to `(movementDirective: MovementDirective, target: DirectiveTarget)`. Keep `capture` -> city validation. Remove `hunt` check (hunt target validated on the Command's DirectiveTarget, not here).
+`validateDirectiveTarget()`: change signature to `(movementDirective: MovementDirective, target: DirectiveTarget)`. Remove `capture` -> city validation (capture is not a directive anymore). Remove `hunt` check (hunt target validated on the Command's DirectiveTarget, not here).
 
 `validateCommand` / `canIssueCommand`: remove `direct-move` range check, `direct-attack` range check, `retreat` case. Only `redirect` remains — just check unit exists and hasn't been commanded this turn.
 
@@ -310,15 +347,14 @@ export function executeDirective(unit: Unit, context: DirectiveContext): UnitAct
     case 'flank-left': return executeFlank(unit, context, 'left');
     case 'flank-right': return executeFlank(unit, context, 'right');
     case 'scout': return executeScout(unit, context);
-    case 'capture': return executeCapture(unit, context);
   }
 }
 ```
 
-All movement functions (`executeAdvance`, `executeHold`, `executeFlank`, `executeScout`, `executeCapture`): replace `tryAttackClosest()` with `resolveAttackBehavior()`.
+All movement functions (`executeAdvance`, `executeHold`, `executeFlank`, `executeScout`): replace `tryAttackClosest()` with `resolveAttackBehavior()`.
 
-- `executeScout`: movement directive function (probe area, keep distance, reveal). Inherent scout behavior (keep distance) is movement logic, NOT attack layer. The old "retreat if enemy adjacent" is still scout-specific movement — if you also set `retreat-on-contact` in the attack layer, both apply (scout keeps distance AND flees on engagement).
-- `executeCapture`: when unit is on a captured city, mutate `unit.movementDirective = 'hold'` and return `{ type: 'hold' }`. One-time transition.
+- `executeScout`: movement directive function — orbit at observation radius around target, patrol arc. Inherent scout behavior (keep distance, patrol) is movement logic, NOT attack layer. The old "retreat if enemy adjacent" is still scout-specific movement — if you also set `retreat-on-contact` in the attack layer, both apply (scout keeps distance AND flees on engagement).
+- Delete `executeCapture()` — capture is `advance(target: city)` now. City auto-hold handled in game-state.ts Phase 9.
 - Hunt is attack layer, handled by `resolveAttackBehavior()`. Remove `executeHunt()` as standalone function.
 - All `findPath`/`getMoveCost` calls: `unit.directive` -> `unit.movementDirective`.
 
@@ -406,6 +442,7 @@ case 'redirect': {
 - Support heal check: `unit.specialtyModifier === 'support'`
 - All `findPath`/`getMoveCost` calls: `unit.directive` -> `unit.movementDirective`.
 - `DirectiveContext` construction (line ~279): add `mapRadius: state.map.mapRadius`, `deploymentZone: currentPlayer === 'player1' ? state.map.player1Deployment : state.map.player2Deployment`.
+- **City auto-hold rule** in territory resolution (Phase 9 equivalent): after a city flips to a unit's owner, if that unit's `directiveTarget` was the captured city, mutate `unit.movementDirective = 'hold'`. This replaces the old `executeCapture()` auto-hold behavior.
 
 ### 9. ai.ts
 
@@ -483,19 +520,30 @@ Update `'place-unit'` and `'set-directive'` event data shapes to carry three fie
 
 Delete Move, Attack, Retreat buttons. Delete `handleMoveMode`, `handleAttackMode`, `handleRetreat`. Delete `commandMode` move/attack state.
 
-One button: **Redirect (1 CP)**. Opens two-layer picker:
-- **Move layer**: 6 card-style buttons (advance, flank-L, flank-R, scout, hold, capture)
-- **Attack layer**: 5 toggle buttons (shoot-on-sight, skirmish, retreat-on-contact, hunt, ignore)
-- **Special**: locked display (support available, engineer/sniper grayed)
-- **Confirm** button dispatches redirect command
+One button: **Redirect (1 CP)**. Opens the **Order Matrix** (see Behavior Matrix section above).
 
-Initial state of picker: populated from selected unit's current directive values.
+### 2. OrderMatrix.tsx — The directive picker (NEW component)
 
-Target selection flow: `capture` -> city target picker, `hunt` -> enemy unit target picker (visible only).
+The 5×5 behavior matrix is the UI. Shared between planning phase (DirectiveSelector) and battle phase (CommandMenu redirect).
 
-### 2. DirectiveSelector.tsx — Same two-layer picker for planning phase
+**Layout:** A 6×6 grid (5 movement rows + header row, 5 attack columns + header column). Row headers are movement directives, column headers are attack directives. Each intersection cell shows the order name.
 
-Three sections matching CommandMenu picker. Same component, different context (planning vs battle).
+**Interaction:**
+1. Click a row header → entire row highlights (soft). Shows 5 possible orders for that movement.
+2. Click a column header → entire column highlights (soft). Shows 5 possible orders for that engagement.
+3. When both row and column are highlighted → intersection cell locks in with accent color. Order name displays prominently.
+4. Click a cell directly → selects both row and column at once.
+5. Specialty modifier toggle row below the matrix (support / engineer / sniper / none).
+6. Target selector appears contextually after order selection when movement requires a target (advance, flank, scout need destination; hold does not).
+7. **Confirm** button dispatches the directive (planning) or redirect command (battle).
+
+Initial state: pre-selected to the unit's current movement × attack combination.
+
+**CSS classes:** `.order-matrix`, `.order-matrix-cell`, `.order-matrix-cell.row-highlight`, `.order-matrix-cell.col-highlight`, `.order-matrix-cell.selected` (accent), `.order-matrix-header`, `.order-matrix-order-name` (large display of selected order).
+
+### 3. DirectiveSelector.tsx — Wraps OrderMatrix for planning phase
+
+Thin wrapper: renders OrderMatrix, dispatches `setUnitDirective()` on confirm. No separate picker UI — the matrix IS the selector.
 
 ### 3. App.tsx
 
@@ -515,14 +563,14 @@ Three sections matching CommandMenu picker. Same component, different context (p
 ### 5. unit-model.ts — Icon maps
 
 ```
-MOVEMENT_ICONS: advance=triangle-up, flank-left=triangle-left, flank-right=triangle-right, scout=circle, hold=square, capture=flag
+MOVEMENT_ICONS: advance=triangle-up, flank-left=triangle-left, flank-right=triangle-right, scout=circle, hold=square
 ATTACK_ICONS: shoot-on-sight=crosshair, skirmish=slash, retreat-on-contact=triangle-down, hunt=eye, ignore=(none)
 ```
 Display: movement icon primary, attack icon secondary (when not ignore). Specialty icon overlay when set.
 
 ### 6. UnitInfoPanel.tsx
 
-Three-row display: Movement info, Attack info (if not ignore), Specialty info (if set).
+Primary display: the **order name** from `BEHAVIOR_NAMES[unit.movementDirective][unit.attackDirective]` (e.g., "ASSAULT", "RECON", "AMBUSH"). Secondary: movement + attack breakdown. Specialty info if set.
 
 ### 7. command-renderer.ts
 
@@ -534,7 +582,7 @@ Three-row display: Movement info, Attack info (if not ignore), Specialty info (i
 
 Update command display. Only one command type now:
 ```
-`redirect:${c.unitId} -> ${c.newMovementDirective}/${c.newAttackDirective}`
+`redirect:${c.unitId} -> ${BEHAVIOR_NAMES[c.newMovementDirective][c.newAttackDirective]}`
 ```
 
 ### 9. network-manager.ts
@@ -548,7 +596,7 @@ Selection highlighting lives in App.tsx (there is no selection-renderer.ts file)
 
 ### 11. components.css
 
-Remove `.command-btn` active states for move/attack modes. Add `.directive-layer-group`, `.directive-layer-btn`, `.directive-layer-btn.active` for two-layer picker. Add `.directive-layer-label` for section headers.
+Remove `.command-btn` active states for move/attack modes. Add `.order-matrix`, `.order-matrix-cell`, `.order-matrix-cell.row-highlight`, `.order-matrix-cell.col-highlight`, `.order-matrix-cell.selected`, `.order-matrix-header`, `.order-matrix-order-name` for the matrix picker.
 
 ---
 
@@ -556,8 +604,8 @@ Remove `.command-btn` active states for move/attack modes. Add `.directive-layer
 
 1. `pnpm test` — all engine tests pass (update count after test changes)
 2. `pnpm test` — all server tests pass
-3. `pnpm dev` — start vsAI game, place units with two-layer directive selector
-4. Battle phase: single Redirect button opens two-layer picker, redirect works
+3. `pnpm dev` — start vsAI game, place units with order matrix
+4. Battle phase: single Redirect button opens order matrix, redirect works
 5. Verify no Move/Attack/Retreat buttons exist in command menu
 6. Verify fog stripping: enemy units show `advance/ignore/null`
 7. Verify redirect does NOT consume unit action — unit acts with new directive same turn
@@ -577,11 +625,12 @@ Remove `.command-btn` active states for move/attack modes. Add `.directive-layer
 6. **Command path visualization**: Old direct-move showed path polyline, old direct-attack showed crosshair. Redirect has no spatial visualization. Future: show directive target as waypoint marker.
 7. **Default attack = ignore behavioral change**: Current advance attacks in range. New advance + ignore walks past enemies. AI presets must explicitly set shoot-on-sight for aggressive behavior. Monitor AI in playtesting.
 8. **Skirmish temporary equivalence**: Skirmish ("fire once, keep moving") requires the combat timeline to resolve mid-movement fire. Until then, skirmish behaves identically to shoot-on-sight (stop and attack). Distinguish in 0.4.
-9. **RESOLUTION_PIPELINE.md stale**: Still uses old terminology (assault, cautious) and old directive model. Needs updating to match this plan's taxonomy. Separate doc task, not blocking implementation.
+9. **RESOLUTION_PIPELINE.md update needed**: Uses provisional names (assault, cautious) and old single-directive model. Update to match finalized layer names and two-layer model. Separate doc task, not blocking implementation.
+10. **Scout orbit algorithm**: Current `executeScout()` does "advance but stop 2-3 hexes away." The target behavior is orbit/patrol at radius around target. This requires new pathfinding logic: pick hexes at radius R from target on the arc, pathfind to nearest, advance along arc each turn. Implement basic version (approach + stop at distance) first, iterate orbit in a follow-up.
 
 ## Risks
 
 1. **Behavioral change from ignore default**: Current advance attacks anything in range. New advance + ignore walks past enemies. AI presets must set shoot-on-sight explicitly.
 2. **No standalone move/attack commands**: Players lose click-to-move, click-to-attack. Redirect-only is intentional but untested. If playtesting reveals this feels bad, consider "force fire" as a rare one-turn exception.
-3. **Client UI complexity**: Two-layer picker in both planning and battle. Keep functional, iterate on UX later.
+3. **Order matrix UI density**: 25 cells is a lot. Mitigated by row/column highlighting — the player doesn't need to read all 25, they select a row and a column. The intersection is the decision. If playtesting shows cognitive overload, consider progressive disclosure (show order names only after row+column selected).
 4. **Redirect doesn't consume action**: Redirected units act immediately with new directive. This makes redirect powerful — change plan + act in same turn. The 1 CP cost is the only penalty. Monitor for abuse.
