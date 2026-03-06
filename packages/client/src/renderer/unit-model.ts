@@ -55,7 +55,7 @@ const UNIT_SCALE: Record<string, number> = {
   infantry:  1.20,
   tank:      1.80,
   artillery: 1.50,
-  recon:     1.30,
+  recon:     2.00,
 };
 
 // ---------------------------------------------------------------------------
@@ -82,17 +82,49 @@ function createUnitModel(
   origBox.getSize(origSize);
   const maxDim = Math.max(origSize.x, origSize.y, origSize.z);
   const typeMul = UNIT_SCALE[unit.type] ?? 0.6;
+
+  // Wrap clone in a container so animations that target the root node's
+  // translation/rotation/scale don't override the world transform we set.
+  const container = new THREE.Group();
+
+  // Scale on the container — not the clone — because animations may override
+  // clone.scale every frame (e.g. non-skinned models like scout).
   if (maxDim > 0) {
-    clone.scale.setScalar((WORLD_HEX_SIZE * typeMul) / maxDim);
+    container.scale.setScalar((WORLD_HEX_SIZE * typeMul) / maxDim);
   }
+  // Shift model up so its bottom sits at ground level. Use an intermediate
+  // group so animations that override clone.position don't wipe the offset.
+  const pivot = new THREE.Group();
+  pivot.position.y = -origBox.min.y;
+  pivot.add(clone);
+  container.add(pivot);
+
+  // Force all materials opaque — clone materials so we don't mutate shared refs
+  clone.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const fixMat = (m: THREE.Material): THREE.Material => {
+      const c = m.clone();
+      c.transparent = false;
+      c.opacity = 1;
+      c.depthWrite = true;
+      (c as THREE.MeshStandardMaterial).alphaMap = null;
+      c.needsUpdate = true;
+      return c;
+    };
+    if (Array.isArray(child.material)) {
+      child.material = child.material.map(fixMat);
+    } else {
+      child.material = fixMat(child.material);
+    }
+  });
 
   // Face units inward: P1 deploys bottom, faces up; P2 deploys top, faces down
-  clone.rotation.y = unit.owner === 'player1' ? Math.PI : 0;
+  container.rotation.y = unit.owner === 'player1' ? Math.PI : 0;
 
   // Position using engine world coordinates
   const elev = elevationMap.get(hexToKey(unit.position)) ?? 0;
   const world = cachedHexToWorld(unit.position, elev);
-  clone.position.set(world.x, world.y, world.z);
+  container.position.set(world.x, world.y, world.z);
 
   // Animation mixer + clips
   const mixer = new THREE.AnimationMixer(clone);
@@ -132,16 +164,16 @@ function createUnitModel(
 
   const hpLabel = new CSS2DObject(hpWrapper);
   hpLabel.position.set(0, modelHeight * 1.1, 0);
-  clone.add(hpLabel);
+  container.add(hpLabel);
 
   const directiveEl = document.createElement('div');
   const directiveLabel = new CSS2DObject(directiveEl);
 
-  ctx.scene.add(clone);
+  ctx.scene.add(container);
 
   const model: UnitModel3D = {
     unitId: unit.id,
-    object: clone,
+    object: container,
     mixer,
     clips,
     currentAction: null,
