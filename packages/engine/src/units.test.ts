@@ -15,6 +15,7 @@ describe('UNIT_STATS', () => {
       attackRange: 1,
       minAttackRange: 1,
       visionRange: 3,
+      canClimb: true,
     });
   });
 
@@ -30,6 +31,7 @@ describe('UNIT_STATS', () => {
       attackRange: 1,
       minAttackRange: 1,
       visionRange: 3,
+      canClimb: false,
     });
   });
 
@@ -45,6 +47,7 @@ describe('UNIT_STATS', () => {
       attackRange: 3,
       minAttackRange: 2,
       visionRange: 3,
+      canClimb: false,
     });
   });
 
@@ -60,6 +63,7 @@ describe('UNIT_STATS', () => {
       attackRange: 1,
       minAttackRange: 1,
       visionRange: 6,
+      canClimb: true,
     });
   });
 });

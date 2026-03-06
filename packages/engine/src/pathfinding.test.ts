@@ -166,14 +166,19 @@ describe('pathCost', () => {
     expect(cost).toBe(0);
   });
 
-  it('returns Infinity when path crosses impassable terrain for unit type', () => {
+  it('returns Infinity when path crosses impassable elevation for unit type', () => {
     const terrain = new Map<string, TerrainType>();
     const p0 = createHex(0, 0);
     const p1 = createHex(1, 0);
     terrain.set(hexToKey(p0), 'plains');
-    terrain.set(hexToKey(p1), 'mountain');
+    terrain.set(hexToKey(p1), 'plains');
 
-    const cost = pathCost([p0, p1], terrain, 'tank');
+    // Elevation delta 4 > CLIMB_THRESHOLD(3), tank canClimb=false → Infinity
+    const elevation = new Map<string, number>();
+    elevation.set(hexToKey(p0), 0);
+    elevation.set(hexToKey(p1), 4);
+
+    const cost = pathCost([p0, p1], terrain, 'tank', undefined, undefined, elevation);
     expect(cost).toBe(Infinity);
   });
 });

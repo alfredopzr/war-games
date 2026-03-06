@@ -9,7 +9,6 @@ describe('TERRAIN definitions', () => {
       moveCost: 1,
       defenseModifier: 0,
       blocksLoS: false,
-      infantryOnly: false,
     });
   });
 
@@ -19,7 +18,6 @@ describe('TERRAIN definitions', () => {
       moveCost: 2,
       defenseModifier: 0.25,
       blocksLoS: true,
-      infantryOnly: false,
     });
   });
 
@@ -29,7 +27,6 @@ describe('TERRAIN definitions', () => {
       moveCost: 3,
       defenseModifier: 0.4,
       blocksLoS: false,
-      infantryOnly: true,
     });
   });
 
@@ -39,34 +36,46 @@ describe('TERRAIN definitions', () => {
       moveCost: 1,
       defenseModifier: 0.3,
       blocksLoS: false,
-      infantryOnly: false,
     });
   });
 });
 
 describe('getMoveCost', () => {
-  it('returns Infinity for tank on mountain', () => {
-    expect(getMoveCost('mountain', 'tank')).toBe(Infinity);
-  });
-
-  it('returns Infinity for artillery on mountain', () => {
-    expect(getMoveCost('mountain', 'artillery')).toBe(Infinity);
-  });
-
-  it('returns Infinity for recon on mountain', () => {
-    expect(getMoveCost('mountain', 'recon')).toBe(Infinity);
-  });
-
-  it('returns normal cost for infantry on mountain', () => {
+  it('returns base cost when no elevation provided', () => {
     expect(getMoveCost('mountain', 'infantry')).toBe(3);
+    expect(getMoveCost('mountain', 'tank')).toBe(3);
+    expect(getMoveCost('plains', 'infantry')).toBe(1);
   });
 
-  it('returns correct cost for all terrain/unit combos on non-infantry-only terrain', () => {
-    const nonRestrictedTerrains: TerrainType[] = ['plains', 'forest', 'city'];
+  it('adds climb cost for uphill movement', () => {
+    // delta=2, cost = 1 (plains) + 2*0.5 = 2
+    expect(getMoveCost('plains', 'infantry', undefined, undefined, 0, 2)).toBe(2);
+  });
+
+  it('blocks non-climbers above CLIMB_THRESHOLD', () => {
+    // delta=4 > threshold=3, tank canClimb=false
+    expect(getMoveCost('plains', 'tank', undefined, undefined, 0, 4)).toBe(Infinity);
+    expect(getMoveCost('plains', 'artillery', undefined, undefined, 0, 4)).toBe(Infinity);
+  });
+
+  it('allows climbers above CLIMB_THRESHOLD', () => {
+    // delta=4, infantry canClimb=true, cost = 1 + 4*0.5 = 3
+    expect(getMoveCost('plains', 'infantry', undefined, undefined, 0, 4)).toBe(3);
+    expect(getMoveCost('plains', 'recon', undefined, undefined, 0, 4)).toBe(3);
+  });
+
+  it('downhill is free by default (DOWNHILL_COST_MULT=0)', () => {
+    // Going from elev 5 to elev 0 — only base terrain cost
+    expect(getMoveCost('plains', 'tank', undefined, undefined, 5, 0)).toBe(1);
+  });
+
+  it('returns correct cost for all terrain/unit combos on flat ground', () => {
+    const allTerrains: TerrainType[] = ['plains', 'forest', 'city', 'mountain'];
     const allUnits: UnitType[] = ['infantry', 'tank', 'artillery', 'recon'];
 
-    for (const terrain of nonRestrictedTerrains) {
+    for (const terrain of allTerrains) {
       for (const unit of allUnits) {
+        // No elevation = base terrain cost
         expect(getMoveCost(terrain, unit)).toBe(TERRAIN[terrain].moveCost);
       }
     }
@@ -94,6 +103,26 @@ describe('flank directive forest cost', () => {
     expect(getMoveCost('plains', 'infantry', 'flank-left')).toBe(1);
     expect(getMoveCost('city', 'infantry', 'flank-right')).toBe(1);
     expect(getMoveCost('mountain', 'infantry', 'flank-left')).toBe(3);
+  });
+});
+
+describe('elevation + terrain combined', () => {
+  it('mountain terrain + steep uphill is expensive for climbers', () => {
+    // mountain base cost 3 + delta 5 * 0.5 = 5.5
+    expect(getMoveCost('mountain', 'infantry', undefined, undefined, 2, 7)).toBe(5.5);
+  });
+
+  it('highway bypasses elevation for vehicles (graded road)', () => {
+    expect(getMoveCost('plains', 'tank', undefined, 'highway', 0, 4)).toBe(0.5);
+    expect(getMoveCost('plains', 'tank', undefined, 'highway', 0, 0)).toBe(0.5);
+  });
+
+  it('bridge is always cost 1 regardless of elevation', () => {
+    expect(getMoveCost('plains', 'tank', undefined, 'bridge', 0, 5)).toBe(1);
+  });
+
+  it('river is always impassable', () => {
+    expect(getMoveCost('plains', 'infantry', undefined, 'river')).toBe(Infinity);
   });
 });
 

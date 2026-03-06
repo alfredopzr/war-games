@@ -1,9 +1,14 @@
 import type { UnitType, UnitStats, Unit, PlayerId, CubeCoord, DirectiveType, DirectiveTarget } from './types';
+import {
+  MOVE_DIVISOR_INFANTRY, MOVE_DIVISOR_TANK,
+  MOVE_DIVISOR_ARTILLERY, MOVE_DIVISOR_RECON,
+} from './map-gen-params';
 
 // =============================================================================
 // Unit Stats — design spec values for all 4 MVP unit types
 // =============================================================================
 
+/** Default stats used when no map is available. Overridden by scaledUnitStats(). */
 export const UNIT_STATS: Record<UnitType, UnitStats> = {
   infantry: {
     type: 'infantry',
@@ -15,6 +20,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
     attackRange: 1,
     minAttackRange: 1,
     visionRange: 3,
+    canClimb: true,
   },
   tank: {
     type: 'tank',
@@ -26,6 +32,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
     attackRange: 1,
     minAttackRange: 1,
     visionRange: 3,
+    canClimb: false,
   },
   artillery: {
     type: 'artillery',
@@ -37,6 +44,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
     attackRange: 3,
     minAttackRange: 2,
     visionRange: 3,
+    canClimb: false,
   },
   recon: {
     type: 'recon',
@@ -48,8 +56,32 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
     attackRange: 1,
     minAttackRange: 1,
     visionRange: 6,
+    canClimb: true,
   },
 } as const;
+
+const MOVE_DIVISORS: Record<UnitType, number> = {
+  infantry: MOVE_DIVISOR_INFANTRY,
+  tank: MOVE_DIVISOR_TANK,
+  artillery: MOVE_DIVISOR_ARTILLERY,
+  recon: MOVE_DIVISOR_RECON,
+};
+
+/**
+ * Return a copy of UNIT_STATS with moveRange scaled to the map diameter.
+ * mapDiameter = 2 * mapRadius.
+ */
+export function scaledUnitStats(mapDiameter: number): Record<UnitType, UnitStats> {
+  const result = {} as Record<UnitType, UnitStats>;
+  for (const key of Object.keys(UNIT_STATS) as UnitType[]) {
+    const base = UNIT_STATS[key];
+    result[key] = {
+      ...base,
+      moveRange: Math.max(1, Math.floor(mapDiameter / MOVE_DIVISORS[key])),
+    };
+  }
+  return result;
+}
 
 // =============================================================================
 // Unit Creation

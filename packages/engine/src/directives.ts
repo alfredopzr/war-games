@@ -10,6 +10,7 @@ import { cubeDistance, hexToKey, hexNeighbors, createHex } from './hex';
 import { UNIT_STATS } from './units';
 import { canAttack } from './combat';
 import { findPath } from './pathfinding';
+import { getMoveCost } from './terrain';
 
 // -----------------------------------------------------------------------------
 // Public API
@@ -316,15 +317,35 @@ function moveToward(
     unit.type,
     occupied,
     unit.directive,
+    context.modifiers,
+    context.elevation,
   );
 
   if (!path || path.length <= 1) {
     return { type: 'hold' };
   }
 
-  // Follow the path up to moveRange steps
-  const stepIndex = Math.min(stats.moveRange, path.length - 1);
-  return { type: 'move', targetHex: path[stepIndex]! };
+  // Walk path spending movement budget (cost-based, not step-based)
+  let costBudget = stats.moveRange;
+  let lastValidIndex = 0;
+  for (let i = 1; i < path.length; i++) {
+    const prevKey = hexToKey(path[i - 1]!);
+    const curKey = hexToKey(path[i]!);
+    const terrain = context.terrain.get(curKey);
+    if (!terrain) break;
+    const stepCost = getMoveCost(
+      terrain, unit.type, unit.directive,
+      context.modifiers.get(curKey),
+      context.elevation.get(prevKey),
+      context.elevation.get(curKey),
+    );
+    if (stepCost === Infinity) break;
+    costBudget -= stepCost;
+    if (costBudget < 0) break;
+    lastValidIndex = i;
+  }
+  if (lastValidIndex === 0) return { type: 'hold' };
+  return { type: 'move', targetHex: path[lastValidIndex]! };
 }
 
 /**
@@ -473,12 +494,33 @@ function scoutExplore(unit: Unit, context: DirectiveContext): UnitAction {
     unit.type,
     occupied,
     unit.directive,
+    context.modifiers,
+    context.elevation,
   );
 
   if (!path || path.length <= 1) {
     return { type: 'hold' };
   }
 
-  const stepIndex = Math.min(stats.moveRange, path.length - 1);
-  return { type: 'move', targetHex: path[stepIndex]! };
+  // Walk path spending movement budget (cost-based)
+  let costBudget = stats.moveRange;
+  let lastValidIndex = 0;
+  for (let i = 1; i < path.length; i++) {
+    const prevKey = hexToKey(path[i - 1]!);
+    const curKey = hexToKey(path[i]!);
+    const terrain = context.terrain.get(curKey);
+    if (!terrain) break;
+    const stepCost = getMoveCost(
+      terrain, unit.type, unit.directive,
+      context.modifiers.get(curKey),
+      context.elevation.get(prevKey),
+      context.elevation.get(curKey),
+    );
+    if (stepCost === Infinity) break;
+    costBudget -= stepCost;
+    if (costBudget < 0) break;
+    lastValidIndex = i;
+  }
+  if (lastValidIndex === 0) return { type: 'hold' };
+  return { type: 'move', targetHex: path[lastValidIndex]! };
 }

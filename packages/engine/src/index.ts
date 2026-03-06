@@ -33,7 +33,7 @@ export {
 export { TERRAIN, getMoveCost, getDefenseModifier, getVisionBonus } from './terrain';
 
 // Units
-export { UNIT_STATS, createUnit, getTypeAdvantage, resetUnitIdCounter } from './units';
+export { UNIT_STATS, scaledUnitStats, createUnit, getTypeAdvantage, resetUnitIdCounter } from './units';
 
 // Combat
 export { calculateDamage, canAttack } from './combat';
@@ -110,4 +110,6 @@ export {
   RIVER_LAKE_RADIUS, RIVER_DELTA_BRANCHES, RIVER_DELTA_MAX_LENGTH,
   RIVER_DELTA_ELEV_THRESHOLD,
   HIGHWAY_ENABLED, HIGHWAY_COUNT,
+  CLIMB_COST_PER_ELEV, CLIMB_THRESHOLD, DOWNHILL_COST_MULT,
+  MOVE_DIVISOR_INFANTRY, MOVE_DIVISOR_TANK, MOVE_DIVISOR_ARTILLERY, MOVE_DIVISOR_RECON,
 } from './map-gen-params';

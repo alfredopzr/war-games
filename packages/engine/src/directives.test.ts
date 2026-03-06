@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { DirectiveContext, PlayerId, TerrainType } from './types';
+import type { DirectiveContext, PlayerId, TerrainType, HexModifier } from './types';
 import { createHex, cubeDistance } from './hex';
 import { createUnit, resetUnitIdCounter } from './units';
 import { executeDirective, resolveTarget } from './directives';
@@ -19,6 +19,8 @@ function makeContext(overrides: Partial<DirectiveContext> = {}): DirectiveContex
     friendlyUnits: [],
     enemyUnits: [],
     terrain,
+    elevation: new Map<string, number>(),
+    modifiers: new Map<string, HexModifier>(),
     centralObjective: createHex(8, 2),
     cities: new Map<string, PlayerId | null>(),
     ...overrides,

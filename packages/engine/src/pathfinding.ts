@@ -36,6 +36,7 @@ export function findPath(
   occupiedHexes: Set<string>,
   directive?: DirectiveType,
   modifiers?: Map<string, HexModifier>,
+  elevationMap?: Map<string, number>,
 ): CubeCoord[] | null {
   const startKey = hexToKey(start);
   const endKey = hexToKey(end);
@@ -90,7 +91,9 @@ export function findPath(
       if (terrain === undefined) continue;
 
       // Skip if impassable
-      const moveCost = getMoveCost(terrain, unitType, directive, modifiers?.get(neighborKey));
+      const elevFrom = elevationMap?.get(currentKey);
+      const elevTo = elevationMap?.get(neighborKey);
+      const moveCost = getMoveCost(terrain, unitType, directive, modifiers?.get(neighborKey), elevFrom, elevTo);
       if (moveCost === Infinity) continue;
 
       // Skip if occupied (except destination)
@@ -128,15 +131,19 @@ export function pathCost(
   unitType: UnitType,
   directive?: DirectiveType,
   modifiers?: Map<string, HexModifier>,
+  elevationMap?: Map<string, number>,
 ): number {
   if (path.length <= 1) return 0;
 
   let total = 0;
   for (let i = 1; i < path.length; i++) {
+    const prevKey = hexToKey(path[i - 1]!);
     const key = hexToKey(path[i]!);
     const terrain = terrainMap.get(key);
     if (terrain === undefined) return Infinity;
-    const cost = getMoveCost(terrain, unitType, directive, modifiers?.get(key));
+    const elevFrom = elevationMap?.get(prevKey);
+    const elevTo = elevationMap?.get(key);
+    const cost = getMoveCost(terrain, unitType, directive, modifiers?.get(key), elevFrom, elevTo);
     if (cost === Infinity) return Infinity;
     total += cost;
   }

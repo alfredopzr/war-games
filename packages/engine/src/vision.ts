@@ -31,6 +31,13 @@ export function calculateVisibility(
 ): Set<string> {
   const visible = new Set<string>();
 
+  // Pre-build coord array once — avoids re-parsing "q,r" strings per unit
+  const hexCoords: { key: string; q: number; r: number }[] = [];
+  for (const key of terrainMap.keys()) {
+    const [qStr, rStr] = key.split(',');
+    hexCoords.push({ key, q: Number(qStr), r: Number(rStr) });
+  }
+
   for (const unit of friendlyUnits) {
     const unitKey = hexToKey(unit.position);
     const unitElev = elevationMap.get(unitKey) ?? 0;
@@ -40,12 +47,8 @@ export function calculateVisibility(
     // The unit always sees its own hex
     visible.add(unitKey);
 
-    for (const key of terrainMap.keys()) {
-      // Parse the key back to a coord for distance check
-      const [qStr, rStr] = key.split(',');
-      const tq = Number(qStr);
-      const tr = Number(rStr);
-      const targetCoord = { q: tq, r: tr, s: -tq - tr };
+    for (const hc of hexCoords) {
+      const targetCoord = { q: hc.q, r: hc.r, s: -hc.q - hc.r };
 
       const dist = cubeDistance(unit.position, targetCoord);
       if (dist > effectiveVision || dist === 0) continue;
@@ -55,7 +58,7 @@ export function calculateVisibility(
       let blocked = false;
 
       const elevA = unitElev;
-      const elevB = elevationMap.get(key) ?? 0;
+      const elevB = elevationMap.get(hc.key) ?? 0;
       const totalSteps = line.length - 1;
 
       // Intermediate hexes = everything except first (start) and last (end)
@@ -76,7 +79,7 @@ export function calculateVisibility(
       }
 
       if (!blocked) {
-        visible.add(key);
+        visible.add(hc.key);
       }
     }
   }

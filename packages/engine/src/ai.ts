@@ -18,7 +18,7 @@ import type {
   TerrainType,
 } from './types';
 import { UNIT_STATS, getTypeAdvantage } from './units';
-import { hexToKey, cubeDistance, getAllHexes } from './hex';
+import { hexToKey, cubeDistance, hexesInRadius, createHex } from './hex';
 import { canAttack, calculateDamage } from './combat';
 import { canIssueCommand, CP_PER_ROUND } from './commands';
 import { findPath } from './pathfinding';
@@ -348,10 +348,8 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
   const valuableCityHexes: CubeCoord[] = [];
   for (const [key, owner] of state.cityOwnership) {
     if (owner !== playerId) {
-      // Parse hex key back — find the hex in the terrain map
-      const allHexes = getAllHexes(state.map.gridSize);
-      const hex = allHexes.find((h) => hexToKey(h) === key);
-      if (hex) valuableCityHexes.push(hex);
+      const [cq, cr] = key.split(',');
+      valuableCityHexes.push(createHex(Number(cq), Number(cr)));
     }
   }
 
@@ -382,20 +380,17 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
     let bestScore = -Infinity;
 
     // Gather potential destinations within move range
-    const allHexes = getAllHexes(state.map.gridSize);
     const reachableHexes: CubeCoord[] = [];
 
-    for (const hex of allHexes) {
+    for (const hex of hexesInRadius(unit.position, stats.moveRange)) {
       const key = hexToKey(hex);
-      const dist = cubeDistance(unit.position, hex);
-      if (dist === 0) continue;
-      if (dist > stats.moveRange) continue;
-      if (occupiedKeys.has(key) && key !== unitKey) continue;
+      if (key === unitKey) continue;
+      if (occupiedKeys.has(key)) continue;
       if (claimedHexes.has(key)) continue;
       if (!state.map.terrain.has(key)) continue;
 
       // Verify pathable
-      const path = findPath(unit.position, hex, state.map.terrain, unit.type, occupiedKeys);
+      const path = findPath(unit.position, hex, state.map.terrain, unit.type, occupiedKeys, undefined, state.map.modifiers, state.map.elevation);
       if (!path) continue;
 
       reachableHexes.push(hex);
