@@ -359,8 +359,7 @@ function applyCommand(
       if (!path || path.length <= 1) return;
 
       // Walk path spending cost budget (same as retreat/directives)
-      const stats = UNIT_STATS[unit.type];
-      let costBudget = stats.moveRange;
+      let costBudget = state.unitStats[unit.type].moveRange;
       let lastValid = 0;
       for (let i = 1; i < path.length; i++) {
         const prevKey = hexToKey(path[i - 1]!);

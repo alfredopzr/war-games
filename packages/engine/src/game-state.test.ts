@@ -390,6 +390,7 @@ describe('direct-move pathfinding', () => {
     state.map.elevation.set(hexToKey(target), 0);
 
     unit.position = start;
+    state.unitStats = { ...UNIT_STATS };
 
     // Infantry moveRange = 3, forest cost = 2 each
     // Path: start -> mid1 (cost 2) -> mid2 (cost 2) = total 4, exceeds budget of 3
