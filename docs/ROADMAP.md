@@ -44,14 +44,17 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 
 ---
 
-## Current State (as of March 4, 2026)
+## Current State (as of March 5, 2026)
 
 ### What works
-- Full game engine: sequential turns, 8 directives with targeting, damage formula, A* pathfinding (min-heap), vision/LoS, economy, map generation (noise + elevation), round scoring, KotH win condition
-- Three.js renderer: terrain meshes, unit GLB models, fog, deploy zones, selection, HP bars, click detection via raycaster
-- Server: Socket.io game loop, room management, build/battle phases, reconnection
-- Client: React + Zustand, BattleHUD, UnitInfoPanel, Field Command palette
-- **Simultaneous resolution** (0.3): server buffers both players' commands, resolves when both received or timeout. Randomized resolution order per turn (deterministic from seed). turnsHeld double-increment fix. Client shows "Waiting for opponent..." / "Resolving..." states. Hotseat/AI remain alternating.
+- Full game engine: simultaneous resolution only (alternating-turn code fully stripped), 8 directives with targeting, damage formula, A* pathfinding (min-heap), vision/LoS, economy, map generation (noise + elevation), round scoring, KotH win condition
+- `executeTurn()` is now a pure resolver — no post-turn bookkeeping (no player switching, no turnsPlayed increment, no command pool creation). Orchestrators (`resolveSimultaneousTurn` on server, `resolveSimultaneousLocal` on client) manage all turn lifecycle externally.
+- `RoundState.turnsPlayed` is a single number (was per-player Record). `maxTurns` replaces `maxTurnsPerSide`.
+- Three.js renderer: terrain meshes, unit GLB models, fog, deploy zones, selection, HP bars, click detection via raycaster, pending command visuals (move path lines, attack crosshairs)
+- Server: Socket.io game loop, room management, build/battle phases, reconnection, simultaneous resolution with deterministic RNG
+- Client: React + Zustand, BattleHUD, UnitInfoPanel, Field Command palette, CommandMenu with move/attack range highlights
+- **Simultaneous resolution** (0.3): server buffers both players' commands, resolves when both received or timeout. Client vsAI mode uses `resolveSimultaneousLocal` with same pattern. Randomized resolution order per turn. turnsHeld double-increment fix. Hotseat mode removed entirely.
+- **AI**: Scored attack system (focus fire, type advantage, kill bonuses), direct-move positioning toward objectives/enemies/cities, smart retreat at 1HP. 6 build presets with leftover budget fill. Console telemetry for debugging.
 
 ### What doesn't exist yet
 - Combat timeline (10-phase pipeline)
@@ -80,9 +83,9 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 
 ---
 
-### Sprint 1 — Directive Model & Cost Movement (Mar 4–10)
+### Sprint 1 — Directive Model & Cost Movement (Mar 4–10) — **NOT STARTED, overdue**
 
-Layer 0 foundation. Structural changes everything else sits on. Implementation Plan items 0.1 + 0.2.
+Layer 0 foundation. Structural changes everything else sits on. Implementation Plan items 0.1 + 0.2. Week was spent on vsAI simultaneous resolution, AI rewrite, hotseat removal, and engine cleanup instead (see ledger).
 
 - [E] **Two-layer directive model** (0.1): Replace flat `DirectiveType` with `movementDirective` (advance/flank/hold/retreat) + `engagementROE` (assault/skirmish/cautious/ignore) + specialty modifier (capture/support/scout/fortify/null)
 - [E] **Update Unit type** in `types.ts`: replace `directive: DirectiveType` with the two-layer fields
@@ -96,16 +99,20 @@ Layer 0 foundation. Structural changes everything else sits on. Implementation P
 
 ---
 
-### Sprint 2 — Simultaneous Resolution (Mar 11–17)
+### Sprint 2 — Simultaneous Resolution (Mar 11–17) — **mostly complete early**
 
 The architectural pivot. Both players submit simultaneously. Layer 0 item 0.3 + client UI (4.1, 4.2).
 
 - [S] ~~**Buffer both submissions** (0.3)~~ DONE — `handleSubmitCommands` buffers per player, `resolveSimultaneousTurn` fires when both received. Randomized resolution order (deterministic from seed). turnsHeld double-increment fix. Timeout fills empty commands for missing players.
-- [S] ~~**Remove alternating player logic**~~ DONE — both players plan → both submit → resolve → next tick. Hotseat/AI remain alternating via `gameMode` checks.
-- [C] **Two-layer directive picker UI** (4.1): movement + ROE selection during planning phase
+- [S] ~~**Remove alternating player logic**~~ DONE — both players plan → both submit → resolve → next tick.
+- [C] ~~**vsAI simultaneous resolution**~~ DONE (Mar 5) — `resolveSimultaneousLocal` in BattleHUD mirrors server pattern. AI generates commands from pre-resolution state, randomized order, two `executeTurn` calls with event drainage.
+- [E] ~~**Strip alternating-turn engine code**~~ DONE (Mar 5) — `executeTurn()` no longer switches currentPlayer, increments turnsPlayed, creates command pools, or resets hasActed. `turnsPlayed` simplified from `Record<PlayerId, number>` to `number`. `maxTurnsPerSide` renamed to `maxTurns`. Orchestrators manage all lifecycle externally.
+- [C] ~~**Remove hotseat mode**~~ DONE (Mar 5) — `GameMode` is `'vsAI' | 'online'`. TurnTransition component deleted. All alternating-turn UI paths removed.
+- [E] ~~**AI rewrite**~~ DONE (Mar 5) — scored attacks (focus fire, type advantage, kill bonuses), direct-move positioning, smart retreat, 6 build presets with leftover budget fill.
+- [C] **Two-layer directive picker UI** (4.1): movement + ROE selection during planning phase — **not started**, blocked on Sprint 1 (0.1 directive model)
 - [C] ~~**Simultaneous submit UI** (4.2)~~ DONE — both players see End Turn simultaneously. "Waiting for opponent..." / "Resolving..." states. CommandMenu hidden after submission. Reconnect restores submission state.
 
-**Exit criteria:** ~~Two clients can submit commands simultaneously. Server waits for both before resolving.~~ DONE. Client can assign both directive layers during build phase. ← blocked on 4.1 (needs 0.1 directive model first).
+**Exit criteria:** ~~Two clients can submit commands simultaneously. Server waits for both before resolving.~~ DONE. ~~vsAI uses same simultaneous pattern.~~ DONE. ~~Alternating-turn code stripped from engine.~~ DONE. Client can assign both directive layers during build phase ← blocked on 4.1 (needs 0.1 directive model first).
 
 ---
 
@@ -169,7 +176,7 @@ Layer 2. Parametric map, win condition, economy scaling.
   - `flankOffset = floor(width × 0.25)`
   - `cityMinDistance = floor(width × 0.15)`
   - `cityCount = floor(width × height / 40)`
-  - `maxTurnsPerSide = floor(width / 2)`
+  - `maxTurns = floor(width / 2)`
   - `CP_PER_ROUND = 4 + floor((width - 20) / 10)`
 - [E] **Multi-city win condition** (2.2, D7): `victoryCities = floor(totalCities × 0.6)`. Remove KotH center-hex logic. Remove `objective` from `RoundState`.
 - [E] **Kill bonus scaling** (2.3): `KILL_BONUS = floor(unit.cost × 0.1)` replaces flat 25
@@ -241,6 +248,12 @@ DATE       | SPRINT | CHANGE                                          | REASON
 2026-03-04 | S8     | Steam page added to Sprint 8 scope.              | Wishlist collection is launch survival infrastructure per GAME_MATH_ENGINE.md market analysis.
 2026-03-04 | S1-S6  | Sprint schedule rewritten to match Implementation Plan layers. | Previous schedule put Layer 1 items (RPS, HP scaling, damage formula) in Sprint 1 before Layer 0 foundation work. Violated Layer 0→1→2→3 dependency chain from GAME_MATH_ENGINE.md §Implementation Plan.
 2026-03-04 | S2     | 0.3 + 4.2 pulled ahead of Sprint 1 (0.1 + 0.2). | GAME_MATH_ENGINE.md §0.3 explicitly says "can be tested with existing executeTurn as a placeholder." Server architecture change is independent of directive model. 4.1 (directive picker) remains blocked on 0.1.
+2026-03-05 | S1     | Sprint 1 (directive model + cost movement) not started by deadline. | Week spent on vsAI simultaneous, AI rewrite, hotseat removal, and engine cleanup. These were unplanned prerequisites — game was unplayable in vsAI mode without them.
+2026-03-05 | S2     | vsAI simultaneous resolution added to Sprint 2 scope. | Server-only simultaneous was done but vsAI still used alternating turns. Client needed `resolveSimultaneousLocal` to mirror server pattern.
+2026-03-05 | S2     | Hotseat mode removed. GameMode narrowed to 'vsAI' | 'online'. | Hotseat was the only consumer of alternating-turn UI code. Removing it unblocked stripping engine internals.
+2026-03-05 | S2     | AI rewrite added to Sprint 2 scope. | Old AI was 3 weak priorities, didn't use build presets, wasted ~50% budget. Game was unplayable for testing without competent AI.
+2026-03-05 | S2     | Engine alternating-turn internals stripped. | executeTurn() no longer does post-turn bookkeeping. turnsPlayed simplified to number. maxTurnsPerSide renamed to maxTurns. Completes the simultaneous-only architecture.
+2026-03-05 | S1     | Sprint 1 scope unchanged but schedule slipped. | Directive model (0.1) and cost movement (0.2) are next. No work started. Sprint dates need rebasing.
 ```
 
 ---

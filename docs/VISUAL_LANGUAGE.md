@@ -17,7 +17,7 @@ Source files: `packages/client/src/renderer/`
 —  Unit Models      3D GLB meshes, no explicit renderOrder (positioned in world space)
 ```
 
-All overlay layers use `depthWrite: false` + `transparent: true` for correct stacking.
+All overlay layers use `depthWrite: false` + `transparent: true` for correct stacking, except fog of war which is fully opaque.
 
 ---
 
@@ -100,8 +100,9 @@ Side faces: 60% darkened version of terrain color.
 
 | State | Color | Opacity |
 |-------|-------|---------|
-| Never seen | `0x16160E` | 0.85 |
-| Explored (fog) | `0x16160E` | 0.5 |
+| Not visible | `0x16160E` | 1.0 (opaque) |
+
+Fog covers hex top faces and side walls of elevated hexes. Props are not rendered on fogged hexes. No explored/unexplored distinction — binary visible or fogged.
 
 ### Objectives (`terrain-renderer.ts`)
 
@@ -139,7 +140,7 @@ Side faces: 60% darkened version of terrain color.
 ## Systems Catalog
 
 ### Terrain — `terrain-renderer.ts`
-Hex top faces (ShapeGeometry rotated XZ→XY), grid outlines (LineLoop, 6 verts + close), side faces for elevated hexes (BufferGeometry quad strips at 60% darkened color). Objectives and city ownership rendered as overlays.
+Hex top faces (batched Float32Array BufferGeometry with vertex colors), grid outlines (batched LineSegments), side faces for elevated hexes (batched BufferGeometry quads at 60% darkened color). Objectives and city ownership rendered as overlays. 3 draw calls for terrain + a few for objectives/city borders.
 
 ### Deploy Zones — `deploy-renderer.ts`
 Build phase only. Friendly zone highlighted with player color, enemy zone dimmed. Fill + outline per hex.
@@ -154,7 +155,7 @@ Rebuilt on `pendingCommands` array reference change.
 - Max 4 commands (CP_PER_ROUND = 4).
 
 ### Fog of War — `fog-renderer.ts`
-Per-hex overlay on non-visible hexes. Darker for never-seen, lighter for explored-but-not-visible.
+Opaque overlay on all non-visible hexes. Covers top faces and side walls of elevated hexes. 1-2 draw calls (top batch + side batch). Active only during combat phase; build phase shows full map.
 
 ### Unit Models — `unit-model.ts`
 3D GLB meshes loaded via `model-loader.ts`. Scaled per type: infantry 1.20, tank 1.80, artillery 1.50, recon 1.30. P1 rotated π (facing up), P2 rotated 0 (facing down). HP bar as CSS2DObject above model. Directive icon as CSS2DObject unicode symbol.

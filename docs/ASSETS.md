@@ -1196,252 +1196,65 @@ All factions share the same unit classes (infantry, tank, scout, artillery) with
 
 # World Props (Terrain)
 
-3D objects placed on hex tiles via Three.js. Sit on top of the flat colored hex base rendered in PixiJS. Most are **static** (no animation). Placed 1-4 per hex depending on terrain type, with random rotation and slight position jitter for variety.
-
----
-
-## Plains Props
-
-Mostly empty hexes. Sparse scatter for subtle texture.
-
-### Dead Grass Tuft
-**File**: `prop_dead_grass.glb`
-**Subject**: Small cluster of dried, flattened grass blades. 3-5 blades fanning from a single base point. Dried yellow-brown, sparse.
-**Colors**: Dried yellow-brown over ashen olive `#6A6A58`.
-**Placement**: 0-2 per plains hex, random rotation.
-**Animation**: None (static).
-
-### Road Stripe Remnant
-**File**: `prop_road_stripe.glb`
-**Subject**: Short section of faded white road dashing — single dashed line segment, cracked and barely visible. Flat on ground.
-**Colors**: Faded white/pale grey on ashen ground.
-**Placement**: 0-1 per plains hex, random rotation.
-**Animation**: None (static).
-
-### Scattered Rocks
-**File**: `prop_rocks_small.glb`
-**Subject**: 3-5 small pebbles and gravel pieces clustered loosely. Fist-sized or smaller.
-**Colors**: Slightly lighter/darker variants of `#6A6A58`.
-**Placement**: 0-2 per plains hex.
-**Animation**: None (static).
-
-### Concrete Pipe Section
-**File**: `prop_concrete_pipe.glb`
-**Subject**: Short section of large-diameter concrete drainage pipe, half-buried at an angle in the dirt. One end exposed, the other sunk into the ground. Interior dark. Rebar visible at the broken edge. Left behind when the infrastructure build stopped — never connected to anything.
-**Colors**: Pale concrete grey, rust-brown rebar, dark interior, ashen ground dust.
-**Placement**: 0-1 per plains hex.
-**Animation**: None (static).
-
-### Survey Stakes
-**File**: `prop_survey_stakes.glb`
-**Subject**: Two wooden survey stakes driven into the ground at angles, connected by a sagging line of faded orange ribbon. The stakes mark a construction boundary that was never built. Ribbon sun-bleached and fraying. Stakes weathered grey.
-**Colors**: Weathered grey wood, faded orange ribbon, ashen ground.
-**Placement**: 0-1 per plains hex.
-**Animation**: None (static).
-
-### Abandoned Tire
-**File**: `prop_tire.glb`
-**Subject**: Single large truck tire lying flat on the ground. Sun-cracked rubber, sidewall text unreadable. Left on an unfinished construction haul route.
-**Colors**: Dark grey-black rubber, sun-faded sidewall, dust-caked tread.
-**Placement**: 0-1 per plains hex.
-**Animation**: None (static).
+3D objects placed on hex tiles via Three.js. Sit on top of the flat colored hex base. Most are **static** (no animation). Placed with random rotation and slight position jitter for variety.
 
 ---
 
 ## Forest Props
 
-Dense clusters. 2-4 trees per hex with understory detail.
-
-### Charred Tree (Variant A)
+### Emergent Tree (Variant A)
 **File**: `prop_tree_a.glb`
-**Subject**: Single charred tree — thick trunk, 3-4 major branches. Some bare and blackened, others hold dark green foliage (angular leaf clusters). Stressed, partially burned.
-**Colors**: Trunk near-black brown, canopy charred green `#3A4030` with variation. Bare branches dark brown-black.
-**Placement**: 2-4 per forest hex, random rotation, Y-scale 0.8-1.2 for height variety.
+**Subject**: Giant tropical emergent tree extremely tall straight trunk massive buttress roots spreading outward high umbrella crown sparse foliage clusters dark jungle green bark grey brown stylized RTS environment asset dominant vertical silhouette isometric camera 30 degrees flat diffuse lighting matte materials transparent background no ground plane
+**Colors**: Dark jungle green canopy, grey-brown bark, dark buttress roots.
+**Placement**: 1-2 per forest hex, random rotation, scale 1.0-2.4. Tallest tree variant — dominant canopy.
 **Animation**: None (static).
 
-### Charred Tree (Variant B)
+### Column Tree (Variant B)
 **File**: `prop_tree_b.glb`
-**Subject**: Thinner, leaning tree. More damaged — mostly bare branches, small foliage cluster at top only. Trunk has a slight bend.
-**Colors**: Same palette as variant A.
-**Placement**: Mixed with variant A for variety.
+**Subject**: Rainforest column tree tall straight trunk medium crown elongated foliage cluster near top leaves dark green bark light brown stylized environment prop optimized for strategy game readability minimal noise foliage isometric camera 30 degrees matte surfaces flat lighting transparent PNG
+**Colors**: Dark green foliage, light brown bark.
+**Placement**: 1-2 per forest hex, scale 0.7-1.8. Medium height — fills mid-canopy.
 **Animation**: None (static).
 
-### Fallen Log
-**File**: `prop_fallen_log.glb`
-**Subject**: Fallen tree trunk, snapped partway up. Lying at angle on ground. Exposed pale wood at break point, dark bark elsewhere. Moss patches.
-**Colors**: Dark grey-brown bark, pale exposed wood, muted dark green moss.
-**Placement**: 0-1 per forest hex.
-**Animation**: None (static).
-
-### Charred Tree (Variant C)
+### Palm Tree (Variant C)
 **File**: `prop_tree_c.glb`
-**Subject**: Broad, squat tree — short thick trunk splitting into two main limbs low to the ground. Dense dark canopy spreading wide. One limb bare and blackened, the other still holding foliage. Different silhouette from A and B — wider than tall.
-**Colors**: Same palette as variants A and B.
-**Placement**: Mixed with variants A and B for variety.
+**Subject**: Rainforest palm tree narrow trunk slightly curved crown of large feather shaped palm leaves spreading outward vibrant green stylized jungle vegetation asset optimized for strategy game readability isometric camera matte surfaces flat lighting transparent PNG
+**Colors**: Vibrant green palm leaves, narrow pale trunk.
+**Placement**: 0-1 per forest hex, scale 0.4-1.2. Distinctive silhouette — breaks up canopy monotony.
 **Animation**: None (static).
 
-### Buried Road Sign
-**File**: `prop_road_sign.glb`
-**Subject**: Metal road sign half-buried among roots. Tilted at angle, text unreadable, rusted metal post. Square or diamond shape.
-**Colors**: Rusted orange-brown sign, faded text, dark metal post.
-**Placement**: 0-1 per forest hex. Rare detail.
-**Animation**: None (static).
-
-### Overgrown Footing
-**File**: `prop_overgrown_footing.glb`
-**Subject**: Rectangular concrete foundation block on the forest floor, roots growing over and through cracks in the surface. Rebar stubs poking up from the top — a building was meant to go here. Moss and dark soil caked into the seams. Nature reclaiming construction.
-**Colors**: Pale concrete grey with dark moss green, rust-brown rebar, charred green `#3A4030` moss.
-**Placement**: 0-1 per forest hex. Rare detail.
+### Understory Tree (Variant D)
+**File**: `prop_tree_d.glb`
+**Subject**: Tropical understory broadleaf tree small trunk large paddle shaped leaves spreading outward dark green smooth bark pale brown stylized jungle plant asset simple readable silhouette RTS environment prop isometric camera 30 degrees matte materials flat lighting transparent background
+**Colors**: Dark green broad leaves, pale brown smooth bark.
+**Placement**: 0-1 per forest hex, scale 0.3-0.8. Shortest — ground-level filler.
 **Animation**: None (static).
 
 ---
 
-## Mountain Props
+## Surface Props (Hex Modifiers)
 
-Imposing rock formations. 1-2 major rocks per hex.
+Full-hex-coverage surfaces placed on modifier hexes (river, lake, bridge, highway).
 
-### Rock Peak (Variant A)
-**File**: `prop_rock_peak_a.glb`
-**Subject**: Jagged rocky peak — raw stone, sharp angular faces. Fractured geological layers in cross-section. Wind erosion striations. Scree at base.
-**Colors**: Dark iron ore `#505058` with lighter/darker facets. Erosion lines lighter grey. Crevice shadows near-black.
-**Placement**: 1 per mountain hex, centered.
+### Road Surface
+**File**: `prop_road_surface.glb`
+**Subject**: Flat hexagonal asphalt slab filling one hex. Two faded lane markings down the center (dashed yellow). Clean paved surface edge-to-edge — no dirt, no gravel, no shoulders. No vehicles, no cracks, no weeds. Viewed from above it reads clearly as "road."
+**Colors**: Dark asphalt `#3A3A38`, faded yellow `#8A8040` lane markings.
+**Placement**: 1 per highway hex, centered, oriented along highway direction. Hex-width (~2 world units across).
 **Animation**: None (static).
 
-### Rock Peak (Variant B)
-**File**: `prop_rock_peak_b.glb`
-**Subject**: Two adjacent stone pillars with narrow gap — natural pass or crevice. Deep erosion grooves. Small overhang at base. Loose boulders around formation.
-**Colors**: Same palette as variant A, slightly warmer.
-**Placement**: 1 per mountain hex. Alternative to variant A.
+### Water Surface
+**File**: `prop_water_surface.glb`
+**Subject**: Flat hexagonal dark water plane filling one hex. Still, murky surface. Subtle ripple texture baked into the surface — not animated, just frozen ripples. Very thin — almost no vertical height. Edges blend to nothing so adjacent water hexes tile seamlessly.
+**Colors**: Medium-dark water `#2A4A5A` base, blue-green `#3A5A58` at edges.
+**Placement**: 1 per river or lake hex, centered. Rotation doesn't matter much (visually near-symmetric). Hex-width.
 **Animation**: None (static).
 
-### Loose Boulders
-**File**: `prop_boulders.glb`
-**Subject**: 2-3 large loose boulders clustered. Angular, broken from larger formation.
-**Colors**: Dark grey `#505058` varied tones.
-**Placement**: 0-1 per mountain hex, secondary detail.
-**Animation**: None (static).
-
-### Abandoned Retaining Wall
-**File**: `prop_retaining_wall.glb`
-**Subject**: Short section of unfinished concrete retaining wall — poured halfway, construction stopped. Rebar stubs extend upward from the top edge where the next pour was meant to go. Plywood formwork still attached on one side, warped and stained. A road or rail line was meant to cut through this mountainside. It never did.
-**Colors**: Raw concrete grey, rust-brown rebar, dark warped plywood, iron ore `#505058` rock face behind.
-**Placement**: 0-1 per mountain hex.
-**Animation**: None (static).
-
-### Rock Peak (Variant C)
-**File**: `prop_rock_peak_c.glb`
-**Subject**: Flat-topped mesa formation — wide base tapering to a level plateau. Layered sedimentary bands visible in cross-section. Scree and gravel at the base. Different silhouette from A and B — horizontal cap instead of jagged peak.
-**Colors**: Dark iron ore `#505058` with warmer sandstone bands `#6A6050`. Scree lighter grey.
-**Placement**: 1 per mountain hex. Alternative to variants A and B.
-**Animation**: None (static).
-
----
-
-## City Props
-
-Dense urban ruin elements. 1-2 structures + 1-2 detail props per hex.
-
-### Building Shell (Variant A — Tall)
-**File**: `prop_building_tall.glb`
-**Subject**: Multi-story concrete building shell — walls standing, no roof, no windows, just rectangular openings. Exposed rebar at top floors. 3-4 stories. Unfinished, not bombed.
-**Colors**: Ember orange-grey `#7A6048` concrete, dark rust brown rebar, near-black window openings.
-**Placement**: 0-1 per city hex.
-**Animation**: None (static).
-
-### Building Shell (Variant B — Low-Rise)
-**File**: `prop_building_low.glb`
-**Subject**: Shorter, wider structure — partially built commercial complex, 1-2 stories. Flat concrete roof with exposed beams. Collapsed section showing interior. Faded unreadable sign.
-**Colors**: Ember orange-grey `#7A6048`, dark steel grey beams, faded sign.
-**Placement**: 0-1 per city hex.
-**Animation**: None (static).
-
-### Utility Pole
-**File**: `prop_utility_pole.glb`
-**Subject**: Broken utility pole, leaning slightly. Electrical cables dangling loose from top. No power.
-**Colors**: Dark grey-brown pole, black cables.
-**Placement**: 0-1 per city hex.
-**Animation**: None (static).
-
-### Road Barrier
-**File**: `prop_jersey_barrier.glb`
-**Subject**: Concrete jersey barrier. Stained, cracked.
-**Colors**: Pale concrete grey, dust and rust stains.
-**Placement**: 0-1 per city hex.
-**Animation**: None (static).
-
-### Construction Debris
-**File**: `prop_debris.glb`
-**Subject**: Small pile of construction debris — concrete chunks, twisted rebar, bent metal pipe, cracked cinder block.
-**Colors**: Mixed grey and brown, rust accents.
-**Placement**: 0-1 per city hex.
-**Animation**: None (static).
-
-### Scaffolding Section
-**File**: `prop_scaffolding.glb`
-**Subject**: Freestanding section of tubular steel scaffolding — two vertical frames connected by cross-braces and a single plank platform at mid-height. Standing alone with nothing attached to it. The building it was meant to support was never finished. One frame leans slightly. Rust at the joint couplers.
-**Colors**: Dark steel grey `#505058` tubes, rust-brown at joints, pale grey-brown plank.
-**Placement**: 0-1 per city hex.
-**Animation**: None (static).
-
-### Dumpster
-**File**: `prop_dumpster.glb`
-**Subject**: Large industrial dumpster — open-top rectangular steel box on small caster wheels. Lid ajar at an angle. Overflowing with construction waste — concrete chunks, bent rebar stubs, crumpled sheet metal visible above the rim. Exterior paint faded and rust-streaked. A dumpster left on a job site that closed overnight.
-**Colors**: Faded dark green paint with rust streaks, grey concrete waste, rust-brown rebar, dark steel.
-**Placement**: 0-1 per city hex.
-**Animation**: None (static).
-
-### Frozen Crane Arm
-**File**: `prop_crane_arm.glb`
-**Subject**: The upper section of a tower crane boom lying on the ground — the lattice arm with its trolley still attached, cables dangling. The tower it sat on is gone or collapsed elsewhere. The boom is angled across the ground, partially resting on rubble. A massive piece of infrastructure frozen mid-swing and dropped. Longest prop in the set.
-**Colors**: Faded yellow `#C4A840` lattice steel, dark steel cables, rust at pin joints.
-**Placement**: 0-1 per city hex. Rare — the largest detail prop.
-**Animation**: None (static).
-
----
-
-## Objective Prop
-
-One unique structure for the central objective hex.
-
-### Command Tower
-**File**: `prop_command_tower.glb`
-**Subject**: Squat reinforced concrete bunker base with tall antenna array rising from roof. Multiple antenna rods, satellite dish, warning lights (red). Faint amber glow from inside through narrow slit windows — power is on. Thick power cables into ground. Small generator beside bunker. Functional, not ruined — maintained by whoever holds it. The only structure on the map that looks alive.
-**Colors**: Concrete grey with ember warmth, dark steel antenna, molten gold `#C88A20` glow and warning lights, black cables, dark steel generator.
-**Placement**: 1 per objective hex, centered. Tallest structure on the map.
-**Animation**: Warning light blink — antenna tip alternates `#C88A20` ↔ dim `#3A3020` at ~1Hz. Generator vibration — Y-axis oscillation ±0.5px at ~3Hz.
-
----
-
-## Hex Modifier Props
-
-Props placed on hexes with modifier overlays (river, lake, bridge, highway). These sit on top of the re-colored hex surface.
-
-### Bridge Span
-**File**: `prop_bridge_span.glb`
-**Subject**: Short section of unfinished concrete bridge deck — two thick support piers rising from below, flat driving surface across the top with rebar stubs where guardrails were meant to go. One lane wide. The pour stopped mid-span — rough concrete edge on one side shows the formwork was never removed. Construction cones still sitting on the deck. A bridge to nowhere that happens to cross a river.
-**Colors**: Raw concrete grey `#8A8880`, rust-brown rebar stubs, dark grey `#505058` support piers, faded orange cones.
-**Placement**: 1 per bridge hex, centered. Oriented perpendicular to river flow direction.
-**Animation**: None (static).
-
-### Highway Guardrail
-**File**: `prop_road_guardrail.glb`
-**Subject**: Bent W-beam highway guardrail on wooden posts — a short section, 3-4 posts long. One post snapped off at the base, the rail section drooping and twisted at that end. Reflector tabs still attached but dulled. A chunk of highway safety infrastructure left standing on an unfinished road.
-**Colors**: Dull galvanized silver `#A0A098` rail, dark wood `#4A3828` posts, faded red-orange reflector tabs.
-**Placement**: 0-1 per highway hex, offset to hex edge.
-**Animation**: None (static).
-
-### Water Reeds
-**File**: `prop_water_reeds.glb`
-**Subject**: Clump of cattails and marsh reeds growing from shallow water — 4-6 tall stalks with characteristic brown seed heads at the top, thinner green-brown reeds around the base. Slightly wind-bent. Nature reclaiming the edges of stagnant water.
-**Colors**: Olive-brown stalks `#5A5838`, dark brown `#4A3020` seed heads, murky green-brown base.
-**Placement**: 0-2 per river or lake hex, offset toward hex edges.
-**Animation**: None (static).
-
-### Waterlogged Debris
-**File**: `prop_water_debris.glb`
-**Subject**: Half-submerged construction waste in still water — a tire lying flat with water filling the center, a wooden plank floating at an angle, a bent piece of corrugated sheet metal sticking out. The kind of garbage that accumulates in urban waterways. Partially visible above a flat water plane.
-**Colors**: Black rubber tire, grey-brown plank, rust-orange corrugated metal, dark water base `#2A3040`.
-**Placement**: 0-1 per river or lake hex.
+### Bridge Deck
+**File**: `prop_bridge_deck.glb`
+**Subject**: Flat hexagonal concrete deck with low side walls (knee height). Two tire-track wear lines down the center. Expansion joint crack across the middle. Drainage slots along the side walls. Slightly elevated above a water surface — the deck sits a fraction higher than surrounding terrain. Thicker than the road surface — has visible depth/thickness on the sides.
+**Colors**: Concrete grey `#7A7A78`, dark wear tracks, rust staining at drainage slots, dark side walls `#505058`.
+**Placement**: 1 per bridge hex, centered, oriented along crossing direction. Hex-width.
 **Animation**: None (static).
 
 ---
@@ -1524,38 +1337,15 @@ assets/models/units/scout_current.glb
 assets/models/units/artillery_current.glb
 ```
 
-## World Prop GLBs (29 files, mostly static)
+## World Prop GLBs (7 files, static)
 ```
-assets/models/props/prop_dead_grass.glb
-assets/models/props/prop_road_stripe.glb
-assets/models/props/prop_rocks_small.glb
-assets/models/props/prop_concrete_pipe.glb
-assets/models/props/prop_survey_stakes.glb
-assets/models/props/prop_tire.glb
 assets/models/props/prop_tree_a.glb
 assets/models/props/prop_tree_b.glb
 assets/models/props/prop_tree_c.glb
-assets/models/props/prop_fallen_log.glb
-assets/models/props/prop_road_sign.glb
-assets/models/props/prop_overgrown_footing.glb
-assets/models/props/prop_rock_peak_a.glb
-assets/models/props/prop_rock_peak_b.glb
-assets/models/props/prop_rock_peak_c.glb
-assets/models/props/prop_boulders.glb
-assets/models/props/prop_retaining_wall.glb
-assets/models/props/prop_building_tall.glb
-assets/models/props/prop_building_low.glb
-assets/models/props/prop_utility_pole.glb
-assets/models/props/prop_jersey_barrier.glb
-assets/models/props/prop_debris.glb
-assets/models/props/prop_scaffolding.glb
-assets/models/props/prop_dumpster.glb
-assets/models/props/prop_crane_arm.glb
-assets/models/props/prop_command_tower.glb
-assets/models/props/prop_bridge_span.glb
-assets/models/props/prop_road_guardrail.glb
-assets/models/props/prop_water_reeds.glb
-assets/models/props/prop_water_debris.glb
+assets/models/props/prop_tree_d.glb
+assets/models/props/prop_road_surface.glb
+assets/models/props/prop_water_surface.glb
+assets/models/props/prop_bridge_deck.glb
 ```
 
 ## 2D Assets (6 files)
@@ -1570,21 +1360,18 @@ assets/effects/explosion.png
 
 ## Prop Placement Rules
 
-| Terrain | Major props | Detail props | Total per hex |
-|---------|------------|--------------|---------------|
-| Plains | — | 0-2 (grass, rocks, road stripe, concrete pipe, survey stakes, tire) | 0-2 |
-| Forest | 2-4 trees (mix A/B/C) | 0-1 (fallen log, road sign, overgrown footing) | 2-5 |
-| Mountain | 1 rock peak (A, B, or C) | 0-1 (boulders, retaining wall) | 1-2 |
-| City | 1 building (tall or low) | 1-2 (utility pole, barrier, debris, scaffolding, dumpster, crane arm) | 2-3 |
-| Objective | 1 command tower | — | 1 |
+| Terrain | Props | Total per hex |
+|---------|-------|---------------|
+| Plains | — | 0 |
+| Forest | 2-5 trees (mix A/B/C) | 2-5 |
+| Mountain | — | 0 |
+| City | — | 0 |
 
-### Modifier Overlay Props
+### Surface Props (Modifiers)
 
-Modifier props are placed **instead of** terrain props on hexes with a modifier. The hex surface color changes too (handled by terrain-renderer).
-
-| Modifier | Props | Surface color |
-|----------|-------|---------------|
-| River | 0-2 water reeds, 0-1 waterlogged debris | Dark water `#2A3040` |
-| Lake | 0-2 water reeds, 0-1 waterlogged debris | Dark water `#2A3040` |
-| Bridge | 1 bridge span | Terrain color (unchanged) |
-| Highway | 0-1 road guardrail (terrain detail props still allowed at reduced rate) | Asphalt dark `#3A3A38` |
+| Modifier | Surface prop |
+|----------|-------------|
+| River | water_surface |
+| Lake | water_surface |
+| Bridge | bridge_deck |
+| Highway | road_surface |
