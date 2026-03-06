@@ -44,9 +44,12 @@ Every unit carries two directive layers. These are set during the planning phase
 | Directive | Behavior |
 |-----------|----------|
 | `advance(target)` | Move toward target hex via shortest path |
-| `flank(target)` | Move toward target via offset flanking arc |
+| `flank-left(target)` | Move toward target via flanking arc, offset left of approach vector |
+| `flank-right(target)` | Move toward target via flanking arc, offset right of approach vector |
 | `hold` | Do not move |
 | `retreat` | Move toward deployment zone |
+
+Flank direction is an explicit player choice — terrain on one side of the approach may be favorable while the other is exposed. The flanking waypoint is computed perpendicular to the unit→target vector, offset by `floor(mapDiameter × 0.25)` hexes (§A6). Left/right refer to the perpendicular direction relative to the approach axis, not to a fixed map axis.
 
 **Engagement Directive (Rules of Engagement)** — defines behavior when enemy contact occurs:
 
@@ -66,7 +69,7 @@ Specialty actions (capture, support, scout, fortify) are **modifiers** on these 
 | advance | assault | Moves toward target, stops at first contact |
 | advance | skirmish | Moves through, fires once per threat zone |
 | advance | ignore | Completes full path, no mid-move combat |
-| flank | cautious | Reroutes if threatened, does not initiate |
+| flank-left | cautious | Arcs left of target, does not initiate if threatened |
 | hold | assault | Stationary, engages anything entering range |
 
 ---
