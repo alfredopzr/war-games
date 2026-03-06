@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PlayerId } from '@hexwar/engine';
 import { UNIT_STATS } from '@hexwar/engine';
 import type { Room, ConnectedPlayer } from './types';
+import { BUILD_DURATION } from './timers';
 import { getRoomPhase } from './types';
 import {
   startGame,
@@ -426,8 +427,8 @@ describe('build timeout', () => {
 
     expect(room.gameState!.phase).toBe('build');
 
-    // Fast-forward the build timer (120 seconds)
-    vi.advanceTimersByTime(120_000);
+    // Fast-forward the build timer
+    vi.advanceTimersByTime(BUILD_DURATION * 1000);
 
     expect(room.gameState!.phase).toBe('battle');
   });
@@ -445,7 +446,7 @@ describe('build timeout', () => {
 
     expect(room.gameState!.phase).toBe('build');
 
-    vi.advanceTimersByTime(120_000);
+    vi.advanceTimersByTime(BUILD_DURATION * 1000);
 
     expect(room.gameState!.phase).toBe('battle');
   });

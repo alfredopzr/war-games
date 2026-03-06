@@ -153,6 +153,7 @@ export function filterStateForPlayer(
       unitsKilledThisRound: { ...state.round.unitsKilledThisRound },
     },
     map: getSerializedMap(state.map),
+    unitStats: state.unitStats,
     maxRounds: state.maxRounds,
     winner: state.winner,
     cityOwnership,
