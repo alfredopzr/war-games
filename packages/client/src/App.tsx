@@ -110,6 +110,8 @@ function renderScene(state: GameState): void {
     store.highlightMode,
     allHexes,
     state.map.elevation,
+    store.commandMode,
+    store.pendingCommands,
   );
   endSelection();
 
@@ -389,6 +391,14 @@ export function App(): ReactElement {
         const unit = findUnitAtHex(gameState, hex);
         if (unit && unit.owner === currentPlayerView) {
           selectUnit(unit);
+          const stats = UNIT_STATS[unit.type];
+          const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
+          const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
+          const reachable = getReachableHexes(
+            unit.position, stats.moveRange, gameState.map.terrain, unit.type,
+            occupiedKeys, unit.directive, gameState.map.modifiers, gameState.map.elevation,
+          );
+          useGameStore.getState().setHighlightedHexes(reachable, 'move');
           perf.logAction('select:build', performance.now() - clickT0);
         } else {
           selectUnit(null);
@@ -467,8 +477,8 @@ export function App(): ReactElement {
         const isOwn = unit.owner === currentPlayerView;
         if (isOwn || visibleHexes.has(key)) {
           selectUnit(unit);
-          // Show move range on selection for own units in battle phase
-          if (isOwn && gameState.phase === 'battle') {
+          // Show move range on selection for own units
+          if (isOwn) {
             const stats = UNIT_STATS[unit.type];
             const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
             const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
@@ -478,15 +488,10 @@ export function App(): ReactElement {
                 occupiedKeys.add(hexToKey(cmd.targetHex));
               }
             }
-            const reachable = new Set<string>();
-            for (const k of gameState.map.terrain.keys()) {
-              const [qStr, rStr] = k.split(',');
-              const h = createHex(Number(qStr), Number(rStr));
-              const dist = cubeDistance(unit.position, h);
-              if (dist > 0 && dist <= stats.moveRange && !occupiedKeys.has(k)) {
-                reachable.add(k);
-              }
-            }
+            const reachable = getReachableHexes(
+              unit.position, stats.moveRange, gameState.map.terrain, unit.type,
+              occupiedKeys, unit.directive, gameState.map.modifiers, gameState.map.elevation,
+            );
             useGameStore.getState().setHighlightedHexes(reachable, 'move');
           }
           perf.logAction('select:unit', performance.now() - clickT0);

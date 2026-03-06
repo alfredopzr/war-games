@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { CubeCoord, Unit } from '@hexwar/engine';
+import type { CubeCoord, Unit, Command } from '@hexwar/engine';
 import { hexToKey, hexWorldVertices } from '@hexwar/engine';
 import { cachedHexToWorld } from './render-cache';
 import { getThreeContext } from './three-scene';
@@ -21,7 +21,7 @@ function createHexOutline(
   const points = verts.map((v) => new THREE.Vector3(v.x, v.y + yOffset, v.z));
   points.push(points[0]!.clone());
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: alpha });
+  const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: alpha, depthTest: false });
   const line = new THREE.LineLoop(geometry, material);
   line.renderOrder = 2;
   return line;
@@ -50,6 +50,7 @@ function createHexFill(
       transparent: true,
       opacity: alpha,
       depthWrite: false,
+      depthTest: false,
       side: THREE.DoubleSide,
     }),
   );
@@ -65,6 +66,8 @@ export function renderSelectionHighlights(
   highlightMode: 'move' | 'attack' | 'none',
   allHexes: CubeCoord[],
   elevationMap: Map<string, number>,
+  commandMode: 'none' | 'move' | 'attack',
+  pendingCommands: Command[],
 ): void {
   const ctx = getThreeContext();
   if (!ctx) return;
@@ -87,7 +90,7 @@ export function renderSelectionHighlights(
 
   // Move/attack range
   if (highlightedHexes.size > 0 && highlightMode !== 'none') {
-    const color = highlightMode === 'move' ? 0xe8e4d8 : 0x9a4a3a;
+    const color = highlightMode === 'move' ? 0x00ccff : 0x9a4a3a;
     const fillAlpha = highlightMode === 'move' ? 0.08 : 0.1;
 
     for (const hex of allHexes) {
@@ -100,11 +103,26 @@ export function renderSelectionHighlights(
     }
   }
 
-  // Hovered hex: white outline
+  // Pending move command destination highlights (electric blue)
+  for (const cmd of pendingCommands) {
+    if (cmd.type === 'direct-move') {
+      const key = hexToKey(cmd.targetHex);
+      const elev = elevationMap.get(key) ?? 0;
+      selectionGroup.add(createHexFill(cmd.targetHex, elev, 0x00ccff, 0.15, 0.005));
+      selectionGroup.add(createHexOutline(cmd.targetHex, elev, 0x00ccff, 0.9, 0.006));
+    }
+  }
+
+  // Hovered hex: electric blue in move/attack mode, white otherwise
   if (hoveredHex) {
     const key = hexToKey(hoveredHex);
     const elev = elevationMap.get(key) ?? 0;
-    selectionGroup.add(createHexOutline(hoveredHex, elev, 0xffffff, 0.6, 0.007));
+    const hoverColor = commandMode === 'move' ? 0x00ccff : commandMode === 'attack' ? 0x9a4a3a : 0xffffff;
+    const hoverAlpha = commandMode !== 'none' ? 0.8 : 0.6;
+    selectionGroup.add(createHexOutline(hoveredHex, elev, hoverColor, hoverAlpha, 0.007));
+    if (commandMode === 'move') {
+      selectionGroup.add(createHexFill(hoveredHex, elev, 0x00ccff, 0.1, 0.005));
+    }
   }
 
   // Selected unit: beige outline

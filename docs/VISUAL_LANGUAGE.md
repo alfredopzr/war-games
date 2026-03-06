@@ -86,14 +86,19 @@ Side faces: 60% darkened version of terrain color.
 | Move range outline | `0xe8e4d8` beige | 0.7 |
 | Attack range fill | `0x9a4a3a` rust | 0.1 |
 | Attack range outline | `0x9a4a3a` rust | 0.7 |
-| Hovered hex outline | `0xffffff` white | 0.6 |
+| Hovered hex outline (default) | `0xffffff` white | 0.6 |
+| Hovered hex outline (move mode) | `0x00ccff` electric blue | 0.8 |
+| Hovered hex fill (move mode) | `0x00ccff` electric blue | 0.1 |
+| Hovered hex outline (attack mode) | `0x9a4a3a` rust | 0.8 |
+| Move destination fill | `0x00ccff` electric blue | 0.15 |
+| Move destination outline | `0x00ccff` electric blue | 0.9 |
 | Selected unit outline | `0xe8e4d8` beige | 0.9 |
 
 ### Commands (`command-renderer.ts`)
 
 | Element | Color | Opacity |
 |---------|-------|---------|
-| Move path polyline | `0x4488ff` blue | 0.8 |
+| Move path polyline | `0x00ccff` electric blue, 4px wide (Line2) | 0.9 |
 | Attack crosshair | `0xff4444` red | 0.9 |
 
 ### Fog of War (`fog-renderer.ts`)
