@@ -454,6 +454,28 @@ export function App(): ReactElement {
         const isOwn = unit.owner === currentPlayerView;
         if (isOwn || visibleHexes.has(key)) {
           selectUnit(unit);
+          // Show move range on selection for own units in battle phase
+          if (isOwn && gameState.phase === 'battle') {
+            const stats = UNIT_STATS[unit.type];
+            const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
+            const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
+            const cmds = useGameStore.getState().pendingCommands;
+            for (const cmd of cmds) {
+              if (cmd.type === 'direct-move') {
+                occupiedKeys.add(hexToKey(cmd.targetHex));
+              }
+            }
+            const reachable = new Set<string>();
+            for (const k of gameState.map.terrain.keys()) {
+              const [qStr, rStr] = k.split(',');
+              const h = createHex(Number(qStr), Number(rStr));
+              const dist = cubeDistance(unit.position, h);
+              if (dist > 0 && dist <= stats.moveRange && !occupiedKeys.has(k)) {
+                reachable.add(k);
+              }
+            }
+            useGameStore.getState().setHighlightedHexes(reachable, 'move');
+          }
           perf.logAction('select:unit', performance.now() - clickT0);
         } else {
           selectUnit(null);
