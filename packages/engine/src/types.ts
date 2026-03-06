@@ -36,7 +36,6 @@ export interface TerrainDefinition {
   readonly type: TerrainType;
   readonly moveCost: number;
   readonly defenseModifier: number;
-  readonly blocksLoS: boolean;
 }
 
 export interface MegaHexInfo {

@@ -68,14 +68,16 @@ describe('calculateDamage', () => {
     // Use forest: without hold = 5, with hold: max(1, floor(6 - 3*0.25)) = max(1,5)=5
     // Use city (defMod=0.3): without hold = max(1,floor(6-2*0.3))=max(1,5)=5
     //                         with hold = max(1,floor(6-3*0.3))=max(1,5)=5
-    // Use mountain (defMod=0.4): without hold = max(1,floor(6-2*0.4))=max(1,5)=5
-    //                             with hold = max(1,floor(6-3*0.4))=max(1,4)=4
+    // Use forest (defMod=0.25) with rng=0.92:
+    //   baseDamage = 4 * 1.5 * 0.92 = 5.52
+    //   without hold = max(1,floor(5.52 - 2*0.25)) = floor(5.02) = 5
+    //   with hold    = max(1,floor(5.52 - 3*0.25)) = floor(4.77) = 4
     const attacker = makeUnit({ type: 'tank', owner: 'player1', position: origin });
     const defenderNoHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, movementDirective: 'advance' });
     const defenderHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, movementDirective: 'hold' });
 
-    const damageNoHold = calculateDamage(attacker, defenderNoHold, 'mountain', () => 1.0);
-    const damageHold = calculateDamage(attacker, defenderHold, 'mountain', () => 1.0);
+    const damageNoHold = calculateDamage(attacker, defenderNoHold, 'forest', () => 0.92);
+    const damageHold = calculateDamage(attacker, defenderHold, 'forest', () => 0.92);
 
     expect(damageHold).toBeLessThan(damageNoHold);
   });

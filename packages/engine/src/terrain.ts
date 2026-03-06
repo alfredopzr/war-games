@@ -1,31 +1,27 @@
 import type { TerrainType, TerrainDefinition, UnitType, MovementDirective, HexModifier } from './types';
 import { UNIT_STATS } from './units';
-import { CLIMB_COST_PER_ELEV, CLIMB_THRESHOLD, DOWNHILL_COST_MULT } from './map-gen-params';
+import { CLIMB_COST_PER_ELEV, CLIMB_THRESHOLD, DOWNHILL_COST_MULT, VISION_ELEV_DIVISOR } from './map-gen-params';
 
 export const TERRAIN: Record<TerrainType, TerrainDefinition> = {
   plains: {
     type: 'plains',
     moveCost: 1,
     defenseModifier: 0,
-    blocksLoS: false,
   },
   forest: {
     type: 'forest',
     moveCost: 2,
     defenseModifier: 0.25,
-    blocksLoS: true,
   },
   mountain: {
     type: 'mountain',
-    moveCost: 3,
-    defenseModifier: 0.4,
-    blocksLoS: false,
+    moveCost: 1,
+    defenseModifier: 0,
   },
   city: {
     type: 'city',
     moveCost: 1,
-    defenseModifier: 0.3,
-    blocksLoS: false,
+    defenseModifier: 0,
   },
 } as const;
 
@@ -79,5 +75,5 @@ export function getDefenseModifier(terrain: TerrainType, modifier?: HexModifier)
 }
 
 export function getVisionBonus(elevation: number): number {
-  return Math.floor(Math.sqrt(elevation));
+  return Math.floor(elevation / VISION_ELEV_DIVISOR);
 }

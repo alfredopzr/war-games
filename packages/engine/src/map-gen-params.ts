@@ -255,3 +255,13 @@ export const HIGHWAY_MAX_ELEVATION = 2.0;
 
 /** Smoothing passes to flatten highway hexes after route selection. */
 export const HIGHWAY_SMOOTH_PASSES = 3;
+
+// -----------------------------------------------------------------------------
+// §12 Vision Parameters
+// -----------------------------------------------------------------------------
+
+/** Elevation units per +1 vision range bonus. floor(elev / divisor). */
+export const VISION_ELEV_DIVISOR = 3;
+
+/** Vision range penalty for units on forest hexes. */
+export const FOREST_VISION_PENALTY = 2;

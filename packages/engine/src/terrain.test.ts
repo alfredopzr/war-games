@@ -8,7 +8,6 @@ describe('TERRAIN definitions', () => {
       type: 'plains',
       moveCost: 1,
       defenseModifier: 0,
-      blocksLoS: false,
     });
   });
 
@@ -17,16 +16,14 @@ describe('TERRAIN definitions', () => {
       type: 'forest',
       moveCost: 2,
       defenseModifier: 0.25,
-      blocksLoS: true,
     });
   });
 
   it('mountain has correct values', () => {
     expect(TERRAIN.mountain).toEqual({
       type: 'mountain',
-      moveCost: 3,
-      defenseModifier: 0.4,
-      blocksLoS: false,
+      moveCost: 1,
+      defenseModifier: 0,
     });
   });
 
@@ -34,16 +31,15 @@ describe('TERRAIN definitions', () => {
     expect(TERRAIN.city).toEqual({
       type: 'city',
       moveCost: 1,
-      defenseModifier: 0.3,
-      blocksLoS: false,
+      defenseModifier: 0,
     });
   });
 });
 
 describe('getMoveCost', () => {
   it('returns base cost when no elevation provided', () => {
-    expect(getMoveCost('mountain', 'infantry')).toBe(3);
-    expect(getMoveCost('mountain', 'tank')).toBe(3);
+    expect(getMoveCost('mountain', 'infantry')).toBe(1);
+    expect(getMoveCost('mountain', 'tank')).toBe(1);
     expect(getMoveCost('plains', 'infantry')).toBe(1);
   });
 
@@ -95,21 +91,20 @@ describe('flank directive forest cost', () => {
     expect(getMoveCost('forest', 'infantry', 'advance')).toBe(2);
     expect(getMoveCost('forest', 'infantry', 'hold')).toBe(2);
     expect(getMoveCost('forest', 'infantry', 'scout')).toBe(2);
-    expect(getMoveCost('forest', 'infantry', 'support')).toBe(2);
     expect(getMoveCost('forest', 'infantry')).toBe(2);
   });
 
   it('flank does not affect non-forest terrain', () => {
     expect(getMoveCost('plains', 'infantry', 'flank-left')).toBe(1);
     expect(getMoveCost('city', 'infantry', 'flank-right')).toBe(1);
-    expect(getMoveCost('mountain', 'infantry', 'flank-left')).toBe(3);
+    expect(getMoveCost('mountain', 'infantry', 'flank-left')).toBe(1);
   });
 });
 
 describe('elevation + terrain combined', () => {
   it('mountain terrain + steep uphill is expensive for climbers', () => {
-    // mountain base cost 3 + delta 5 * 0.5 = 5.5
-    expect(getMoveCost('mountain', 'infantry', undefined, undefined, 2, 7)).toBe(5.5);
+    // mountain base cost 1 + delta 5 * 0.5 = 3.5
+    expect(getMoveCost('mountain', 'infantry', undefined, undefined, 2, 7)).toBe(3.5);
   });
 
   it('highway bypasses elevation for vehicles (graded road)', () => {
@@ -135,12 +130,12 @@ describe('getDefenseModifier', () => {
     expect(getDefenseModifier('forest')).toBe(0.25);
   });
 
-  it('mountain gives 0.4 defense', () => {
-    expect(getDefenseModifier('mountain')).toBe(0.4);
+  it('mountain gives 0 defense', () => {
+    expect(getDefenseModifier('mountain')).toBe(0);
   });
 
-  it('city gives 0.3 defense', () => {
-    expect(getDefenseModifier('city')).toBe(0.3);
+  it('city gives 0 defense', () => {
+    expect(getDefenseModifier('city')).toBe(0);
   });
 });
 
@@ -149,23 +144,23 @@ describe('getVisionBonus', () => {
     expect(getVisionBonus(0)).toBe(0);
   });
 
-  it('elevation 1 gives +1 bonus', () => {
-    expect(getVisionBonus(1)).toBe(1);
+  it('elevation 2 gives 0 bonus', () => {
+    expect(getVisionBonus(2)).toBe(0);
   });
 
-  it('elevation 4 gives +2 bonus', () => {
-    expect(getVisionBonus(4)).toBe(2);
+  it('elevation 3 gives +1 bonus', () => {
+    expect(getVisionBonus(3)).toBe(1);
   });
 
-  it('elevation 9 gives +3 bonus', () => {
-    expect(getVisionBonus(9)).toBe(3);
+  it('elevation 6 gives +2 bonus', () => {
+    expect(getVisionBonus(6)).toBe(2);
   });
 
-  it('elevation 16 gives +4 bonus', () => {
-    expect(getVisionBonus(16)).toBe(4);
+  it('elevation 12 gives +4 bonus', () => {
+    expect(getVisionBonus(12)).toBe(4);
   });
 
-  it('elevation 20 gives +4 bonus', () => {
-    expect(getVisionBonus(20)).toBe(4);
+  it('elevation 20 gives +6 bonus', () => {
+    expect(getVisionBonus(20)).toBe(6);
   });
 });

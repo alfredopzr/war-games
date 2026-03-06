@@ -26,6 +26,7 @@ import { canAfford, calculateIncome, applyCarryover, applyMaintenance } from './
 import { createCommandPool, spendCommand } from './commands';
 import { hexToKey, cubeDistance, hexNeighbors } from './hex';
 import { canAttack, calculateDamage } from './combat';
+import { calculateVisibility } from './vision';
 import { executeDirective } from './directives';
 
 // -----------------------------------------------------------------------------
@@ -347,7 +348,8 @@ function applyDirectiveAction(
       const defender = findUnitById(enemyUnits, action.targetUnitId);
       if (!defender) break;
 
-      if (!canAttack(unit, defender)) break;
+      const attackerVisible = calculateVisibility([unit], state.map.terrain, state.map.elevation);
+      if (!canAttack(unit, defender, attackerVisible)) break;
 
       const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
       const damage = calculateDamage(unit, defender, defenderTerrain, randomFn);
@@ -618,9 +620,10 @@ function updateCityOwnership(state: GameState): void {
     if (unit) {
       const currentOwner = state.cityOwnership.get(cityKey);
       if (currentOwner !== unit.owner) {
-        // City flips to new owner — unit loses 1 HP
+        // City flips to new owner — unit loses ceil(maxHp * 0.1)
         state.cityOwnership.set(cityKey, unit.owner);
-        unit.hp -= 1;
+        const captureCost = Math.ceil(state.unitStats[unit.type].maxHp * 0.1);
+        unit.hp -= captureCost;
         const label = unit.owner === 'player1' ? 'P1' : 'P2';
         const unitName = unitLabels[unit.type] ?? unit.type;
         if (unit.hp <= 0) {
@@ -634,7 +637,7 @@ function updateCityOwnership(state: GameState): void {
           state.pendingEvents.push({
             type: 'capture-damage',
             actingPlayer: unit.owner,
-            message: `${label} ${unitName} took 1 damage capturing a city (${unit.hp} HP left)`,
+            message: `${label} ${unitName} took ${captureCost} damage capturing a city (${unit.hp} HP left)`,
           });
         }
       }

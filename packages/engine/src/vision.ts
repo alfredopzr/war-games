@@ -4,9 +4,9 @@
 
 import type { Unit, TerrainType } from './types';
 import { cubeDistance, hexToKey, hexLineDraw } from './hex';
-import { TERRAIN } from './terrain';
 import { getVisionBonus } from './terrain';
 import { UNIT_STATS } from './units';
+import { FOREST_VISION_PENALTY } from './map-gen-params';
 
 // -----------------------------------------------------------------------------
 // calculateVisibility
@@ -16,12 +16,12 @@ import { UNIT_STATS } from './units';
  * Compute the set of visible hex keys for a group of friendly units.
  *
  * For each unit:
- *  - Effective vision = base vision range + floor(sqrt(elevation))
- *  - For each hex in terrainMap within effective range, perform LoS check:
+ *  - Effective vision = base vision range + floor(elevation / VISION_ELEV_DIVISOR)
+ *  - Forest penalty: units on forest hexes lose FOREST_VISION_PENALTY range
+ *  - For each hex within effective range, perform LoS check:
  *    - Draw hex line from unit to target
- *    - If any INTERMEDIATE hex blocks the sight line (its elevation
- *      exceeds the interpolated sight-line height AND its terrain
- *      blocks LoS), the target is NOT visible
+ *    - If any INTERMEDIATE hex has elevation strictly above the interpolated
+ *      sight-line height, the target is NOT visible (elevation occlusion)
  *    - The blocking hex itself IS visible
  */
 export function calculateVisibility(
@@ -41,11 +41,19 @@ export function calculateVisibility(
   for (const unit of friendlyUnits) {
     const unitKey = hexToKey(unit.position);
     const unitElev = elevationMap.get(unitKey) ?? 0;
+    const unitTerrain = terrainMap.get(unitKey);
     const visionBonus = getVisionBonus(unitElev);
-    const effectiveVision = UNIT_STATS[unit.type].visionRange + visionBonus;
+    let effectiveVision = UNIT_STATS[unit.type].visionRange + visionBonus;
+
+    // Forest vision penalty: units in forest see less in all directions
+    if (unitTerrain === 'forest') {
+      effectiveVision -= FOREST_VISION_PENALTY;
+    }
 
     // The unit always sees its own hex
     visible.add(unitKey);
+
+    if (effectiveVision <= 0) continue;
 
     for (const hc of hexCoords) {
       const targetCoord = { q: hc.q, r: hc.r, s: -hc.q - hc.r };
@@ -64,14 +72,13 @@ export function calculateVisibility(
       // Intermediate hexes = everything except first (start) and last (end)
       for (let i = 1; i < line.length - 1; i++) {
         const intermediateKey = hexToKey(line[i]!);
-        const intermediateTerrain = terrainMap.get(intermediateKey);
         const intermediateElev = elevationMap.get(intermediateKey) ?? 0;
 
         // Interpolated sight-line height at this step
         const sightHeight = elevA + (elevB - elevA) * (i / totalSteps);
 
-        if (intermediateElev >= sightHeight && intermediateTerrain && TERRAIN[intermediateTerrain].blocksLoS) {
-          // The blocking hex itself is visible, but target is not
+        // Pure elevation occlusion: any hex strictly above the sight line blocks
+        if (intermediateElev > sightHeight) {
           visible.add(intermediateKey);
           blocked = true;
           break;
@@ -94,8 +101,9 @@ export function calculateVisibility(
 /**
  * Check if a target unit is visible to any of the observing units.
  *
- * Special rule: if the target is on a forest hex, it is only visible
- * if at least one observer is adjacent (cube distance <= 1).
+ * Forest concealment: units in forest are invisible to ALL observers outside
+ * the forest. Only observers who are also on forest hexes can detect them
+ * (subject to the forest vision penalty).
  */
 export function isUnitVisible(
   target: Unit,
@@ -106,14 +114,18 @@ export function isUnitVisible(
   const targetKey = hexToKey(target.position);
   const targetTerrain = terrainMap.get(targetKey);
 
-  // Forest concealment: only adjacent observers can see units in forest
+  // Forest concealment: only observers on forest hexes can see units in forest
   if (targetTerrain === 'forest') {
-    return observingUnits.some(
-      (obs) => cubeDistance(obs.position, target.position) <= 1,
-    );
+    const forestObservers = observingUnits.filter((obs) => {
+      const obsTerrain = terrainMap.get(hexToKey(obs.position));
+      return obsTerrain === 'forest';
+    });
+    if (forestObservers.length === 0) return false;
+    const visibleSet = calculateVisibility(forestObservers, terrainMap, elevationMap);
+    return visibleSet.has(targetKey);
   }
 
-  // Otherwise check if target hex is in the combined visibility set
+  // Non-forest target: check if any observer can see the hex
   const visibleSet = calculateVisibility(observingUnits, terrainMap, elevationMap);
   return visibleSet.has(targetKey);
 }

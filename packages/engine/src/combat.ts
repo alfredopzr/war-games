@@ -1,5 +1,5 @@
 import type { Unit, TerrainType, HexModifier } from './types';
-import { cubeDistance } from './hex';
+import { cubeDistance, hexToKey } from './hex';
 import { getDefenseModifier } from './terrain';
 import { UNIT_STATS, getTypeAdvantage } from './units';
 
@@ -45,9 +45,14 @@ export function calculateDamage(
  * Returns false if:
  * - Same owner (friendly fire)
  * - Distance is outside [minAttackRange, attackRange]
+ * - visibleHexes provided and defender's hex is not in the set (LoS gate)
  */
-export function canAttack(attacker: Unit, defender: Unit): boolean {
+export function canAttack(attacker: Unit, defender: Unit, visibleHexes?: Set<string>): boolean {
   if (attacker.owner === defender.owner) {
+    return false;
+  }
+
+  if (visibleHexes && !visibleHexes.has(hexToKey(defender.position))) {
     return false;
   }
 

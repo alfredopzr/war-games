@@ -6,11 +6,24 @@
 // unit based on context.
 // =============================================================================
 
-import type { Unit, UnitAction, DirectiveContext, CubeCoord, ResolvedTarget } from './types';
+import type { Unit, UnitAction, DirectiveContext, CubeCoord, ResolvedTarget, MovementDirective, AttackDirective } from './types';
 import { cubeDistance, hexToKey, hexNeighbors, createHex } from './hex';
 import { canAttack } from './combat';
+import { calculateVisibility } from './vision';
 import { findPath } from './pathfinding';
 import { getMoveCost } from './terrain';
+
+// -----------------------------------------------------------------------------
+// Behavior Matrix — human-readable names for each movement × attack combo
+// -----------------------------------------------------------------------------
+
+export const BEHAVIOR_NAMES: Record<MovementDirective, Record<AttackDirective, string>> = {
+  advance:        { 'shoot-on-sight': 'Assault',        skirmish: 'Advance in Contact', 'retreat-on-contact': 'Probe',       hunt: 'Search & Destroy', ignore: 'March' },
+  'flank-left':   { 'shoot-on-sight': 'Envelop Left',   skirmish: 'Harass Left',        'retreat-on-contact': 'Feint Left',  hunt: 'Pursue Left',      ignore: 'Bypass Left' },
+  'flank-right':  { 'shoot-on-sight': 'Envelop Right',  skirmish: 'Harass Right',       'retreat-on-contact': 'Feint Right', hunt: 'Pursue Right',     ignore: 'Bypass Right' },
+  scout:          { 'shoot-on-sight': 'Recon in Force',  skirmish: 'Armed Recon',        'retreat-on-contact': 'Recon',       hunt: 'Track',            ignore: 'Silent Recon' },
+  hold:           { 'shoot-on-sight': 'Defend',          skirmish: 'Harassing Defense',  'retreat-on-contact': 'Tripwire',    hunt: 'Ambush',           ignore: 'Dig In' },
+};
 
 // -----------------------------------------------------------------------------
 // Public API
@@ -114,14 +127,15 @@ export function executeDirective(unit: Unit, context: DirectiveContext): UnitAct
 export function resolveAttackBehavior(unit: Unit, context: DirectiveContext): UnitAction | null {
   if (unit.attackDirective === 'ignore') return null;
 
-  const nearest = findClosestAttackableEnemy(unit, context);
+  const visibleHexes = calculateVisibility([unit], context.terrain, context.elevation);
+  const nearest = findClosestAttackableEnemy(unit, context, visibleHexes);
   if (!nearest) return null;
 
   switch (unit.attackDirective) {
     case 'shoot-on-sight':
     case 'hunt':       // temporary: same as shoot-on-sight until vision gating
     case 'skirmish':   // temporary: same as shoot-on-sight until combat timeline
-      if (canAttack(unit, nearest)) return { type: 'attack', targetUnitId: nearest.id };
+      if (canAttack(unit, nearest, visibleHexes)) return { type: 'attack', targetUnitId: nearest.id };
       return null;
     case 'retreat-on-contact': {
       // Enemy in detection range -> flee toward deployment zone
@@ -269,11 +283,11 @@ function executeSupport(unit: Unit, context: DirectiveContext): UnitAction {
 /**
  * Find the closest enemy in attack range. If tied on distance, prefer lower HP.
  */
-function findClosestAttackableEnemy(unit: Unit, context: DirectiveContext): Unit | null {
+function findClosestAttackableEnemy(unit: Unit, context: DirectiveContext, visibleHexes: Set<string>): Unit | null {
   const targets: { enemy: Unit; distance: number }[] = [];
 
   for (const enemy of context.enemyUnits) {
-    if (canAttack(unit, enemy)) {
+    if (canAttack(unit, enemy, visibleHexes)) {
       targets.push({
         enemy,
         distance: cubeDistance(unit.position, enemy.position),
@@ -449,7 +463,8 @@ function retreatFrom(
   }
 
   // All retreat paths blocked — attack if possible as last resort
-  const enemy = findClosestAttackableEnemy(unit, context);
+  const fallbackVisible = calculateVisibility([unit], context.terrain, context.elevation);
+  const enemy = findClosestAttackableEnemy(unit, context, fallbackVisible);
   if (enemy) return { type: 'attack', targetUnitId: enemy.id };
 
   return { type: 'hold' };
