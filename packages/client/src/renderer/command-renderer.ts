@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import type { Command, GameState } from '@hexwar/engine';
 import { findPath, hexToKey } from '@hexwar/engine';
 import { cachedHexToWorld } from './render-cache';
@@ -25,7 +28,7 @@ export function renderCommandVisuals(
   if (commandGroup) {
     ctx.scene.remove(commandGroup);
     commandGroup.traverse((obj) => {
-      if (obj instanceof THREE.Line) {
+      if (obj instanceof THREE.Line || obj instanceof Line2) {
         obj.geometry.dispose();
         if (obj.material instanceof THREE.Material) {
           obj.material.dispose();
@@ -52,22 +55,33 @@ export function renderCommandVisuals(
         state.map.terrain,
         unit.type,
         occupiedHexes,
+        unit.directive,
+        state.map.modifiers,
+        state.map.elevation,
       );
       if (!path || path.length < 2) continue;
 
-      const points = path.map((hex) => {
+      const positions: number[] = [];
+      for (const hex of path) {
         const elev = state.map.elevation.get(hexToKey(hex)) ?? 0;
         const w = cachedHexToWorld(hex, elev);
-        return new THREE.Vector3(w.x, w.y + 0.15, w.z);
-      });
+        positions.push(w.x, w.y + 0.15, w.z);
+      }
 
-      const geo = new THREE.BufferGeometry().setFromPoints(points);
-      const mat = new THREE.LineBasicMaterial({
-        color: 0x4488ff,
+      const geo = new LineGeometry();
+      geo.setPositions(positions);
+      const mat = new LineMaterial({
+        color: 0x00ccff,
+        linewidth: 4,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.9,
+        resolution: new THREE.Vector2(
+          ctx.renderer.domElement.clientWidth,
+          ctx.renderer.domElement.clientHeight,
+        ),
       });
-      const line = new THREE.Line(geo, mat);
+      const line = new Line2(geo, mat);
+      line.computeLineDistances();
       line.renderOrder = 2;
       commandGroup.add(line);
     }
@@ -120,7 +134,7 @@ export function clearCommandVisuals(): void {
 
   ctx.scene.remove(commandGroup);
   commandGroup.traverse((obj) => {
-    if (obj instanceof THREE.Line) {
+    if (obj instanceof THREE.Line || obj instanceof Line2) {
       obj.geometry.dispose();
       if (obj.material instanceof THREE.Material) {
         obj.material.dispose();
