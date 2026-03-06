@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, type ReactElement } from 'react';
+import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import {
   placeUnit,
   hexToKey, calculateVisibility, createHex,
@@ -7,21 +7,24 @@ import {
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
 import { screenToHex } from './renderer/click-handler';
 import { renderTerrain } from './renderer/terrain-renderer';
-import { renderFog } from './renderer/fog-renderer';
+import { renderFog, clearFog } from './renderer/fog-renderer';
 import { renderDeployZones } from './renderer/deploy-renderer';
 import { renderSelectionHighlights } from './renderer/selection-renderer';
 import { renderCommandVisuals, clearCommandVisuals } from './renderer/command-renderer';
 import { renderUnits } from './renderer/unit-renderer';
 import { updateEffects } from './renderer/effects-renderer';
-import { setupStaticCamera, setMapParams, wasDrag } from './renderer/camera-controller';
+import { setupStaticCamera, setMapParams, setDeployFacing, refitCamera, startIntro, tickIntro, tickCamera, wasDrag } from './renderer/camera-controller';
 import {
   createThreeContext, setMapFlip, startRenderLoop, stopRenderLoop,
-  disposeThreeContext, fitCameraToMap,
+  disposeThreeContext, markLabelsDirty,
 } from './renderer/three-scene';
 import { preloadFactionModels } from './renderer/model-loader';
 import { syncUnitModels, advanceAnimations, clearAllUnitModels } from './renderer/unit-model';
 import { preloadAllProps, renderProps, clearProps } from './renderer/prop-renderer';
+import { clearWorldCache } from './renderer/render-cache';
+import { renderTopoLines, clearTopoLines } from './renderer/topo-renderer';
 import { useGameStore } from './store/game-store';
+import { perf } from './perf-monitor';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
 import { DirectiveSelector } from './components/DirectiveSelector';
 import { BattleHUD } from './components/BattleHUD';
@@ -49,8 +52,26 @@ function getEnemyPlayer(player: PlayerId): PlayerId {
   return player === 'player1' ? 'player2' : 'player1';
 }
 
+// ---------------------------------------------------------------------------
+// Dirty-flag: skip static map rebuild when only units/commands changed
+// ---------------------------------------------------------------------------
+
+let lastTerrainSeed = -1;
+let lastCityOwnershipHash = '';
+
+function cityOwnershipHash(state: GameState): string {
+  const parts: string[] = [];
+  for (const [key, owner] of state.cityOwnership) {
+    if (owner) parts.push(`${key}:${owner}`);
+  }
+  return parts.join('|');
+}
+
 /** Render the full scene into Three.js. */
 function renderScene(state: GameState): void {
+  clearWorldCache();
+  markLabelsDirty();
+  const endTotal = perf.start('renderScene');
   const store = useGameStore.getState();
   const currentPlayerView = store.currentPlayerView;
   const visibleHexes = store.visibleHexes;
@@ -64,12 +85,24 @@ function renderScene(state: GameState): void {
     allHexes.push(createHex(Number(qStr), Number(rStr)));
   }
 
-  renderTerrain(state);
+  const ownerHash = cityOwnershipHash(state);
+  const terrainDirty = state.map.seed !== lastTerrainSeed || ownerHash !== lastCityOwnershipHash;
 
-  if (isBuildPhase) {
-    renderDeployZones(state, currentPlayerView);
+  if (terrainDirty) {
+    const endTerrain = perf.start('renderTerrain');
+    renderTerrain(state);
+    endTerrain();
+    lastTerrainSeed = state.map.seed;
+    lastCityOwnershipHash = ownerHash;
   }
 
+  if (isBuildPhase) {
+    const endDeploy = perf.start('renderDeployZones');
+    renderDeployZones(state, currentPlayerView);
+    endDeploy();
+  }
+
+  const endSelection = perf.start('renderSelection');
   renderSelectionHighlights(
     selectedUnit,
     store.hoveredHex,
@@ -78,14 +111,34 @@ function renderScene(state: GameState): void {
     allHexes,
     state.map.elevation,
   );
+  endSelection();
 
+  const endCommand = perf.start('renderCommandVisuals');
   renderCommandVisuals(store.pendingCommands, state);
+  endCommand();
 
+  const endUnits = perf.start('renderUnits');
   renderUnits(state, currentPlayerView, visibleHexes, lastKnownEnemies);
+  endUnits();
 
-  if (!isBuildPhase) {
+  const debugFogOff = store.debugFogOff;
+
+  if (!debugFogOff) {
+    const endProps = perf.start('renderProps');
+    renderProps(state, visibleHexes);
+    endProps();
+
+    const endFog = perf.start('renderFog');
     renderFog(allHexes, visibleHexes, state.map.elevation);
+    endFog();
+
+    renderTopoLines(allHexes, state.map.elevation, visibleHexes);
+  } else {
+    clearFog();
+    clearTopoLines();
+    renderProps(state);
   }
+  endTotal();
 }
 
 export function App(): ReactElement {
@@ -93,6 +146,8 @@ export function App(): ReactElement {
   const cleanupCameraRef = useRef<(() => void) | null>(null);
   const modelsLoadedRef = useRef(false);
   const propsRenderedRef = useRef(false);
+  const introPlayedRef = useRef(false);
+  const [assetsLoading, setAssetsLoading] = useState(false);
 
   const gameState = useGameStore((s) => s.gameState);
   const selectedUnit = useGameStore((s) => s.selectedUnit);
@@ -106,15 +161,19 @@ export function App(): ReactElement {
   const setHoveredHex = useGameStore((s) => s.setHoveredHex);
 
   const pendingCommands = useGameStore((s) => s.pendingCommands);
+  const debugFogOff = useGameStore((s) => s.debugFogOff);
   const myPlayerId = useGameStore((s) => s.myPlayerId);
   const gameMode = useGameStore((s) => s.gameMode);
 
   // Recalculate visibility when player view changes
   useEffect(() => {
     if (!gameState) return;
+    const endVis = perf.start('effect.visibility');
     const viewPlayer = (gameMode === 'online' && myPlayerId) ? myPlayerId : currentPlayerView;
     const friendly = getPlayerUnits(gameState, viewPlayer);
+    const endCalc = perf.start('visibility');
     const vis = calculateVisibility(friendly, gameState.map.terrain, gameState.map.elevation);
+    endCalc();
     setVisibleHexes(vis);
 
     const enemyPlayer = getEnemyPlayer(viewPlayer);
@@ -130,7 +189,17 @@ export function App(): ReactElement {
     }
 
     useGameStore.setState({ lastKnownEnemies: updated });
+    endVis();
   }, [gameState, currentPlayerView, gameMode, myPlayerId, setVisibleHexes]);
+
+  // Debug: P key toggles fog
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key.toLowerCase() === 'p') useGameStore.getState().toggleDebugFog();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Initialize Three.js
   useEffect(() => {
@@ -143,6 +212,8 @@ export function App(): ReactElement {
     cleanupCameraRef.current = cleanupCamera;
 
     startRenderLoop((deltaSec) => {
+      tickIntro(deltaSec);
+      tickCamera(deltaSec);
       advanceAnimations(deltaSec);
       updateEffects(deltaSec);
     });
@@ -165,35 +236,58 @@ export function App(): ReactElement {
     if (!gameState) return;
 
     // Set map flip before rendering
-    setMapFlip(currentPlayerView === 'player1');
+    const isP1 = currentPlayerView === 'player1';
+    setMapFlip(isP1);
 
-    // Store map params for camera fitting
+    // Orient camera so current player's deploy zone is at screen bottom
+    const deployZone = isP1 ? gameState.map.player1Deployment : gameState.map.player2Deployment;
+    setDeployFacing(deployZone, isP1 ? -1 : 1);
+
+    // Store map params and refit camera with rotation
     setMapParams(gameState.map.elevation);
-    fitCameraToMap(gameState.map.elevation);
+    refitCamera();
 
     renderScene(gameState);
 
-    // Preload 3D models on first state arrival
+    // Preload all assets on first state arrival, then start intro
     if (!modelsLoadedRef.current) {
       modelsLoadedRef.current = true;
-      Promise.all([
+      propsRenderedRef.current = true;
+      setAssetsLoading(true);
+
+      const modelT0 = performance.now();
+      const modelPromise = Promise.all([
         preloadFactionModels('engineer'),
         preloadFactionModels('caravaner'),
       ]).then(() => {
-        syncUnitModels(gameState, currentPlayerView, useGameStore.getState().visibleHexes);
+        perf.record('preloadModels', performance.now() - modelT0);
+      });
+
+      const propT0 = performance.now();
+      const propPromise = preloadAllProps().then(() => {
+        perf.record('preloadProps', performance.now() - propT0);
+      });
+
+      Promise.all([modelPromise, propPromise]).then(() => {
+        setAssetsLoading(false);
+        const gs = useGameStore.getState().gameState;
+        if (gs) {
+          syncUnitModels(gs, useGameStore.getState().currentPlayerView, useGameStore.getState().visibleHexes);
+          const endRenderProps = perf.start('renderProps');
+          renderProps(gs, useGameStore.getState().visibleHexes);
+          endRenderProps();
+        }
+        if (!introPlayedRef.current) {
+          introPlayedRef.current = true;
+          startIntro();
+        }
       });
     }
 
-    // Preload and render props once on map load
-    if (!propsRenderedRef.current) {
-      propsRenderedRef.current = true;
-      preloadAllProps().then(() => {
-        renderProps(gameState);
-      });
-    }
-
+    const endSync = perf.start('syncUnitModels');
     syncUnitModels(gameState, currentPlayerView, useGameStore.getState().visibleHexes);
-  }, [gameState, selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies, pendingCommands]);
+    endSync();
+  }, [gameState, selectedUnit, currentPlayerView, visibleHexes, lastKnownEnemies, pendingCommands, debugFogOff]);
 
   // Click handler
   const handleClick = useCallback(
@@ -202,6 +296,7 @@ export function App(): ReactElement {
       if (!gameState) return;
       if (useGameStore.getState().isReplayPlaying) return;
 
+      const clickT0 = performance.now();
       const canvas = containerRef.current;
       if (!canvas) return;
       const hex = screenToHex(e.offsetX, e.offsetY, canvas.clientWidth, canvas.clientHeight);
@@ -224,6 +319,7 @@ export function App(): ReactElement {
               type: 'enemy-unit',
               unitId: enemy.id,
             });
+            perf.logAction('target:hunt', performance.now() - clickT0);
           } else {
             store.showToast('Select a hex with an enemy unit');
           }
@@ -234,6 +330,7 @@ export function App(): ReactElement {
               type: 'city',
               hex,
             });
+            perf.logAction('target:capture', performance.now() - clickT0);
           } else {
             store.showToast('Select a city hex');
           }
@@ -262,6 +359,7 @@ export function App(): ReactElement {
           store.exitPlacementMode();
           import('./network/network-manager').then(({ networkManager }) => {
             networkManager.placeUnit(unitType, hex, 'advance');
+            perf.logAction('place:online', performance.now() - clickT0);
           });
           return;
         }
@@ -269,6 +367,7 @@ export function App(): ReactElement {
         placeUnit(gameState, currentPlayerView, store.placementMode, hex);
         store.exitPlacementMode();
         store.setGameState({ ...gameState });
+        perf.logAction('place:local', performance.now() - clickT0);
         return;
       }
 
@@ -277,6 +376,7 @@ export function App(): ReactElement {
         const unit = findUnitAtHex(gameState, hex);
         if (unit && unit.owner === currentPlayerView) {
           selectUnit(unit);
+          perf.logAction('select:build', performance.now() - clickT0);
         } else {
           selectUnit(null);
         }
@@ -314,6 +414,7 @@ export function App(): ReactElement {
           const command: Command = { type: 'direct-move', unitId: selected.id, targetHex: hex };
           useGameStore.getState().addPendingCommand(command);
           useGameStore.getState().selectUnit(null);
+          perf.logAction('cmd:move', performance.now() - clickT0);
           return;
         }
         useGameStore.getState().showToast('Out of range');
@@ -334,6 +435,7 @@ export function App(): ReactElement {
             };
             useGameStore.getState().addPendingCommand(command);
             useGameStore.getState().selectUnit(null);
+            perf.logAction('cmd:attack', performance.now() - clickT0);
             return;
           }
           useGameStore.getState().showToast('Out of attack range');
@@ -352,6 +454,7 @@ export function App(): ReactElement {
         const isOwn = unit.owner === currentPlayerView;
         if (isOwn || visibleHexes.has(key)) {
           selectUnit(unit);
+          perf.logAction('select:unit', performance.now() - clickT0);
         } else {
           selectUnit(null);
         }
@@ -380,15 +483,18 @@ export function App(): ReactElement {
       const unit = findUnitAtHex(gameState, hex);
       if (unit && unit.owner === currentPlayerView) {
         e.preventDefault();
+        const t0 = performance.now();
 
         if (useGameStore.getState().gameMode === 'online') {
           import('./network/network-manager').then(({ networkManager }) => {
             networkManager.removeUnit(unit.id);
+            perf.logAction('remove:online', performance.now() - t0);
           });
           return;
         }
 
         useGameStore.getState().removePlacedUnit(unit.id);
+        perf.logAction('remove:local', performance.now() - t0);
       }
     },
     [gameState, currentPlayerView],
@@ -433,6 +539,11 @@ export function App(): ReactElement {
   return (
     <>
       <StartMenu />
+      {assetsLoading && (
+        <div className="loading-overlay">
+          <div className="loading-spinner" />
+        </div>
+      )}
       <div className="game-layout">
         {gameState && <BattleHUD />}
         <div ref={containerRef} className="game-canvas" />

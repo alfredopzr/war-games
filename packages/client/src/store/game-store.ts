@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
 import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, DirectiveTarget, Command, PlayerId } from '@hexwar/engine';
 import type { TurnEvent } from '../renderer/replay-sequencer';
+import { perf } from '../perf-monitor';
 
 export type GameMode = 'vsAI' | 'online';
 export type LobbyState = 'menu' | 'creating' | 'waiting' | 'joining' | null;
@@ -94,12 +95,16 @@ interface GameStore {
   turnReplayEvents: TurnEvent[];
   isReplayPlaying: boolean;
 
+  // Debug
+  debugFogOff: boolean;
+
   // Round result / game over overlays
   showRoundResult: boolean;
   roundResult: RoundResultData | null;
   showGameOver: boolean;
 
   // Actions
+  toggleDebugFog: () => void;
   setGameMode: (mode: GameMode) => void;
   setGameState: (state: GameState) => void;
   setRoomId: (id: string | null) => void;
@@ -171,9 +176,12 @@ export const useGameStore = create<GameStore>((set) => ({
   targetSelectionMode: false,
   targetSelectionDirective: null,
   toastMessage: null,
+  debugFogOff: false,
   showRoundResult: false,
   roundResult: null,
   showGameOver: false,
+
+  toggleDebugFog: (): void => set((s) => ({ debugFogOff: !s.debugFogOff })),
 
   setGameMode: (mode: GameMode): void => set({ gameMode: mode }),
 
@@ -326,6 +334,7 @@ export const useGameStore = create<GameStore>((set) => ({
   },
 
   confirmBuild: (): void => {
+    const t0 = performance.now();
     const store = useGameStore.getState();
     if (!store.gameState || store.gameState.phase !== 'build') return;
 
@@ -342,6 +351,7 @@ export const useGameStore = create<GameStore>((set) => ({
         buildTimerInterval: null,
         placementMode: null,
       });
+      perf.logAction('confirmBuild:online', performance.now() - t0);
       return;
     }
 
@@ -380,6 +390,7 @@ export const useGameStore = create<GameStore>((set) => ({
       currentPlayerView: 'player1',
       survivingUnitIds: new Set<string>(),
     });
+    perf.logAction('confirmBuild:local', performance.now() - t0);
   },
 
   addBattleLogEntries: (entries: BattleLogEntry[]): void =>
