@@ -2,10 +2,10 @@ import { useState, useRef, useEffect, useCallback, type ReactElement } from 'rea
 import {
   placeUnit,
   hexToKey, calculateVisibility, createHex,
-  canAttack, cubeDistance, UNIT_STATS,
+  canAttack, cubeDistance, UNIT_STATS, getReachableHexes,
 } from '@hexwar/engine';
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
-import { screenToHex } from './renderer/click-handler';
+import { screenToHex, setClickElevationMap } from './renderer/click-handler';
 import { renderTerrain } from './renderer/terrain-renderer';
 import { renderFog, clearFog } from './renderer/fog-renderer';
 import { renderDeployZones } from './renderer/deploy-renderer';
@@ -257,6 +257,7 @@ export function App(): ReactElement {
 
     // Store map params and refit camera with rotation
     setMapParams(gameState.map.elevation);
+    setClickElevationMap(gameState.map.elevation);
     refitCamera();
 
     renderScene(gameState);
