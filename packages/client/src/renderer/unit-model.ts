@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import type { Unit, PlayerId, GameState } from '@hexwar/engine';
-import { hexToKey, hexToWorld, UNIT_STATS, WORLD_HEX_SIZE } from '@hexwar/engine';
+import { hexToKey, UNIT_STATS, WORLD_HEX_SIZE } from '@hexwar/engine';
+import { cachedHexToWorld } from './render-cache';
 import {
   MODEL_MANIFEST,
   PLAYER_FACTION,
   type Faction,
+  type AnimAction,
 } from './constants';
 import { getModelFromCache } from './model-loader';
 import { getThreeContext } from './three-scene';
@@ -15,14 +17,12 @@ import { getThreeContext } from './three-scene';
 // Types
 // ---------------------------------------------------------------------------
 
-type AnimClip = 'idle' | 'move' | 'attack' | 'hit' | 'death';
-
 interface UnitModel3D {
   unitId: string;
   object: THREE.Object3D;
   mixer: THREE.AnimationMixer;
-  clips: Map<string, THREE.AnimationClip>;
-  currentClip: AnimClip | null;
+  clips: Map<AnimAction, THREE.AnimationClip[]>;
+  currentAction: AnimAction | null;
   hpLabel: CSS2DObject;
   hpBar: HTMLDivElement;
   hpFill: HTMLDivElement;
@@ -91,14 +91,31 @@ function createUnitModel(
 
   // Position using engine world coordinates
   const elev = elevationMap.get(hexToKey(unit.position)) ?? 0;
-  const world = hexToWorld(unit.position, elev);
+  const world = cachedHexToWorld(unit.position, elev);
   clone.position.set(world.x, world.y, world.z);
 
   // Animation mixer + clips
   const mixer = new THREE.AnimationMixer(clone);
-  const clips = new Map<string, THREE.AnimationClip>();
-  for (const clip of gltf.animations) {
-    clips.set(clip.name, clip);
+  const clips = new Map<AnimAction, THREE.AnimationClip[]>();
+  const clipMap = manifest.clipMap;
+
+  if (clipMap) {
+    const rawByName = new Map<string, THREE.AnimationClip>();
+    for (const c of gltf.animations) rawByName.set(c.name, c);
+
+    for (const [action, rawNames] of Object.entries(clipMap) as [AnimAction, string[]][]) {
+      const matched: THREE.AnimationClip[] = [];
+      for (const name of rawNames) {
+        const c = rawByName.get(name);
+        if (c) matched.push(c);
+      }
+      if (matched.length > 0) clips.set(action, matched);
+    }
+  } else {
+    for (const clip of gltf.animations) {
+      const action = clip.name as AnimAction;
+      clips.set(action, [clip]);
+    }
   }
 
   // --- HP bar (CSS2D) ---
@@ -127,7 +144,7 @@ function createUnitModel(
     object: clone,
     mixer,
     clips,
-    currentClip: null,
+    currentAction: null,
     hpLabel,
     hpBar: hpWrapper,
     hpFill,
@@ -136,6 +153,7 @@ function createUnitModel(
   };
 
   playAnimation(model, 'idle');
+  mixer.update(0);
 
   unitModels.set(unit.id, model);
   return model;
@@ -168,26 +186,28 @@ function hpColor(ratio: number): string {
 // Animation playback
 // ---------------------------------------------------------------------------
 
-function playAnimation(model: UnitModel3D, clipName: AnimClip): void {
-  const clip = model.clips.get(clipName);
-  if (!clip) return;
-  if (model.currentClip === clipName) return;
+function playAnimation(model: UnitModel3D, action: AnimAction): void {
+  const candidates = model.clips.get(action);
+  if (!candidates || candidates.length === 0) return;
+  if (model.currentAction === action) return;
+
+  const clip = candidates[Math.floor(Math.random() * candidates.length)]!;
 
   model.mixer.stopAllAction();
-  const action = model.mixer.clipAction(clip);
-  action.reset();
+  const threeAction = model.mixer.clipAction(clip);
+  threeAction.reset();
 
-  if (clipName === 'idle') {
-    action.setLoop(THREE.LoopRepeat, Infinity);
+  if (action === 'idle') {
+    threeAction.setLoop(THREE.LoopRepeat, Infinity);
   } else {
-    action.setLoop(THREE.LoopOnce, 1);
-    action.clampWhenFinished = true;
+    threeAction.setLoop(THREE.LoopOnce, 1);
+    threeAction.clampWhenFinished = true;
   }
 
-  action.play();
-  model.currentClip = clipName;
+  threeAction.play();
+  model.currentAction = action;
 
-  if (clipName !== 'idle' && clipName !== 'death') {
+  if (action !== 'idle' && action !== 'death') {
     const onFinished = (): void => {
       model.mixer.removeEventListener('finished', onFinished);
       playAnimation(model, 'idle');
@@ -197,10 +217,10 @@ function playAnimation(model: UnitModel3D, clipName: AnimClip): void {
 }
 
 /** Trigger an animation on a unit by ID. */
-export function playUnitAnimation(unitId: string, clipName: AnimClip): void {
+export function playUnitAnimation(unitId: string, action: AnimAction): void {
   const model = unitModels.get(unitId);
   if (!model) return;
-  playAnimation(model, clipName);
+  playAnimation(model, action);
 }
 
 // ---------------------------------------------------------------------------
@@ -232,7 +252,7 @@ export function syncUnitModels(
       if (existing) {
         // Update position using engine world coordinates
         const elev = elevationMap.get(key) ?? 0;
-        const world = hexToWorld(unit.position, elev);
+        const world = cachedHexToWorld(unit.position, elev);
         existing.object.position.set(world.x, world.y, world.z);
 
         // Update HP bar

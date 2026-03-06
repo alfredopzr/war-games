@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { GameState, PlayerId, UnitType, CubeCoord } from '@hexwar/engine';
-import { hexToKey, hexToWorld } from '@hexwar/engine';
+import { hexToKey } from '@hexwar/engine';
+import { cachedHexToWorld } from './render-cache';
 import { getThreeContext } from './three-scene';
 import { UNIT_LABELS } from './constants';
 
@@ -11,6 +12,17 @@ import { UNIT_LABELS } from './constants';
 // ---------------------------------------------------------------------------
 
 let ghostGroup: THREE.Group | null = null;
+
+// Shared ghost geometry + material (identical for all ghost markers)
+const sharedGhostGeo = new THREE.CircleGeometry(0.35, 16);
+sharedGhostGeo.rotateX(-Math.PI / 2);
+const sharedGhostMat = new THREE.MeshBasicMaterial({
+  color: 0x888888,
+  transparent: true,
+  opacity: 0.4,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
 
 /** Render ghost markers. Live units handled by Three.js unit-model.ts. */
 export function renderUnits(
@@ -22,17 +34,9 @@ export function renderUnits(
   const ctx = getThreeContext();
   if (!ctx) return;
 
-  // Remove previous ghosts
+  // Remove previous ghosts (geometry + material are shared singletons — not disposed)
   if (ghostGroup) {
     ctx.scene.remove(ghostGroup);
-    ghostGroup.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) {
-        obj.geometry.dispose();
-        if (obj.material instanceof THREE.Material) {
-          obj.material.dispose();
-        }
-      }
-    });
   }
 
   ghostGroup = new THREE.Group();
@@ -50,21 +54,10 @@ export function renderUnits(
     if (visibleHexes.has(ghostKey)) continue;
 
     const elev = elevationMap.get(ghostKey) ?? 0;
-    const world = hexToWorld(ghost.position, elev);
+    const world = cachedHexToWorld(ghost.position, elev);
 
-    // Grey translucent circle
-    const circleGeo = new THREE.CircleGeometry(0.35, 16);
-    circleGeo.rotateX(-Math.PI / 2);
-    const circleMesh = new THREE.Mesh(
-      circleGeo,
-      new THREE.MeshBasicMaterial({
-        color: 0x888888,
-        transparent: true,
-        opacity: 0.4,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      }),
-    );
+    // Grey translucent circle (shared geometry + material)
+    const circleMesh = new THREE.Mesh(sharedGhostGeo, sharedGhostMat);
     circleMesh.position.set(world.x, world.y + 0.02, world.z);
     ghostGroup.add(circleMesh);
 
