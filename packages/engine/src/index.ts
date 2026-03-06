@@ -39,7 +39,7 @@ export { UNIT_STATS, scaledUnitStats, createUnit, getTypeAdvantage, resetUnitIdC
 export { calculateDamage, canAttack } from './combat';
 
 // Pathfinding
-export { findPath, pathCost } from './pathfinding';
+export { findPath, pathCost, getReachableHexes } from './pathfinding';
 
 // Vision
 export { calculateVisibility, isUnitVisible } from './vision';

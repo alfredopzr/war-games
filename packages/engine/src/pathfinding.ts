@@ -151,6 +151,67 @@ export function pathCost(
 }
 
 // -----------------------------------------------------------------------------
+// Reachable Hexes (Dijkstra flood-fill)
+// -----------------------------------------------------------------------------
+
+/**
+ * Return all hex keys reachable from `start` within a movement `budget`.
+ * Uses Dijkstra with terrain costs, elevation, modifiers, and unit type.
+ */
+export function getReachableHexes(
+  start: CubeCoord,
+  budget: number,
+  terrainMap: Map<string, TerrainType>,
+  unitType: UnitType,
+  occupiedHexes: Set<string>,
+  directive?: DirectiveType,
+  modifiers?: Map<string, HexModifier>,
+  elevationMap?: Map<string, number>,
+): Set<string> {
+  const reachable = new Set<string>();
+  const startKey = hexToKey(start);
+  const bestG = new Map<string, number>();
+  bestG.set(startKey, 0);
+
+  const heap = new MinHeap<{ coord: CubeCoord; g: number }>((a, b) => a.g - b.g);
+  heap.push({ coord: start, g: 0 });
+
+  while (heap.size > 0) {
+    const current = heap.pop()!;
+    const currentKey = hexToKey(current.coord);
+
+    if (current.g > (bestG.get(currentKey) ?? Infinity)) continue;
+
+    if (currentKey !== startKey) {
+      reachable.add(currentKey);
+    }
+
+    for (const neighbor of hexNeighbors(current.coord)) {
+      const neighborKey = hexToKey(neighbor);
+      const terrain = terrainMap.get(neighborKey);
+      if (terrain === undefined) continue;
+      if (occupiedHexes.has(neighborKey)) continue;
+
+      const elevFrom = elevationMap?.get(currentKey);
+      const elevTo = elevationMap?.get(neighborKey);
+      const cost = getMoveCost(terrain, unitType, directive, modifiers?.get(neighborKey), elevFrom, elevTo);
+      if (cost === Infinity) continue;
+
+      const totalCost = current.g + cost;
+      if (totalCost > budget) continue;
+
+      const prev = bestG.get(neighborKey);
+      if (prev !== undefined && totalCost >= prev) continue;
+
+      bestG.set(neighborKey, totalCost);
+      heap.push({ coord: neighbor, g: totalCost });
+    }
+  }
+
+  return reachable;
+}
+
+// -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
 
