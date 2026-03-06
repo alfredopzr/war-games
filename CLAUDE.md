@@ -56,3 +56,5 @@ Keep each commit scoped to a single feature or fix. Do not bundle unrelated chan
 - `pnpm dev` — start all packages in dev mode
 - `pnpm build` — build all packages
 - `pnpm format` — format all source files with Prettier
+
+do not run compound git or cd commands. do them one at a time

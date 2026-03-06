@@ -8,7 +8,13 @@
       "Bash(npx vitest:*)",
       "Bash(pnpm test:*)",
       "Bash(node:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(npm i:*)",
+      "Bash(\"C:/Program Files/Blender Foundation/Blender 5.0/blender.exe\":*)",
+      "Bash(gltf-transform inspect:*)",
+      "Bash(ls:*)",
+      "Bash(PYTHONIOENCODING=utf-8 python:*)"
     ]
   }
 }
