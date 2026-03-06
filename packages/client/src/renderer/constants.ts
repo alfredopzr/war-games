@@ -50,7 +50,7 @@ interface ModelEntry {
 export const MODEL_MANIFEST: Record<Faction, Record<UnitType, ModelEntry>> = {
   engineer: {
     infantry: {
-      glbPath: '/models/infantry_engineer.glb',
+      glbPath: '/models/highdef/infantry_engineer.glb',
       clipMap: {
         idle:   ['Idle_02'],
         move:   ['Walking', 'Running'],
@@ -61,13 +61,13 @@ export const MODEL_MANIFEST: Record<Faction, Record<UnitType, ModelEntry>> = {
         climb:  ['climbing_up_wall'],
       },
     },
-    tank:      { glbPath: '/models/tank_engineer.glb' },
-    artillery: { glbPath: '/models/artillery_engineer.glb' },
-    recon:     { glbPath: '/models/scout_engineer.glb' },
+    tank:      { glbPath: '/models/highdef/tank_engineer.glb' },
+    artillery: { glbPath: '/models/highdef/artillery_engineer.glb' },
+    recon:     { glbPath: '/models/highdef/scout_engineer.glb' },
   },
   caravaner: {
     infantry: {
-      glbPath: '/models/infantry_caravaner.glb',
+      glbPath: '/models/highdef/infantry_caravaner.glb',
       clipMap: {
         idle:   ['Idle_8'],
         move:   ['Walking', 'Running'],
@@ -78,8 +78,8 @@ export const MODEL_MANIFEST: Record<Faction, Record<UnitType, ModelEntry>> = {
         climb:  ['climbing_up_wall'],
       },
     },
-    tank:      { glbPath: '/models/tank_caravaner.glb' },
-    artillery: { glbPath: '/models/artillery_caravaner.glb' },
-    recon:     { glbPath: '/models/scout_caravaner.glb' },
+    tank:      { glbPath: '/models/highdef/tank_caravaner.glb' },
+    artillery: { glbPath: '/models/highdef/artillery_caravaner.glb' },
+    recon:     { glbPath: '/models/highdef/scout_caravaner.glb' },
   },
 };
