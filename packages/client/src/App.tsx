@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback, type ReactElement } from 'rea
 import {
   placeUnit,
   hexToKey, calculateVisibility, createHex,
-  canAttack, cubeDistance, UNIT_STATS, getReachableHexes,
+  UNIT_STATS, getReachableHexes,
 } from '@hexwar/engine';
-import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
+import type { GameState, CubeCoord, Unit, PlayerId } from '@hexwar/engine';
 import { screenToHex, setClickElevationMap } from './renderer/click-handler';
 import { renderTerrain } from './renderer/terrain-renderer';
 import { renderFog, clearFog } from './renderer/fog-renderer';
@@ -319,37 +319,32 @@ export function App(): ReactElement {
 
       const store = useGameStore.getState();
 
-      // Build phase: target selection for hunt/capture directives
-      if (gameState.phase === 'build' && store.targetSelectionMode && store.selectedUnit) {
+      // Target selection mode: click map to set directive target
+      if (store.targetSelectionMode && store.selectedUnit) {
         const hexKey = hexToKey(hex);
-        const directive = store.targetSelectionDirective;
+        const terrain = gameState.map.terrain.get(hexKey);
 
-        if (directive === 'hunt') {
-          const enemyPlayer = currentPlayerView === 'player1' ? 'player2' : 'player1';
-          const enemy = gameState.players[enemyPlayer].units.find(
-            (u) => hexToKey(u.position) === hexKey,
-          );
-          if (enemy) {
-            store.setUnitDirectiveTarget(store.selectedUnit.id, directive, {
-              type: 'enemy-unit',
-              unitId: enemy.id,
-            });
-            perf.logAction('target:hunt', performance.now() - clickT0);
-          } else {
-            store.showToast('Select a hex with an enemy unit');
-          }
-        } else if (directive === 'capture') {
-          const terrain = gameState.map.terrain.get(hexKey);
-          if (terrain === 'city') {
-            store.setUnitDirectiveTarget(store.selectedUnit.id, directive, {
-              type: 'city',
-              hex,
-            });
-            perf.logAction('target:capture', performance.now() - clickT0);
-          } else {
-            store.showToast('Select a city hex');
-          }
+        // Try enemy unit first
+        const enemyPlayer = currentPlayerView === 'player1' ? 'player2' : 'player1';
+        const enemy = gameState.players[enemyPlayer].units.find(
+          (u) => hexToKey(u.position) === hexKey,
+        );
+        if (enemy) {
+          store.setUnitDirectiveTarget(store.selectedUnit.id, { type: 'enemy-unit', unitId: enemy.id });
+          perf.logAction('target:enemy', performance.now() - clickT0);
+          return;
         }
+
+        // Try city
+        if (terrain === 'city') {
+          store.setUnitDirectiveTarget(store.selectedUnit.id, { type: 'city', hex });
+          perf.logAction('target:city', performance.now() - clickT0);
+          return;
+        }
+
+        // Fall back to hex target
+        store.setUnitDirectiveTarget(store.selectedUnit.id, { type: 'hex', hex });
+        perf.logAction('target:hex', performance.now() - clickT0);
         return;
       }
 
@@ -373,7 +368,7 @@ export function App(): ReactElement {
           const unitType = store.placementMode;
           store.exitPlacementMode();
           import('./network/network-manager').then(({ networkManager }) => {
-            networkManager.placeUnit(unitType, hex, 'advance');
+            networkManager.placeUnit(unitType, hex, 'advance', 'ignore', null);
             perf.logAction('place:online', performance.now() - clickT0);
           });
           return;
@@ -396,77 +391,13 @@ export function App(): ReactElement {
           const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
           const reachable = getReachableHexes(
             unit.position, stats.moveRange, gameState.map.terrain, unit.type,
-            occupiedKeys, unit.directive, gameState.map.modifiers, gameState.map.elevation,
+            occupiedKeys, unit.movementDirective, gameState.map.modifiers, gameState.map.elevation,
           );
           useGameStore.getState().setHighlightedHexes(reachable, 'move');
           perf.logAction('select:build', performance.now() - clickT0);
         } else {
           selectUnit(null);
         }
-        return;
-      }
-
-      const mode = store.commandMode;
-      const selected = store.selectedUnit;
-
-      // Command mode: move
-      if (mode === 'move' && selected && selected.owner === currentPlayerView) {
-        const stats = UNIT_STATS[selected.type];
-        const dist = cubeDistance(selected.position, hex);
-        const targetKey = hexToKey(hex);
-        if (dist <= stats.moveRange && dist > 0) {
-          const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
-          const isOccupied = allUnits.some((u) => hexToKey(u.position) === targetKey);
-          if (isOccupied) {
-            useGameStore.getState().showToast('Hex occupied');
-            return;
-          }
-          if (!gameState.map.terrain.has(targetKey)) {
-            useGameStore.getState().showToast('Invalid hex');
-            return;
-          }
-          const pendingTargets = new Set(
-            store.pendingCommands
-              .filter((c): c is Command & { type: 'direct-move' } => c.type === 'direct-move')
-              .map((c) => hexToKey(c.targetHex)),
-          );
-          if (pendingTargets.has(targetKey)) {
-            useGameStore.getState().showToast('Hex claimed by another command');
-            return;
-          }
-          const command: Command = { type: 'direct-move', unitId: selected.id, targetHex: hex };
-          useGameStore.getState().addPendingCommand(command);
-          useGameStore.getState().selectUnit(null);
-          perf.logAction('cmd:move', performance.now() - clickT0);
-          return;
-        }
-        useGameStore.getState().showToast('Out of range');
-        useGameStore.getState().setCommandMode('none');
-        useGameStore.getState().clearHighlightedHexes();
-        return;
-      }
-
-      // Command mode: attack
-      if (mode === 'attack' && selected && selected.owner === currentPlayerView) {
-        const targetUnit = findUnitAtHex(gameState, hex);
-        if (targetUnit && targetUnit.owner !== currentPlayerView) {
-          if (canAttack(selected, targetUnit)) {
-            const command: Command = {
-              type: 'direct-attack',
-              unitId: selected.id,
-              targetUnitId: targetUnit.id,
-            };
-            useGameStore.getState().addPendingCommand(command);
-            useGameStore.getState().selectUnit(null);
-            perf.logAction('cmd:attack', performance.now() - clickT0);
-            return;
-          }
-          useGameStore.getState().showToast('Out of attack range');
-          return;
-        }
-        useGameStore.getState().showToast('No enemy target');
-        useGameStore.getState().setCommandMode('none');
-        useGameStore.getState().clearHighlightedHexes();
         return;
       }
 
@@ -482,15 +413,9 @@ export function App(): ReactElement {
             const stats = UNIT_STATS[unit.type];
             const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
             const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
-            const cmds = useGameStore.getState().pendingCommands;
-            for (const cmd of cmds) {
-              if (cmd.type === 'direct-move') {
-                occupiedKeys.add(hexToKey(cmd.targetHex));
-              }
-            }
             const reachable = getReachableHexes(
               unit.position, stats.moveRange, gameState.map.terrain, unit.type,
-              occupiedKeys, unit.directive, gameState.map.modifiers, gameState.map.elevation,
+              occupiedKeys, unit.movementDirective, gameState.map.modifiers, gameState.map.elevation,
             );
             useGameStore.getState().setHighlightedHexes(reachable, 'move');
           }

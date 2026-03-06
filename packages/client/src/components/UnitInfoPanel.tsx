@@ -1,22 +1,10 @@
 import type { ReactElement } from 'react';
-import { UNIT_STATS } from '@hexwar/engine';
-import type { DirectiveType } from '@hexwar/engine';
+import { UNIT_STATS, BEHAVIOR_NAMES } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
 function ownerLabel(owner: string): string {
   return owner === 'player1' ? 'Player 1' : 'Player 2';
 }
-
-const DIRECTIVE_INFO: Record<DirectiveType, { name: string; desc: string }> = {
-  'advance': { name: 'Advance', desc: 'Move toward the objective aggressively' },
-  'hold': { name: 'Hold', desc: 'Stay in position and defend' },
-  'flank-left': { name: 'Flank Left', desc: 'Circle around the left side' },
-  'flank-right': { name: 'Flank Right', desc: 'Circle around the right side' },
-  'scout': { name: 'Scout', desc: 'Explore and reveal enemy positions' },
-  'support': { name: 'Support', desc: 'Stay back and provide fire support' },
-  'hunt': { name: 'Hunt', desc: 'Pursue and destroy a target enemy' },
-  'capture': { name: 'Capture', desc: 'Move to city, occupy, then hold' },
-};
 
 export function UnitInfoPanel(): ReactElement | null {
   const selectedUnit = useGameStore((s) => s.selectedUnit);
@@ -25,7 +13,7 @@ export function UnitInfoPanel(): ReactElement | null {
   if (!selectedUnit) return null;
 
   const stats = UNIT_STATS[selectedUnit.type];
-  const directiveInfo = DIRECTIVE_INFO[selectedUnit.directive];
+  const behaviorName = BEHAVIOR_NAMES[selectedUnit.movementDirective][selectedUnit.attackDirective];
 
   return (
     <div className="unit-info-panel">
@@ -41,8 +29,11 @@ export function UnitInfoPanel(): ReactElement | null {
       <StatRow label="Range" value={`${stats.minAttackRange}-${stats.attackRange}`} />
       <StatRow label="Vision" value={String(stats.visionRange)} />
       <div className="directive-section">
-        <span className="directive-section-name">{directiveInfo.name}</span>
-        <span className="directive-section-desc">{directiveInfo.desc}</span>
+        <span className="directive-section-name">{behaviorName}</span>
+        <span className="directive-section-desc">
+          {selectedUnit.movementDirective} + {selectedUnit.attackDirective}
+          {selectedUnit.specialtyModifier ? ` [${selectedUnit.specialtyModifier}]` : ''}
+        </span>
       </div>
     </div>
   );

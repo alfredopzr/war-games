@@ -55,9 +55,6 @@ const DIRECTIVE_ICONS: Record<string, string> = {
   'flank-left': '\u25C4',
   'flank-right': '\u25BA',
   'scout': '\u25CF',
-  'support': '\u25C6',
-  'hunt': '\u2666',
-  'capture': '\u2691',
 };
 
 // ---------------------------------------------------------------------------
@@ -326,7 +323,7 @@ export function syncUnitModels(
         existing.hpFill.style.background = hpColor(ratio);
 
         // Update directive icon
-        existing.directiveEl.textContent = DIRECTIVE_ICONS[unit.directive] ?? '';
+        existing.directiveEl.textContent = DIRECTIVE_ICONS[unit.movementDirective] ?? '';
       } else {
         const faction = PLAYER_FACTION[unit.owner];
         createUnitModel(unit, faction, elevationMap);

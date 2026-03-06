@@ -4,7 +4,9 @@ import type {
   PlayerId,
   UnitType,
   CubeCoord,
-  DirectiveType,
+  MovementDirective,
+  AttackDirective,
+  SpecialtyModifier,
   Command,
   SerializableGameState,
   Unit,
@@ -71,16 +73,16 @@ class NetworkManager {
   // Build Phase
   // ---------------------------------------------------------------------------
 
-  placeUnit(unitType: UnitType, position: CubeCoord, directive: DirectiveType): void {
-    this.socket?.emit('place-unit', { unitType, position, directive });
+  placeUnit(unitType: UnitType, position: CubeCoord, movementDirective: MovementDirective, attackDirective: AttackDirective, specialtyModifier: SpecialtyModifier | null): void {
+    this.socket?.emit('place-unit', { unitType, position, movementDirective, attackDirective, specialtyModifier });
   }
 
   removeUnit(unitId: string): void {
     this.socket?.emit('remove-unit', { unitId });
   }
 
-  setDirective(unitId: string, directive: DirectiveType): void {
-    this.socket?.emit('set-directive', { unitId, directive });
+  setDirective(unitId: string, movementDirective: MovementDirective, attackDirective: AttackDirective, specialtyModifier: SpecialtyModifier | null): void {
+    this.socket?.emit('set-directive', { unitId, movementDirective, attackDirective, specialtyModifier });
   }
 
   confirmBuild(): void {

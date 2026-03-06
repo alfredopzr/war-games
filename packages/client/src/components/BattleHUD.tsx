@@ -112,13 +112,10 @@ function resolveSimultaneousLocal(
   console.log(`[TURN ${turnNum}] P1 units: ${gameState.players.player1.units.length}, P2 units: ${gameState.players.player2.units.length}`);
   console.log(`[TURN ${turnNum}] P1 commands (${p1Commands.length}):`, p1Commands.map((c) => `${c.type}:${c.unitId}`));
   console.log(`[TURN ${turnNum}] AI commands (${aiCommands.length}):`, aiCommands.map((c) => {
-    if (c.type === 'direct-attack') return `attack:${c.unitId}→${c.targetUnitId}`;
-    if (c.type === 'direct-move') return `move:${c.unitId}→(${c.targetHex.q},${c.targetHex.r})`;
-    if (c.type === 'retreat') return `retreat:${c.unitId}`;
-    return `redirect:${c.unitId}→${c.type === 'redirect' ? c.newDirective : '?'}`;
+    return `redirect:${c.unitId}→${c.newMovementDirective}/${c.newAttackDirective}`;
   }));
   for (const u of gameState.players.player2.units) {
-    console.log(`  P2 ${u.type} [${u.directive}] hp=${u.hp} @ (${u.position.q},${u.position.r})`);
+    console.log(`  P2 ${u.type} [${u.movementDirective}/${u.attackDirective}] hp=${u.hp} @ (${u.position.q},${u.position.r})`);
   }
 
   // Snapshot before any resolution — positions, HP, cities (for replay diff)

@@ -64,7 +64,7 @@ export { mulberry32 } from './rng';
 export { MinHeap } from './min-heap';
 
 // Directives
-export { executeDirective, resolveTarget, resolveAttackBehavior } from './directives';
+export { executeDirective, resolveTarget, resolveAttackBehavior, BEHAVIOR_NAMES } from './directives';
 
 // Commands
 export { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND, validateDirectiveTarget } from './commands';

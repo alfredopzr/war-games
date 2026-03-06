@@ -124,7 +124,14 @@ io.on('connection', (socket) => {
 
   socket.on(
     'place-unit',
-    (data: { unitType: string; position: { q: number; r: number; s: number }; directive: string; target?: unknown }) => {
+    (data: {
+      unitType: string;
+      position: { q: number; r: number; s: number };
+      movementDirective: string;
+      attackDirective: string;
+      specialtyModifier: string | null;
+      target?: unknown;
+    }) => {
       const found = getRoomBySocket(socket.id);
       if (!found) return;
       try {
@@ -133,7 +140,9 @@ io.on('connection', (socket) => {
           found.playerId,
           data.unitType as Parameters<typeof handlePlaceUnit>[2],
           data.position,
-          data.directive as Parameters<typeof handlePlaceUnit>[4],
+          data.movementDirective as Parameters<typeof handlePlaceUnit>[4],
+          data.attackDirective as Parameters<typeof handlePlaceUnit>[5],
+          data.specialtyModifier as Parameters<typeof handlePlaceUnit>[6],
           io,
           data.target as DirectiveTarget | undefined,
         );
@@ -161,7 +170,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('set-directive', (data: { unitId: string; directive: string; target?: unknown }) => {
+  socket.on('set-directive', (data: {
+    unitId: string;
+    movementDirective: string;
+    attackDirective: string;
+    specialtyModifier: string | null;
+    target?: unknown;
+  }) => {
     const found = getRoomBySocket(socket.id);
     if (!found) return;
     try {
@@ -169,7 +184,9 @@ io.on('connection', (socket) => {
         found.room,
         found.playerId,
         data.unitId,
-        data.directive as Parameters<typeof handleSetDirective>[3],
+        data.movementDirective as Parameters<typeof handleSetDirective>[3],
+        data.attackDirective as Parameters<typeof handleSetDirective>[4],
+        data.specialtyModifier as Parameters<typeof handleSetDirective>[5],
         io,
         data.target as DirectiveTarget | undefined,
       );

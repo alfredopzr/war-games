@@ -103,15 +103,8 @@ export function renderSelectionHighlights(
     }
   }
 
-  // Pending move command destination highlights (electric blue)
-  for (const cmd of pendingCommands) {
-    if (cmd.type === 'direct-move') {
-      const key = hexToKey(cmd.targetHex);
-      const elev = elevationMap.get(key) ?? 0;
-      selectionGroup.add(createHexFill(cmd.targetHex, elev, 0x00ccff, 0.15, 0.005));
-      selectionGroup.add(createHexOutline(cmd.targetHex, elev, 0x00ccff, 0.9, 0.006));
-    }
-  }
+  // Redirect commands have no spatial target to highlight
+  void pendingCommands;
 
   // Hovered hex: electric blue in move/attack mode, white otherwise
   if (hoveredHex) {

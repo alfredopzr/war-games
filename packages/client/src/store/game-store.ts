@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
-import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, DirectiveTarget, Command, PlayerId } from '@hexwar/engine';
+import type { GameState, Unit, CubeCoord, UnitType, MovementDirective, AttackDirective, SpecialtyModifier, DirectiveTarget, Command, PlayerId } from '@hexwar/engine';
 import type { TurnEvent } from '../renderer/replay-sequencer';
 import { perf } from '../perf-monitor';
 
@@ -85,9 +85,8 @@ interface GameStore {
   // Battle log
   battleLog: BattleLogEntry[];
 
-  // Target selection mode (for hunt/capture directives)
+  // Target selection mode (for directive targets: city, hex, enemy unit)
   targetSelectionMode: boolean;
-  targetSelectionDirective: DirectiveType | null;
 
   // Toast messages
   toastMessage: string | null;
@@ -125,9 +124,9 @@ interface GameStore {
   clearHighlightedHexes: () => void;
   enterPlacementMode: (type: UnitType) => void;
   exitPlacementMode: () => void;
-  setUnitDirective: (unitId: string, directive: DirectiveType) => void;
-  setTargetSelectionMode: (active: boolean, directive?: DirectiveType) => void;
-  setUnitDirectiveTarget: (unitId: string, directive: DirectiveType, target: DirectiveTarget) => void;
+  setUnitDirectives: (unitId: string, movement: MovementDirective, attack: AttackDirective, specialty: SpecialtyModifier | null) => void;
+  setTargetSelectionMode: (active: boolean) => void;
+  setUnitDirectiveTarget: (unitId: string, target: DirectiveTarget) => void;
   removePlacedUnit: (unitId: string) => void;
   addPendingCommand: (command: Command) => void;
   clearPendingCommands: () => void;
@@ -176,7 +175,6 @@ export const useGameStore = create<GameStore>((set) => ({
   turnReplayEvents: [],
   isReplayPlaying: false,
   targetSelectionMode: false,
-  targetSelectionDirective: null,
   toastMessage: null,
   debugFogOff: false,
   showRoundResult: false,
@@ -233,42 +231,38 @@ export const useGameStore = create<GameStore>((set) => ({
   exitPlacementMode: (): void =>
     set({ placementMode: null }),
 
-  setUnitDirective: (unitId: string, directive: DirectiveType): void =>
+  setUnitDirectives: (unitId: string, movement: MovementDirective, attack: AttackDirective, specialty: SpecialtyModifier | null): void =>
     set((prev) => {
       if (!prev.gameState) return {};
       const player = prev.gameState.players[prev.currentPlayerView];
       const unit = player.units.find((u) => u.id === unitId);
       if (!unit) return {};
-      unit.directive = directive;
-      // Update selectedUnit reference if it matches
+      unit.movementDirective = movement;
+      unit.attackDirective = attack;
+      unit.specialtyModifier = specialty;
       const updatedSelected = prev.selectedUnit?.id === unitId
-        ? { ...prev.selectedUnit, directive }
+        ? { ...prev.selectedUnit, movementDirective: movement, attackDirective: attack, specialtyModifier: specialty }
         : prev.selectedUnit;
       return { gameState: { ...prev.gameState }, selectedUnit: updatedSelected };
     }),
 
-  setTargetSelectionMode: (active: boolean, directive?: DirectiveType): void =>
-    set({
-      targetSelectionMode: active,
-      targetSelectionDirective: directive ?? null,
-    }),
+  setTargetSelectionMode: (active: boolean): void =>
+    set({ targetSelectionMode: active }),
 
-  setUnitDirectiveTarget: (unitId: string, directive: DirectiveType, target: DirectiveTarget): void =>
+  setUnitDirectiveTarget: (unitId: string, target: DirectiveTarget): void =>
     set((prev) => {
       if (!prev.gameState) return {};
       const player = prev.gameState.players[prev.currentPlayerView];
       const unit = player.units.find((u) => u.id === unitId);
       if (!unit) return {};
-      unit.directive = directive;
       unit.directiveTarget = target;
       const updatedSelected = prev.selectedUnit?.id === unitId
-        ? { ...prev.selectedUnit, directive, directiveTarget: target }
+        ? { ...prev.selectedUnit, directiveTarget: target }
         : prev.selectedUnit;
       return {
         gameState: { ...prev.gameState },
         selectedUnit: updatedSelected,
         targetSelectionMode: false,
-        targetSelectionDirective: null,
       };
     }),
 
@@ -362,21 +356,13 @@ export const useGameStore = create<GameStore>((set) => ({
       clearInterval(store.buildTimerInterval);
     }
 
-    // Auto-assign 'advance' directive to units without one
-    const playerUnits = store.gameState.players[store.currentPlayerView].units;
-    for (const unit of playerUnits) {
-      if (!unit.directive) {
-        unit.directive = 'advance';
-      }
-    }
-
     // AI builds for P2, then go straight to battle
     const aiPlacements = aiBuildPhase(store.gameState, 'player2');
     console.log(`[AI BUILD] Budget: ${store.gameState.players.player2.resources}g, placing ${aiPlacements.length} units:`);
     for (const p of aiPlacements) {
-      console.log(`  ${p.unitType} @ (${p.position.q},${p.position.r}) [${p.directive}] cost=${p.cost}`);
+      console.log(`  ${p.unitType} @ (${p.position.q},${p.position.r}) [${p.movementDirective}/${p.attackDirective}] cost=${p.cost}`);
       try {
-        placeUnit(store.gameState, 'player2', p.unitType, p.position, p.directive);
+        placeUnit(store.gameState, 'player2', p.unitType, p.position, p.movementDirective, p.attackDirective, p.specialtyModifier);
       } catch (e) {
         console.warn(`  FAILED: ${e instanceof Error ? e.message : e}`);
       }
@@ -490,8 +476,7 @@ export const useGameStore = create<GameStore>((set) => ({
       isReplayPlaying: false,
       toastMessage: null,
       targetSelectionMode: false,
-      targetSelectionDirective: null,
-          showRoundResult: false,
+      showRoundResult: false,
       roundResult: null,
       showGameOver: false,
     });
