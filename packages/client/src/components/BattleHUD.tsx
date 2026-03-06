@@ -8,6 +8,7 @@ import {
 import type { PlayerId, ObjectiveState, GameState } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 import type { BattleLogEntry } from '../store/game-store';
+import { perf } from '../perf-monitor';
 import { skipReplay } from '../renderer/replay-sequencer';
 
 function phaseClass(phase: string): string {
@@ -164,7 +165,12 @@ function resolveSimultaneousLocal(
 
   if (!earlyRoundEnd.roundOver) {
     // --- Resolve second player ---
-    // currentPlayer was switched by first executeTurn
+    gameState.round.currentPlayer = order[1];
+    gameState.round.commandPool = createCommandPool();
+    for (const unit of gameState.players[order[1]].units) {
+      unit.hasActed = false;
+    }
+
     executeTurn(gameState, commandsMap[order[1]]);
 
     if (gameState.pendingEvents.length > 0) {
@@ -183,6 +189,10 @@ function resolveSimultaneousLocal(
       gameState.round.objective.turnsHeld = turnsHeldBefore + 1;
     }
   }
+
+  // Increment turn counters (once per simultaneous resolution)
+  gameState.round.turnsPlayed += 1;
+  gameState.round.turnNumber += 1;
 
   // Flash damaged units
   const updated = new Map(store.damagedUnits);
@@ -287,10 +297,13 @@ export function BattleHUD(): ReactElement | null {
     if (useGameStore.getState().isReplayPlaying) return;
     if (!gameState) return;
 
+    const t0 = performance.now();
+
     // Online mode: send commands to server
     if (useGameStore.getState().gameMode === 'online') {
       import('../network/network-manager').then(({ networkManager }) => {
         networkManager.submitCommands(pendingCommands);
+        perf.logAction('endTurn:online', performance.now() - t0);
       });
       useGameStore.getState().setWaitingForServer(true);
       clearPendingCommands();
@@ -303,7 +316,9 @@ export function BattleHUD(): ReactElement | null {
     clearPendingCommands();
     selectUnit(null);
     setAiThinking(true);
+    perf.logAction('endTurn:local', performance.now() - t0);
     setTimeout(() => {
+      const resolveT0 = performance.now();
       const currentGame = useGameStore.getState().gameState;
       if (!currentGame || currentGame.phase !== 'battle') {
         setAiThinking(false);
@@ -311,6 +326,7 @@ export function BattleHUD(): ReactElement | null {
       }
       resolveSimultaneousLocal(currentGame, validCommands);
       setAiThinking(false);
+      perf.logAction('resolve:ai', performance.now() - resolveT0);
     }, 500);
   }, [gameState, pendingCommands, clearPendingCommands, selectUnit, aiThinking]);
 
@@ -318,8 +334,8 @@ export function BattleHUD(): ReactElement | null {
 
   const { phase, round } = gameState;
   const cpRemaining = CP_PER_ROUND - pendingCommands.length;
-  const turnTotal = round.maxTurnsPerSide;
-  const currentTurn = round.turnsPlayed.player1 + 1;
+  const turnTotal = round.maxTurns;
+  const currentTurn = round.turnsPlayed + 1;
 
   const isBuildPhase = phase === 'build';
   const isBattlePhase = phase === 'battle';

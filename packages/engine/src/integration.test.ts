@@ -89,24 +89,46 @@ describe('Full game simulation', () => {
       expect(game.phase).toBe('battle');
       expect(game.round.turnNumber).toBe(1);
 
-      // BATTLE PHASE: run turns until round ends
-      // Use deterministic random for combat damage
+      // BATTLE PHASE: simulate simultaneous turns until round ends
       const deterministicRng = (): number => 1.0;
       let turnCount = 0;
+      let roundEnded = false;
 
-      while (turnCount < 20) {
+      while (turnCount < 15) {
+        // Resolve player1
+        game.round.currentPlayer = 'player1';
+        game.round.commandPool = createCommandPool();
+        for (const u of game.players.player1.units) u.hasActed = false;
         executeTurn(game, [], deterministicRng);
-        const result = checkRoundEnd(game);
+
+        let result = checkRoundEnd(game);
         if (result.roundOver) {
           scoreRound(game, result.winner);
           roundsPlayed++;
+          roundEnded = true;
+          break;
+        }
+
+        // Resolve player2
+        game.round.currentPlayer = 'player2';
+        game.round.commandPool = createCommandPool();
+        for (const u of game.players.player2.units) u.hasActed = false;
+        executeTurn(game, [], deterministicRng);
+
+        game.round.turnsPlayed += 1;
+        game.round.turnNumber += 1;
+
+        result = checkRoundEnd(game);
+        if (result.roundOver) {
+          scoreRound(game, result.winner);
+          roundsPlayed++;
+          roundEnded = true;
           break;
         }
         turnCount++;
       }
 
-      // If turn limit hit without checkRoundEnd triggering, force score
-      if (turnCount >= 20) {
+      if (!roundEnded) {
         scoreRound(game, null);
         roundsPlayed++;
       }
@@ -146,14 +168,28 @@ describe('Full game simulation', () => {
       const highDamageRng = (): number => 1.15;
       let turnCount = 0;
 
-      // Loop past maxTurnsPerSide (12 each = 24 calls) so checkRoundEnd always fires
-      while (turnCount < 30) {
+      // Simulate simultaneous turns until elimination
+      while (turnCount < 15) {
+        // Resolve player1
+        game.round.currentPlayer = 'player1';
+        game.round.commandPool = createCommandPool();
+        for (const u of game.players.player1.units) u.hasActed = false;
         executeTurn(game, [], highDamageRng);
-        const result = checkRoundEnd(game);
-        if (result.roundOver) {
-          scoreRound(game, result.winner);
-          break;
-        }
+
+        let result = checkRoundEnd(game);
+        if (result.roundOver) { scoreRound(game, result.winner); break; }
+
+        // Resolve player2
+        game.round.currentPlayer = 'player2';
+        game.round.commandPool = createCommandPool();
+        for (const u of game.players.player2.units) u.hasActed = false;
+        executeTurn(game, [], highDamageRng);
+
+        game.round.turnsPlayed += 1;
+        game.round.turnNumber += 1;
+
+        result = checkRoundEnd(game);
+        if (result.roundOver) { scoreRound(game, result.winner); break; }
         turnCount++;
       }
     }
@@ -179,20 +215,33 @@ describe('Full game simulation', () => {
 
     startBattlePhase(game);
 
-    // Run until round ends
+    // Run simultaneous turns until round ends
     const deterministicRng = (): number => 1.0;
     let turnCount = 0;
-    while (turnCount < 20) {
+    let roundEnded = false;
+    while (turnCount < 15) {
+      game.round.currentPlayer = 'player1';
+      game.round.commandPool = createCommandPool();
+      for (const u of game.players.player1.units) u.hasActed = false;
       executeTurn(game, [], deterministicRng);
-      const result = checkRoundEnd(game);
-      if (result.roundOver) {
-        scoreRound(game, result.winner);
-        break;
-      }
+
+      let result = checkRoundEnd(game);
+      if (result.roundOver) { scoreRound(game, result.winner); roundEnded = true; break; }
+
+      game.round.currentPlayer = 'player2';
+      game.round.commandPool = createCommandPool();
+      for (const u of game.players.player2.units) u.hasActed = false;
+      executeTurn(game, [], deterministicRng);
+
+      game.round.turnsPlayed += 1;
+      game.round.turnNumber += 1;
+
+      result = checkRoundEnd(game);
+      if (result.roundOver) { scoreRound(game, result.winner); roundEnded = true; break; }
       turnCount++;
     }
 
-    if (turnCount >= 20) {
+    if (!roundEnded) {
       scoreRound(game, null);
     }
 

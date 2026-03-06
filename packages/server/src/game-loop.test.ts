@@ -363,8 +363,8 @@ describe('handleSubmitCommands', () => {
     handleSubmitCommands(room, 'player1', [], io as unknown as Parameters<typeof handleSubmitCommands>[3]);
     handleSubmitCommands(room, 'player2', [], io as unknown as Parameters<typeof handleSubmitCommands>[3]);
 
-    // Turn advances by 2 (one executeTurn per player)
-    expect(room.gameState!.round.turnNumber).toBe(turnBefore + 2);
+    // Turn advances by 1 (one simultaneous resolution)
+    expect(room.gameState!.round.turnNumber).toBe(turnBefore + 1);
 
     // Should emit turn-result to both players
     const turnResults = io.emitted.filter((e) => e.event === 'turn-result');
@@ -409,8 +409,8 @@ describe('handleSubmitCommands', () => {
     // Simulate turn timeout (60s)
     vi.advanceTimersByTime(60_000);
 
-    // Both players resolved — turn advanced by 2
-    expect(room.gameState!.round.turnNumber).toBe(turnBefore + 2);
+    // Both players resolved — turn advanced by 1
+    expect(room.gameState!.round.turnNumber).toBe(turnBefore + 1);
   });
 });
 

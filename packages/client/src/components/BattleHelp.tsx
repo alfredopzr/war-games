@@ -8,8 +8,7 @@ export function BattleHelp(): ReactElement | null {
   if (!gameState || gameState.phase !== 'battle' || dismissed) return null;
 
   // Only show on the first few turns
-  const totalTurnsPlayed = gameState.round.turnsPlayed.player1 + gameState.round.turnsPlayed.player2;
-  if (totalTurnsPlayed > 1) return null;
+  if (gameState.round.turnsPlayed > 1) return null;
 
   return (
     <div className="battle-help">

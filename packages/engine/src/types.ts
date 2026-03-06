@@ -37,7 +37,6 @@ export interface TerrainDefinition {
   readonly moveCost: number;
   readonly defenseModifier: number;
   readonly blocksLoS: boolean;
-  readonly infantryOnly: boolean;
 }
 
 export interface MegaHexInfo {
@@ -72,6 +71,7 @@ export interface UnitStats {
   readonly attackRange: number;
   readonly minAttackRange: number;
   readonly visionRange: number;
+  readonly canClimb: boolean;
 }
 
 export type DirectiveType = 'advance' | 'hold' | 'flank-left' | 'flank-right' | 'scout' | 'support' | 'hunt' | 'capture';
@@ -140,8 +140,8 @@ export interface RoundState {
   roundNumber: number;
   turnNumber: number;
   currentPlayer: PlayerId;
-  maxTurnsPerSide: number;
-  turnsPlayed: Record<PlayerId, number>;
+  maxTurns: number;
+  turnsPlayed: number;
   commandPool: CommandPool;
   objective: ObjectiveState;
   unitsKilledThisRound: Record<PlayerId, number>;
@@ -211,6 +211,8 @@ export interface DirectiveContext {
   friendlyUnits: Unit[];
   enemyUnits: Unit[];
   terrain: Map<string, TerrainType>;
+  elevation: Map<string, number>;
+  modifiers: Map<string, HexModifier>;
   centralObjective: CubeCoord;
   cities: Map<string, PlayerId | null>;
 }

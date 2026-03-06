@@ -26,6 +26,7 @@ import { hexToKey, cubeDistance, hexNeighbors } from './hex';
 import { canAttack, calculateDamage } from './combat';
 import { findPath } from './pathfinding';
 import { executeDirective } from './directives';
+import { getMoveCost } from './terrain';
 
 // -----------------------------------------------------------------------------
 // createGame
@@ -62,8 +63,8 @@ export function createGame(seed?: number): GameState {
       roundNumber: 1,
       turnNumber: 0,
       currentPlayer: 'player1',
-      maxTurnsPerSide: 12,
-      turnsPlayed: { player1: 0, player2: 0 },
+      maxTurns: 12,
+      turnsPlayed: 0,
       commandPool: createCommandPool(),
       objective: { occupiedBy: null, turnsHeld: 0 },
       unitsKilledThisRound: { player1: 0, player2: 0 },
@@ -133,7 +134,7 @@ export function startBattlePhase(state: GameState): GameState {
   state.phase = 'battle';
   state.round.turnNumber = 1;
   state.round.currentPlayer = 'player1';
-  state.round.turnsPlayed = { player1: 0, player2: 0 };
+  state.round.turnsPlayed = 0;
   state.round.commandPool = createCommandPool();
   state.round.objective = { occupiedBy: null, turnsHeld: 0 };
   state.round.unitsKilledThisRound = { player1: 0, player2: 0 };
@@ -253,21 +254,6 @@ export function executeTurn(
   // Update objective tracking (with city gate check)
   updateObjective(state);
 
-  // Increment turnsPlayed for current player
-  state.round.turnsPlayed[currentPlayer] += 1;
-  state.round.turnNumber += 1;
-
-  // Switch current player
-  state.round.currentPlayer = enemyPlayer;
-
-  // Create fresh command pool for next player
-  state.round.commandPool = createCommandPool();
-
-  // Reset next player's units' hasActed
-  for (const unit of state.players[enemyPlayer].units) {
-    unit.hasActed = false;
-  }
-
   return state;
 }
 
@@ -293,6 +279,8 @@ function executeUnitDirective(
     friendlyUnits: [...friendlyUnits],
     enemyUnits: [...state.players[enemyPlayer].units],
     terrain: state.map.terrain,
+    elevation: state.map.elevation,
+    modifiers: state.map.modifiers,
     centralObjective: state.map.centralObjective,
     cities: state.cityOwnership,
   };
@@ -428,7 +416,7 @@ function applyCommand(
       }
 
       if (bestHex) {
-        // Move toward best hex, limited by move range
+        // Move toward best hex, limited by move cost budget
         const stats = UNIT_STATS[unit.type];
         const path = findPath(
           unit.position,
@@ -437,10 +425,31 @@ function applyCommand(
           unit.type,
           occupied,
           unit.directive,
+          state.map.modifiers,
+          state.map.elevation,
         );
         if (path && path.length > 1) {
-          const stepIndex = Math.min(stats.moveRange, path.length - 1);
-          unit.position = path[stepIndex]!;
+          let costBudget = stats.moveRange;
+          let lastValid = 0;
+          for (let i = 1; i < path.length; i++) {
+            const prevKey = hexToKey(path[i - 1]!);
+            const curKey = hexToKey(path[i]!);
+            const terrain = state.map.terrain.get(curKey);
+            if (!terrain) break;
+            const stepCost = getMoveCost(
+              terrain, unit.type, unit.directive,
+              state.map.modifiers.get(curKey),
+              state.map.elevation.get(prevKey),
+              state.map.elevation.get(curKey),
+            );
+            if (stepCost === Infinity) break;
+            costBudget -= stepCost;
+            if (costBudget < 0) break;
+            lastValid = i;
+          }
+          if (lastValid > 0) {
+            unit.position = path[lastValid]!;
+          }
         }
       }
 
@@ -597,11 +606,7 @@ export function checkRoundEnd(state: GameState): RoundEndResult {
   }
 
   // c. Turn limit
-  const { maxTurnsPerSide, turnsPlayed } = state.round;
-  if (
-    turnsPlayed.player1 >= maxTurnsPerSide &&
-    turnsPlayed.player2 >= maxTurnsPerSide
-  ) {
+  if (state.round.turnsPlayed >= state.round.maxTurns) {
     const winner = resolveTurnLimitTiebreaker(state);
     return { roundOver: true, winner, reason: 'turn-limit' };
   }
@@ -707,7 +712,7 @@ export function scoreRound(
   // Reset round state
   state.round.turnNumber = 0;
   state.round.currentPlayer = 'player1';
-  state.round.turnsPlayed = { player1: 0, player2: 0 };
+  state.round.turnsPlayed = 0;
   state.round.commandPool = createCommandPool();
   state.round.objective = { occupiedBy: null, turnsHeld: 0 };
   state.round.unitsKilledThisRound = { player1: 0, player2: 0 };

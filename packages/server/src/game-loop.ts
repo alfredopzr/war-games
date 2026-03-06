@@ -27,6 +27,7 @@ import {
   executeTurn,
   checkRoundEnd,
   scoreRound,
+  createCommandPool,
   UNIT_STATS,
   mulberry32,
 } from '@hexwar/engine';
@@ -414,7 +415,8 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
   // --- Resolve first player ---
   state.round.currentPlayer = order[0];
   const turnSeed1 = (room.gameSeed! * 37 + originalTurnNumber) | 0;
-  const combatRng1 = (): number => 0.85 + mulberry32(turnSeed1)() * 0.3;
+  const rng1 = mulberry32(turnSeed1);
+  const combatRng1 = (): number => 0.85 + rng1() * 0.3;
 
   executeTurn(state, room.bufferedCommands.get(order[0])!, combatRng1);
 
@@ -433,11 +435,17 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
 
   if (!earlyRoundEnd.roundOver) {
     // --- Resolve second player ---
-    // currentPlayer was already switched to order[1] by first executeTurn
+    state.round.currentPlayer = order[1];
+    state.round.commandPool = createCommandPool();
+    for (const unit of state.players[order[1]].units) {
+      unit.hasActed = false;
+    }
+
     const midUnits = snapshotUnits(state);
     const midCities = snapshotCities(state);
-    turnSeed2 = (room.gameSeed! * 37 + state.round.turnNumber) | 0;
-    const combatRng2 = (): number => 0.85 + mulberry32(turnSeed2)() * 0.3;
+    turnSeed2 = (room.gameSeed! * 41 + originalTurnNumber) | 0;
+    const rng2 = mulberry32(turnSeed2);
+    const combatRng2 = (): number => 0.85 + rng2() * 0.3;
 
     executeTurn(state, room.bufferedCommands.get(order[1])!, combatRng2);
 
@@ -457,6 +465,10 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
       state.round.objective.turnsHeld = turnsHeldBefore + 1;
     }
   }
+
+  // Increment turn counters (once per simultaneous resolution)
+  state.round.turnsPlayed += 1;
+  state.round.turnNumber += 1;
 
   const allEvents = [...events1, ...events2];
 

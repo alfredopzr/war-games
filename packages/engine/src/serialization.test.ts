@@ -91,7 +91,7 @@ describe('serialization', () => {
       state.round.roundNumber = 2;
       state.round.turnNumber = 5;
       state.round.currentPlayer = 'player2';
-      state.round.turnsPlayed = { player1: 3, player2: 2 };
+      state.round.turnsPlayed = 3;
       state.round.commandPool.remaining = 1;
       state.round.objective = { occupiedBy: 'player1', turnsHeld: 3 };
       state.round.unitsKilledThisRound = { player1: 2, player2: 1 };
@@ -101,7 +101,7 @@ describe('serialization', () => {
       expect(result.round.roundNumber).toBe(2);
       expect(result.round.turnNumber).toBe(5);
       expect(result.round.currentPlayer).toBe('player2');
-      expect(result.round.turnsPlayed).toEqual({ player1: 3, player2: 2 });
+      expect(result.round.turnsPlayed).toBe(3);
       expect(result.round.commandPool.remaining).toBe(1);
       expect(result.round.objective).toEqual({ occupiedBy: 'player1', turnsHeld: 3 });
       expect(result.round.unitsKilledThisRound).toEqual({ player1: 2, player2: 1 });

@@ -255,7 +255,7 @@ describe('filterStateForPlayer — always-included data', () => {
     expect(filtered.round.roundNumber).toBe(2);
     expect(filtered.round.turnNumber).toBe(5);
     expect(filtered.round.currentPlayer).toBe(state.round.currentPlayer);
-    expect(filtered.round.maxTurnsPerSide).toBe(state.round.maxTurnsPerSide);
+    expect(filtered.round.maxTurns).toBe(state.round.maxTurns);
     expect(filtered.round.objective).toEqual(state.round.objective);
   });
 

@@ -34,8 +34,8 @@ interface SerializableRoundState {
   roundNumber: number;
   turnNumber: number;
   currentPlayer: PlayerId;
-  maxTurnsPerSide: number;
-  turnsPlayed: Record<PlayerId, number>;
+  maxTurns: number;
+  turnsPlayed: number;
   commandPool: SerializableCommandPool;
   objective: ObjectiveState;
   unitsKilledThisRound: Record<PlayerId, number>;
@@ -81,8 +81,8 @@ function serializeRoundState(round: RoundState): SerializableRoundState {
     roundNumber: round.roundNumber,
     turnNumber: round.turnNumber,
     currentPlayer: round.currentPlayer,
-    maxTurnsPerSide: round.maxTurnsPerSide,
-    turnsPlayed: { ...round.turnsPlayed },
+    maxTurns: round.maxTurns,
+    turnsPlayed: round.turnsPlayed,
     commandPool: serializeCommandPool(round.commandPool),
     objective: { ...round.objective },
     unitsKilledThisRound: { ...round.unitsKilledThisRound },
@@ -183,8 +183,8 @@ function deserializeRoundState(data: SerializableRoundState): RoundState {
     roundNumber: data.roundNumber,
     turnNumber: data.turnNumber,
     currentPlayer: data.currentPlayer,
-    maxTurnsPerSide: data.maxTurnsPerSide,
-    turnsPlayed: { ...data.turnsPlayed },
+    maxTurns: data.maxTurns,
+    turnsPlayed: data.turnsPlayed,
     commandPool: deserializeCommandPool(data.commandPool),
     objective: { ...data.objective },
     unitsKilledThisRound: { ...data.unitsKilledThisRound },
@@ -209,7 +209,7 @@ function deserializeGameMap(data: SerializableGameMap): GameMap {
     }
   }
   const modifiers = new Map<string, HexModifier>();
-  if ((data as Record<string, unknown>).modifiers) {
+  if (data.modifiers) {
     for (const key of Object.keys(data.modifiers)) {
       const value = data.modifiers[key];
       if (value !== undefined) {
