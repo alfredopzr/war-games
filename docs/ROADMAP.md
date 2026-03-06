@@ -44,17 +44,22 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 
 ---
 
-## Current State (as of March 5, 2026)
+## Current State (as of March 6, 2026)
 
 ### What works
-- Full game engine: simultaneous resolution only (alternating-turn code fully stripped), 8 directives with targeting, damage formula, A* pathfinding (min-heap), vision/LoS, economy, map generation (noise + elevation), round scoring, KotH win condition
+- Full game engine: simultaneous resolution only (alternating-turn code fully stripped), 8 directives with targeting, damage formula, A* pathfinding (min-heap), vision/LoS, economy, round scoring, KotH win condition
 - `executeTurn()` is now a pure resolver — no post-turn bookkeeping (no player switching, no turnsPlayed increment, no command pool creation). Orchestrators (`resolveSimultaneousTurn` on server, `resolveSimultaneousLocal` on client) manage all turn lifecycle externally.
 - `RoundState.turnsPlayed` is a single number (was per-player Record). `maxTurns` replaces `maxTurnsPerSide`.
-- Three.js renderer: terrain meshes, unit GLB models, fog, deploy zones, selection, HP bars, click detection via raycaster, pending command visuals (move path lines, attack crosshairs)
-- Server: Socket.io game loop, room management, build/battle phases, reconnection, simultaneous resolution with deterministic RNG
+- **Hex-of-hexes map generation**: Two-level grid (R_MACRO=3, R_MINI=5 → 37 macro-hexes × 91 minis each). Procedural terrain assignment, elevation-aware LoS, deployment at hex boundary corners. Fairness re-roll. All params in `map-gen-params.ts`.
+- **Cost-based movement** (0.2): `direct-move`, `moveToward()`, `retreat` all use A* pathfinding with cost budget, not step count. `getReachableHexes()` Dijkstra flood-fill for move range display.
+- **Map-scaled unit stats**: `scaledUnitStats(mapDiameter)` derives moveRange from map size per GAME_MATH_ENGINE.md §A5. Stored on `GameState.unitStats`, serialized over network, available in `DirectiveContext`.
+- Three.js renderer: hex-of-hexes terrain meshes, elevation-corrected click detection, unit GLB models (skeletal Meshy animations), fog of war with explored state + LoS border ring, deploy zones, selection highlights (electric blue move mode), HP bars, pending command visuals (Line2 move paths with elevation awareness, attack crosshairs), move range highlight on selection
+- **Animation system**: Multi-clip mapping per game action (`AnimAction` type: idle/move/attack/melee/hit/death/climb). Per-model `clipMap` tables map raw Meshy clip names to game actions with random selection from candidates. Infantry models (Engineer + Caravaner) have 13-14 skeletal animation clips each.
+- Server: Socket.io game loop, room management, build/battle phases, reconnection, simultaneous resolution with deterministic RNG, fog-of-war state filtering with `unitStats`
 - Client: React + Zustand, BattleHUD, UnitInfoPanel, Field Command palette, CommandMenu with move/attack range highlights
 - **Simultaneous resolution** (0.3): server buffers both players' commands, resolves when both received or timeout. Client vsAI mode uses `resolveSimultaneousLocal` with same pattern. Randomized resolution order per turn. turnsHeld double-increment fix. Hotseat mode removed entirely.
 - **AI**: Scored attack system (focus fire, type advantage, kill bonuses), direct-move positioning toward objectives/enemies/cities, smart retreat at 1HP. 6 build presets with leftover budget fill. Console telemetry for debugging.
+- **Assets**: 8 unit GLBs (2 factions × 4 unit types) in highdef, 28 prop GLBs, infantry models with full skeletal animation sets from Meshy
 
 ### What doesn't exist yet
 - Combat timeline (10-phase pipeline)
@@ -66,14 +71,15 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 - Structured event log - STARTED
 - Reveal animation (event log playback)
 - Multi-city win condition (currently KotH)
-- Parametric map constants (currently hardcoded to 20×14)
+- ~~Parametric map constants (currently hardcoded to 20×14)~~ Partially done — hex-of-hexes map + movement scaling done. maxTurns, CP_PER_ROUND not yet derived from map size
 - HP/stat scaling (currently 2-4 HP, needs ×10)
 - Clean RPS matrix (currently artillery is generalist)
 - Fixed damage formula (currently DEF×terrainDef, needs (1-terrainDef) percentage)
+- ~~Cost-based movement (currently step-counting)~~ DONE (Mar 6) — A* pathfinding + cost budget
 - LoS check on attacks (currently distance-only)
-- Cost-based movement (currently step-counting)
 - Archetype/upgrade system
 - AI vs AI test harness
+- Animation sequencer (climb on elevation change, melee vs ranged attack selection)
 
 ---
 
@@ -83,19 +89,19 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 
 ---
 
-### Sprint 1 — Directive Model & Cost Movement (Mar 4–10) — **NOT STARTED, overdue**
+### Sprint 1 — Directive Model & Cost Movement (Mar 4–10) — **0.2 DONE, 0.1 not started**
 
-Layer 0 foundation. Structural changes everything else sits on. Implementation Plan items 0.1 + 0.2. Week was spent on vsAI simultaneous resolution, AI rewrite, hotseat removal, and engine cleanup instead (see ledger).
+Layer 0 foundation. Structural changes everything else sits on. Implementation Plan items 0.1 + 0.2. Week was spent on vsAI simultaneous resolution, AI rewrite, hotseat removal, hex-of-hexes map gen rewrite, and cost movement instead (see ledger).
 
-- [E] **Two-layer directive model** (0.1): Replace flat `DirectiveType` with `movementDirective` (advance/flank/hold/retreat) + `engagementROE` (assault/skirmish/cautious/ignore) + specialty modifier (capture/support/scout/fortify/null)
-- [E] **Update Unit type** in `types.ts`: replace `directive: DirectiveType` with the two-layer fields
-- [E] **Update all directive consumers**: `directives.ts`, `game-state.ts`, `combat.ts` (hold bonus → ROE-based), `commands.ts`, `ai.ts`
-- [E] **Update serialization** for new directive fields
-- [E] **Cost-based movement** (0.2): Unify `direct-move`, `moveToward()`, `retreat` into single `moveUnit()` that walks A* path spending cost budget, not step count. Fixes risks 8.1 + 8.2
-- [S] **Update server** for new directive structure in placement/redirect messages
-- [E] **Update all tests** for new directive model and movement
+- [E] **Two-layer directive model** (0.1): Replace flat `DirectiveType` with `movementDirective` (advance/flank/hold/retreat) + `engagementROE` (assault/skirmish/cautious/ignore) + specialty modifier (capture/support/scout/fortify/null) — **NOT STARTED**
+- [E] **Update Unit type** in `types.ts`: replace `directive: DirectiveType` with the two-layer fields — **NOT STARTED**
+- [E] **Update all directive consumers**: `directives.ts`, `game-state.ts`, `combat.ts` (hold bonus → ROE-based), `commands.ts`, `ai.ts` — **NOT STARTED**
+- [E] **Update serialization** for new directive fields — **NOT STARTED**
+- [E] ~~**Cost-based movement** (0.2)~~ DONE (Mar 5-6) — `direct-move` uses A* `findPath` + cost budget. `moveToward()` and `retreat` also use cost budget. `getReachableHexes()` Dijkstra flood-fill added for client move range display. `scaledUnitStats(mapDiameter)` derives moveRange from map size per §A5, stored on `GameState.unitStats`.
+- [S] **Update server** for new directive structure in placement/redirect messages — **NOT STARTED** (blocked on 0.1)
+- [E] **Update all tests** for new directive model and movement — cost movement tests DONE, directive tests blocked on 0.1
 
-**Exit criteria:** `pnpm test` all green. Every unit carries movement + ROE. Old `DirectiveType` union removed. All movement uses cost budget, not step count.
+**Exit criteria:** ~~`pnpm test` all green.~~ Green (299 engine + 74 server). ~~All movement uses cost budget, not step count.~~ DONE. Every unit carries movement + ROE ← blocked on 0.1. Old `DirectiveType` union removed ← blocked on 0.1.
 
 ---
 
@@ -171,16 +177,15 @@ The product. Event log plays back as animation. Players watch their plans collid
 
 Layer 2. Parametric map, win condition, economy scaling.
 
-- [E] **Parametric constants** (2.1, A6): all map-dependent values derived from `GRID`
-  - `deploymentRows = floor(height × 0.2)`
-  - `flankOffset = floor(width × 0.25)`
-  - `cityMinDistance = floor(width × 0.15)`
-  - `cityCount = floor(width × height / 40)`
-  - `maxTurns = floor(width / 2)`
-  - `CP_PER_ROUND = 4 + floor((width - 20) / 10)`
+- [E] **Parametric constants** (2.1, A6): all map-dependent values derived from `GRID` — **A5 (movement scaling) DONE early** (Mar 6). Remaining:
+  - ~~`deploymentRows`, `flankOffset`~~ N/A — hex-of-hexes uses boundary corners for deploy, flank offsets need rethinking
+  - `cityMinDistance = floor(width × 0.15)` — fairness re-roll exists but uses different formula
+  - `cityCount` — currently 5 cities from hex-of-hexes gen, needs review against formula
+  - `maxTurns = floor(width / 2)` — not yet parametric
+  - `CP_PER_ROUND = 4 + floor((width - 20) / 10)` — not yet parametric
 - [E] **Multi-city win condition** (2.2, D7): `victoryCities = floor(totalCities × 0.6)`. Remove KotH center-hex logic. Remove `objective` from `RoundState`.
 - [E] **Kill bonus scaling** (2.3): `KILL_BONUS = floor(unit.cost × 0.1)` replaces flat 25
-- [E] **40×28 map** (2.4): Scale map. Movement ranges auto-derive from A5: `infantry = floor(w/8)`, `tank = floor(w/7)`, `recon = floor(w/5)`, `artillery = floor(w/12)`
+- [E] ~~**40×28 map** (2.4)~~ DONE early (Mar 5) — hex-of-hexes generates ~2800 hex map. ~~Movement ranges auto-derive from A5~~ DONE (Mar 6) — `scaledUnitStats(mapDiameter)` in `units.ts`
 - [E] **LoS on attacks** (2.5): Add `hexLineDraw` LoS check to `canAttack()`. Artillery can no longer fire through forests.
 - [C] **Render at scale**: terrain mesh batching if needed, camera bounds, minimap
 - [E] **Match length measurement**: instrument AI vs AI for average match duration at 40×28
@@ -254,6 +259,12 @@ DATE       | SPRINT | CHANGE                                          | REASON
 2026-03-05 | S2     | AI rewrite added to Sprint 2 scope. | Old AI was 3 weak priorities, didn't use build presets, wasted ~50% budget. Game was unplayable for testing without competent AI.
 2026-03-05 | S2     | Engine alternating-turn internals stripped. | executeTurn() no longer does post-turn bookkeeping. turnsPlayed simplified to number. maxTurnsPerSide renamed to maxTurns. Completes the simultaneous-only architecture.
 2026-03-05 | S1     | Sprint 1 scope unchanged but schedule slipped. | Directive model (0.1) and cost movement (0.2) are next. No work started. Sprint dates need rebasing.
+2026-03-05 | —      | Hex-of-hexes map gen rewrite completed.          | Major unplanned work. Two-level grid (R_MACRO=3, R_MINI=5), procedural terrain, elevation-aware LoS, fairness re-roll. map-gen.ts fully rewritten, all tests pass. Not in any sprint — emerged from hex grid scaling needs.
+2026-03-06 | S1     | Cost-based movement (0.2) completed.             | direct-move uses A* findPath + cost budget. moveToward/retreat also converted. getReachableHexes Dijkstra flood-fill added. scaledUnitStats wired into GameState, serialization, DirectiveContext.
+2026-03-06 | —      | Animation system built (multi-clip mapping).      | Unplanned. Per-model clipMap tables map Meshy skeletal clip names to game actions (idle/move/attack/melee/hit/death/climb) with random selection. Infantry Engineer + Caravaner GLBs replaced with 13-14 clip Meshy models.
+2026-03-06 | —      | Asset pipeline: 8 unit GLBs, 28 prop GLBs.       | Unplanned. Highdef models directory established. Prop models for terrain decoration placed.
+2026-03-06 | S6     | Parametric map constants partially done early.    | scaledUnitStats (A5 movement scaling) implemented ahead of Sprint 6. Map is hex-of-hexes not rectangular, so some S6 formulas (deploymentRows, flankOffset) don't apply directly.
+2026-03-06 | S1     | Two-layer directive model (0.1) remains blocker.  | 0.2 done, 0.1 not started. 0.1 blocks S3 combat timeline (ROE determines engagement behavior). Sprint dates need rebasing.
 ```
 
 ---
