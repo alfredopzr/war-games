@@ -864,9 +864,21 @@
   transition: border-color 0.15s, color 0.15s;
 }
 
-.target-btn:hover {
+.target-btn:disabled {
+  color: #555;
+  border-color: #2a2a24;
+  cursor: default;
+}
+
+.target-btn:hover:not(:disabled) {
   border-color: #e8e4d8;
   color: #e8e4d8;
+}
+
+.target-btn.active {
+  border-color: #4a8af4;
+  color: #4a8af4;
+  background: rgba(74, 138, 244, 0.1);
 }
 
 /* Start Menu */

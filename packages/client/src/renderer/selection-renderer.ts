@@ -290,8 +290,8 @@ function createROEIcon(
   const cx = world.x;
   const cy = world.y + 0.25;
   const cz = world.z;
-  const r = 0.25;
-  const color = 0x00ccff;
+  const r = 1.25;
+  const color = 0x5599bb;
 
   switch (attackDirective) {
     case 'shoot-on-sight': return createCrosshairIcon(cx, cy, cz, r, color, alpha);
@@ -343,6 +343,17 @@ export function renderSelectionHighlights(
     lastGameStateRef = gameState;
   }
 
+  // Build set of current friendly unit IDs to prune stale cache entries
+  if (gameState && currentPlayerView) {
+    const currentIds = new Set(
+      gameState.players[currentPlayerView as 'player1' | 'player2'].units.map((u) => u.id),
+    );
+    for (const key of vizCache.keys()) {
+      const unitId = key.split('|')[0]!;
+      if (!currentIds.has(unitId)) vizCache.delete(key);
+    }
+  }
+
   // Move/attack range
   if (highlightedHexes.size > 0 && highlightMode !== 'none') {
     const color = highlightMode === 'move' ? 0x00ccff : 0x9a4a3a;
@@ -367,8 +378,8 @@ export function renderSelectionHighlights(
     if (hoveredHex) {
       const key = hexToKey(hoveredHex);
       const elev = elevationMap.get(key) ?? 0;
-      selectionGroup.add(createHexOutline(hoveredHex, elev, 0x00ccff, 0.9, 0.007));
-      selectionGroup.add(createHexFill(hoveredHex, elev, 0x00ccff, 0.12, 0.005));
+      selectionGroup.add(createHexOutline(hoveredHex, elev, 0x5599bb, 0.9, 0.007));
+      selectionGroup.add(createHexFill(hoveredHex, elev, 0x5599bb, 0.12, 0.005));
     }
   } else if (hoveredHex) {
     // Normal hover: electric blue in move/attack mode, white otherwise
@@ -424,7 +435,7 @@ export function renderSelectionHighlights(
             unit.movementDirective, gameState.map.modifiers, gameState.map.elevation,
           );
           if (path && path.length > 1) {
-            selectionGroup.add(createPathLine(path, elevationMap, 0x00ccff, lineAlpha));
+            selectionGroup.add(createPathLine(path, elevationMap, 0x5599bb, lineAlpha));
           }
           break;
         }
@@ -440,21 +451,33 @@ export function renderSelectionHighlights(
           }
           if (trajectory.length > 1) {
             selectionGroup.add(createDashedPathLine(
-              trajectory, elevationMap, 0x00ccff, lineAlpha, 0.4, 0.2,
+              trajectory, elevationMap, 0x5599bb, lineAlpha, 0.4, 0.2,
             ));
           }
           break;
         }
 
         case 'scout': {
-          const patrolHexes = hexesInRadius(targetHex, 2);
+          // Path line to target
+          const scoutPath = findPath(
+            unit.position, targetHex,
+            gameState.map.terrain, unit.type, occupiedKeys,
+            unit.movementDirective, gameState.map.modifiers, gameState.map.elevation,
+          );
+          if (scoutPath && scoutPath.length > 1) {
+            selectionGroup.add(createDashedPathLine(
+              scoutPath, elevationMap, 0x5599bb, lineAlpha, 0.2, 0.2,
+            ));
+          }
+          // Patrol circle
+          const patrolHexes = hexesInRadius(targetHex, 3);
           for (const patrolHex of patrolHexes) {
             const pKey = hexToKey(patrolHex);
             if (!gameState.map.terrain.has(pKey)) continue;
-            if (cubeDistance(targetHex, patrolHex) === 2) {
+            if (cubeDistance(targetHex, patrolHex) === 3) {
               const pElev = elevationMap.get(pKey) ?? 0;
               selectionGroup.add(createHexOutline(
-                patrolHex, pElev, 0x00ccff, isSelected ? 0.6 : 0.3, 0.006,
+                patrolHex, pElev, 0x5599bb, isSelected ? 0.6 : 0.3, 0.006,
               ));
             }
           }

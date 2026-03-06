@@ -248,7 +248,7 @@ function executeScout(unit: Unit, context: DirectiveContext): UnitAction {
   if (unit.directiveTarget.type !== 'central-objective') {
     const resolved = resolveTarget(unit, context);
     const dist = cubeDistance(unit.position, resolved.hex);
-    if (dist <= 2) return { type: 'hold' };
+    if (dist <= 3) return { type: 'hold' };
     return moveToward(unit, context, resolved.hex);
   }
 

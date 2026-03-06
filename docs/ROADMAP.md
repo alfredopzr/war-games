@@ -47,23 +47,25 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 ## Current State (as of March 6, 2026)
 
 ### What works
-- Full game engine: simultaneous resolution only (alternating-turn code fully stripped), 8 directives with targeting, damage formula, A* pathfinding (min-heap), vision/LoS, economy, round scoring, KotH win condition
+- Full game engine: simultaneous resolution only (alternating-turn code fully stripped), damage formula, A* pathfinding (min-heap), vision/LoS, economy, round scoring, KotH win condition
 - `executeTurn()` is now a pure resolver — no post-turn bookkeeping (no player switching, no turnsPlayed increment, no command pool creation). Orchestrators (`resolveSimultaneousTurn` on server, `resolveSimultaneousLocal` on client) manage all turn lifecycle externally.
 - `RoundState.turnsPlayed` is a single number (was per-player Record). `maxTurns` replaces `maxTurnsPerSide`.
 - **Hex-of-hexes map generation**: Two-level grid (R_MACRO=3, R_MINI=5 → 37 macro-hexes × 91 minis each). Procedural terrain assignment, elevation-aware LoS, deployment at hex boundary corners. Fairness re-roll. All params in `map-gen-params.ts`.
 - **Cost-based movement** (0.2): `direct-move`, `moveToward()`, `retreat` all use A* pathfinding with cost budget, not step count. `getReachableHexes()` Dijkstra flood-fill for move range display.
 - **Map-scaled unit stats**: `scaledUnitStats(mapDiameter)` derives moveRange from map size per GAME_MATH_ENGINE.md §A5. Stored on `GameState.unitStats`, serialized over network, available in `DirectiveContext`.
+- **Two-layer directive system** (0.1): `movementDirective` (advance/flank-left/flank-right/scout/hold) × `attackDirective` (shoot-on-sight/skirmish/retreat-on-contact/hunt/ignore) × optional `specialtyModifier`. 25 named behavior combinations via `BEHAVIOR_NAMES`. All consumers updated: directives.ts, game-state.ts, combat.ts, commands.ts, ai.ts, serialization. Server handles two-layer placement/redirect messages. `computeFlankWaypoint` extracted as pure function for client reuse.
+- **Terrain simplification**: Physics-based model — elevation is pure LoS occlusion (strict `>`), forest provides concealment (invisible from outside, -2 vision penalty inside via `FOREST_VISION_PENALTY`). Mountain/city defense modifiers zeroed. `canAttack()` gates on LoS visibility. `getVisionBonus` uses `floor(elev / VISION_ELEV_DIVISOR)`.
+- **Directive-aware path visualization**: Per-directive rendering — advance shows solid A* path, flank shows dashed simulated multi-turn arc (via `simulateFlankTrajectory` with cached trajectories), scout shows patrol circle (radius 8 hex ring around target). ROE icons at target hex: crosshair (shoot-on-sight), chevrons (skirmish/retreat), arrow (hunt). Targets persist for all friendly units after deselection. Reactive selection rendering decoupled from heavy renderScene.
 - Three.js renderer: hex-of-hexes terrain meshes, elevation-corrected click detection, unit GLB models (skeletal Meshy animations), fog of war with explored state + LoS border ring, deploy zones, selection highlights (electric blue move mode), HP bars, pending command visuals (Line2 move paths with elevation awareness, attack crosshairs), move range highlight on selection
 - **Animation system**: Multi-clip mapping per game action (`AnimAction` type: idle/move/attack/melee/hit/death/climb). Per-model `clipMap` tables map raw Meshy clip names to game actions with random selection from candidates. Infantry models (Engineer + Caravaner) have 13-14 skeletal animation clips each.
 - Server: Socket.io game loop, room management, build/battle phases, reconnection, simultaneous resolution with deterministic RNG, fog-of-war state filtering with `unitStats`
-- Client: React + Zustand, BattleHUD, UnitInfoPanel, Field Command palette, CommandMenu with move/attack range highlights
+- Client: React + Zustand, BattleHUD, UnitInfoPanel, compose-based OrderMatrix (movement + ROE columns with live order name), CommandMenu with target selection mode (crosshair cursor, blue target highlights), DeployManifest, move/attack range highlights
 - **Simultaneous resolution** (0.3): server buffers both players' commands, resolves when both received or timeout. Client vsAI mode uses `resolveSimultaneousLocal` with same pattern. Randomized resolution order per turn. turnsHeld double-increment fix. Hotseat mode removed entirely.
 - **AI**: Scored attack system (focus fire, type advantage, kill bonuses), direct-move positioning toward objectives/enemies/cities, smart retreat at 1HP. 6 build presets with leftover budget fill. Console telemetry for debugging.
 - **Assets**: 8 unit GLBs (2 factions × 4 unit types) in highdef, 28 prop GLBs, infantry models with full skeletal animation sets from Meshy
 
 ### What doesn't exist yet
 - Combat timeline (10-phase pipeline)
-- Two-layer directives (movement + ROE split)
 - Response time / initiative system
 - Counter-attacks
 - Melee system
@@ -76,7 +78,8 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 - Clean RPS matrix (currently artillery is generalist)
 - Fixed damage formula (currently DEF×terrainDef, needs (1-terrainDef) percentage)
 - ~~Cost-based movement (currently step-counting)~~ DONE (Mar 6) — A* pathfinding + cost budget
-- LoS check on attacks (currently distance-only)
+- ~~Two-layer directives (movement + ROE split)~~ DONE (Mar 6) — full 5×5 matrix with specialty modifiers
+- ~~LoS check on attacks (currently distance-only)~~ DONE (Mar 6) — canAttack gates on visibleHexes
 - Archetype/upgrade system
 - AI vs AI test harness
 - Animation sequencer (climb on elevation change, melee vs ranged attack selection)
@@ -89,23 +92,23 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 
 ---
 
-### Sprint 1 — Directive Model & Cost Movement (Mar 4–10) — **0.2 DONE, 0.1 not started**
+### Sprint 1 — Directive Model & Cost Movement (Mar 4–10) — **COMPLETE**
 
-Layer 0 foundation. Structural changes everything else sits on. Implementation Plan items 0.1 + 0.2. Week was spent on vsAI simultaneous resolution, AI rewrite, hotseat removal, hex-of-hexes map gen rewrite, and cost movement instead (see ledger).
+Layer 0 foundation. Structural changes everything else sits on. Implementation Plan items 0.1 + 0.2. Completed Mar 6 after schedule slip (week 1 spent on simultaneous resolution prerequisites).
 
-- [E] **Two-layer directive model** (0.1): Replace flat `DirectiveType` with `movementDirective` (advance/flank/hold/retreat) + `engagementROE` (assault/skirmish/cautious/ignore) + specialty modifier (capture/support/scout/fortify/null) — **NOT STARTED**
-- [E] **Update Unit type** in `types.ts`: replace `directive: DirectiveType` with the two-layer fields — **NOT STARTED**
-- [E] **Update all directive consumers**: `directives.ts`, `game-state.ts`, `combat.ts` (hold bonus → ROE-based), `commands.ts`, `ai.ts` — **NOT STARTED**
-- [E] **Update serialization** for new directive fields — **NOT STARTED**
+- [E] ~~**Two-layer directive model** (0.1)~~ DONE (Mar 6) — `movementDirective` (advance/flank-left/flank-right/scout/hold) × `attackDirective` (shoot-on-sight/skirmish/retreat-on-contact/hunt/ignore) × optional `specialtyModifier`. 25 named behaviors via `BEHAVIOR_NAMES`. Old `DirectiveType` union removed.
+- [E] ~~**Update Unit type**~~ DONE — `Unit` carries `movementDirective`, `attackDirective`, `specialtyModifier`, `directiveTarget`.
+- [E] ~~**Update all directive consumers**~~ DONE — `directives.ts` (5 movement executors + 5 attack resolvers), `game-state.ts`, `combat.ts`, `commands.ts`, `ai.ts` all updated.
+- [E] ~~**Update serialization**~~ DONE — two-layer fields serialized/deserialized.
 - [E] ~~**Cost-based movement** (0.2)~~ DONE (Mar 5-6) — `direct-move` uses A* `findPath` + cost budget. `moveToward()` and `retreat` also use cost budget. `getReachableHexes()` Dijkstra flood-fill added for client move range display. `scaledUnitStats(mapDiameter)` derives moveRange from map size per §A5, stored on `GameState.unitStats`.
-- [S] **Update server** for new directive structure in placement/redirect messages — **NOT STARTED** (blocked on 0.1)
-- [E] **Update all tests** for new directive model and movement — cost movement tests DONE, directive tests blocked on 0.1
+- [S] ~~**Update server**~~ DONE — placement/redirect messages carry two-layer directive fields.
+- [E] ~~**Update all tests**~~ DONE — 320 engine tests pass.
 
-**Exit criteria:** ~~`pnpm test` all green.~~ Green (299 engine + 74 server). ~~All movement uses cost budget, not step count.~~ DONE. Every unit carries movement + ROE ← blocked on 0.1. Old `DirectiveType` union removed ← blocked on 0.1.
+**Exit criteria:** ~~`pnpm test` all green.~~ DONE (320 engine). ~~All movement uses cost budget, not step count.~~ DONE. ~~Every unit carries movement + ROE.~~ DONE. ~~Old `DirectiveType` union removed.~~ DONE.
 
 ---
 
-### Sprint 2 — Simultaneous Resolution (Mar 11–17) — **mostly complete early**
+### Sprint 2 — Simultaneous Resolution (Mar 11–17) — **COMPLETE**
 
 The architectural pivot. Both players submit simultaneously. Layer 0 item 0.3 + client UI (4.1, 4.2).
 
@@ -115,10 +118,10 @@ The architectural pivot. Both players submit simultaneously. Layer 0 item 0.3 + 
 - [E] ~~**Strip alternating-turn engine code**~~ DONE (Mar 5) — `executeTurn()` no longer switches currentPlayer, increments turnsPlayed, creates command pools, or resets hasActed. `turnsPlayed` simplified from `Record<PlayerId, number>` to `number`. `maxTurnsPerSide` renamed to `maxTurns`. Orchestrators manage all lifecycle externally.
 - [C] ~~**Remove hotseat mode**~~ DONE (Mar 5) — `GameMode` is `'vsAI' | 'online'`. TurnTransition component deleted. All alternating-turn UI paths removed.
 - [E] ~~**AI rewrite**~~ DONE (Mar 5) — scored attacks (focus fire, type advantage, kill bonuses), direct-move positioning, smart retreat, 6 build presets with leftover budget fill.
-- [C] **Two-layer directive picker UI** (4.1): movement + ROE selection during planning phase — **not started**, blocked on Sprint 1 (0.1 directive model)
+- [C] ~~**Two-layer directive picker UI** (4.1)~~ DONE (Mar 6) — compose-based OrderMatrix with movement + ROE columns, live order name display, target selection mode with crosshair cursor and persistent blue target highlights. Directive-aware path visualization: solid (advance), dashed arc (flank), patrol circle (scout), ROE icons at target.
 - [C] ~~**Simultaneous submit UI** (4.2)~~ DONE — both players see End Turn simultaneously. "Waiting for opponent..." / "Resolving..." states. CommandMenu hidden after submission. Reconnect restores submission state.
 
-**Exit criteria:** ~~Two clients can submit commands simultaneously. Server waits for both before resolving.~~ DONE. ~~vsAI uses same simultaneous pattern.~~ DONE. ~~Alternating-turn code stripped from engine.~~ DONE. Client can assign both directive layers during build phase ← blocked on 4.1 (needs 0.1 directive model first).
+**Exit criteria:** ~~Two clients can submit commands simultaneously. Server waits for both before resolving.~~ DONE. ~~vsAI uses same simultaneous pattern.~~ DONE. ~~Alternating-turn code stripped from engine.~~ DONE. ~~Client can assign both directive layers during build phase.~~ DONE.
 
 ---
 
@@ -265,6 +268,11 @@ DATE       | SPRINT | CHANGE                                          | REASON
 2026-03-06 | —      | Asset pipeline: 8 unit GLBs, 28 prop GLBs.       | Unplanned. Highdef models directory established. Prop models for terrain decoration placed.
 2026-03-06 | S6     | Parametric map constants partially done early.    | scaledUnitStats (A5 movement scaling) implemented ahead of Sprint 6. Map is hex-of-hexes not rectangular, so some S6 formulas (deploymentRows, flankOffset) don't apply directly.
 2026-03-06 | S1     | Two-layer directive model (0.1) remains blocker.  | 0.2 done, 0.1 not started. 0.1 blocks S3 combat timeline (ROE determines engagement behavior). Sprint dates need rebasing.
+2026-03-06 | S1     | Two-layer directive model (0.1) completed.        | 5×5 movement×attack matrix (advance/flank-left/flank-right/scout/hold × shoot-on-sight/skirmish/retreat-on-contact/hunt/ignore) + specialty modifier. All consumers updated. Old DirectiveType removed. 320 engine tests pass. Sprint 1 exit criteria fully met.
+2026-03-06 | S2     | Two-layer directive picker UI (4.1) completed.    | Compose-based OrderMatrix (movement + ROE columns with live order name). Target selection mode: crosshair cursor, blue hex highlights, path to target. Sprint 2 exit criteria fully met.
+2026-03-06 | —      | Terrain simplification (unplanned).                | Physics-based model: elevation = pure LoS occlusion, forest = concealment (-2 vision, invisible from outside), mountain/city defense zeroed. canAttack() gates on LoS visibility. Improves player legibility — fewer invisible knobs.
+2026-03-06 | —      | Directive-aware path visualization (unplanned).    | Per-directive rendering: advance=solid A* path, flank=dashed simulated multi-turn arc (computeFlankWaypoint extracted to engine), scout=patrol circle (radius 8). ROE icons at target (crosshair/chevrons/arrow). Cached trajectories. Targets persist for all friendly units.
+2026-03-06 | S1+S2  | Sprints 1 and 2 marked COMPLETE.                   | All exit criteria met. S1 delivered Mar 6 (4 days early vs Mar 10 end). S2 was already mostly done, 4.1 was the last blocker. Next up: S3 combat timeline.
 ```
 
 ---

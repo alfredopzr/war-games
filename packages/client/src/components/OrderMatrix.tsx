@@ -1,4 +1,4 @@
-import { useCallback, type ReactElement } from 'react';
+import { useState, useEffect, useCallback, type ReactElement } from 'react';
 import type { MovementDirective, AttackDirective, SpecialtyModifier } from '@hexwar/engine';
 import { BEHAVIOR_NAMES } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
@@ -32,15 +32,25 @@ const SPECIALTY_LABELS: Record<string, string> = {
 
 interface OrderMatrixProps {
   onSelect?: (movement: MovementDirective, attack: AttackDirective, specialty: SpecialtyModifier | null) => void;
+  onBothConfirmed?: () => void;
 }
 
-export function OrderMatrix({ onSelect }: OrderMatrixProps): ReactElement | null {
+export function OrderMatrix({ onSelect, onBothConfirmed }: OrderMatrixProps): ReactElement | null {
   const selectedUnit = useGameStore((s) => s.selectedUnit);
   const setUnitDirectives = useGameStore((s) => s.setUnitDirectives);
+
+  const [movementPicked, setMovementPicked] = useState(false);
+  const [attackPicked, setAttackPicked] = useState(false);
 
   const currentMovement = selectedUnit?.movementDirective ?? 'advance';
   const currentAttack = selectedUnit?.attackDirective ?? 'ignore';
   const currentSpecialty = selectedUnit?.specialtyModifier ?? null;
+
+  // Reset when unit changes
+  useEffect(() => {
+    setMovementPicked(false);
+    setAttackPicked(false);
+  }, [selectedUnit?.id]);
 
   const apply = useCallback(
     (movement: MovementDirective, attack: AttackDirective, specialty: SpecialtyModifier | null): void => {
@@ -54,9 +64,28 @@ export function OrderMatrix({ onSelect }: OrderMatrixProps): ReactElement | null
     [selectedUnit, setUnitDirectives, onSelect],
   );
 
+  const pickMovement = useCallback(
+    (mov: MovementDirective): void => {
+      setMovementPicked(true);
+      apply(mov, currentAttack, currentSpecialty);
+      if (attackPicked && onBothConfirmed) onBothConfirmed();
+    },
+    [apply, currentAttack, currentSpecialty, attackPicked, onBothConfirmed],
+  );
+
+  const pickAttack = useCallback(
+    (atk: AttackDirective): void => {
+      setAttackPicked(true);
+      apply(currentMovement, atk, currentSpecialty);
+      if (movementPicked && onBothConfirmed) onBothConfirmed();
+    },
+    [apply, currentMovement, currentSpecialty, movementPicked, onBothConfirmed],
+  );
+
   if (!selectedUnit) return null;
 
-  const orderName = BEHAVIOR_NAMES[currentMovement][currentAttack];
+  const bothPicked = movementPicked && attackPicked;
+  const orderName = bothPicked ? BEHAVIOR_NAMES[currentMovement][currentAttack] : '—';
 
   return (
     <div className="order-composer">
@@ -66,8 +95,8 @@ export function OrderMatrix({ onSelect }: OrderMatrixProps): ReactElement | null
           {MOVEMENTS.map((mov) => (
             <button
               key={mov}
-              className={`order-btn ${mov === currentMovement ? 'active' : ''}`}
-              onClick={() => apply(mov, currentAttack, currentSpecialty)}
+              className={`order-btn ${movementPicked && mov === currentMovement ? 'active' : ''}`}
+              onClick={() => pickMovement(mov)}
               type="button"
             >
               {MOVEMENT_LABELS[mov]}
@@ -79,8 +108,8 @@ export function OrderMatrix({ onSelect }: OrderMatrixProps): ReactElement | null
           {ATTACKS.map((atk) => (
             <button
               key={atk}
-              className={`order-btn ${atk === currentAttack ? 'active' : ''}`}
-              onClick={() => apply(currentMovement, atk, currentSpecialty)}
+              className={`order-btn ${attackPicked && atk === currentAttack ? 'active' : ''}`}
+              onClick={() => pickAttack(atk)}
               type="button"
             >
               {ATTACK_LABELS[atk]}
