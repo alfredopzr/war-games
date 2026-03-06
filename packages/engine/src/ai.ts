@@ -366,7 +366,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
     if (usedUnitIds.has(unit.id)) continue;
     if (!canIssueCommand(pool, unit.id)) continue;
 
-    const stats = UNIT_STATS[unit.type];
+    const scaledStats = state.unitStats[unit.type];
     const unitKey = hexToKey(unit.position);
 
     // Artillery shouldn't move if it can already hit someone (min range 2)
@@ -382,7 +382,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
     // Gather potential destinations within move range
     const reachableHexes: CubeCoord[] = [];
 
-    for (const hex of hexesInRadius(unit.position, stats.moveRange)) {
+    for (const hex of hexesInRadius(unit.position, scaledStats.moveRange)) {
       const key = hexToKey(hex);
       if (key === unitKey) continue;
       if (occupiedKeys.has(key)) continue;
@@ -408,7 +408,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
       if (key === objectiveKey) score += 50;
 
       // Bonus for being on/near enemy units (for melee units)
-      if (stats.attackRange === 1) {
+      if (scaledStats.attackRange === 1) {
         for (const enemy of enemyUnits) {
           const distToEnemy = cubeDistance(hex, enemy.position);
           if (distToEnemy === 1) score += 25; // Can attack next turn
@@ -420,7 +420,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
       if (unit.type === 'artillery') {
         for (const enemy of enemyUnits) {
           const distToEnemy = cubeDistance(hex, enemy.position);
-          if (distToEnemy >= stats.minAttackRange && distToEnemy <= stats.attackRange) {
+          if (distToEnemy >= scaledStats.minAttackRange && distToEnemy <= scaledStats.attackRange) {
             score += 30; // Can attack from this position
           }
         }

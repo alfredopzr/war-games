@@ -13,6 +13,8 @@ import type {
   CommandPool,
   PlayerState,
   PlayerId,
+  UnitType,
+  UnitStats,
   TerrainType,
   CubeCoord,
   GridSize,
@@ -60,6 +62,7 @@ export interface SerializableGameState {
   players: Record<PlayerId, PlayerState>;
   round: SerializableRoundState;
   map: SerializableGameMap;
+  unitStats: Record<UnitType, UnitStats>;
   maxRounds: number;
   winner: PlayerId | null;
   cityOwnership: Record<string, PlayerId | null>;
@@ -161,6 +164,7 @@ export function serializeGameState(state: GameState): SerializableGameState {
     },
     round: serializeRoundState(state.round),
     map: serializeGameMap(state.map),
+    unitStats: state.unitStats,
     maxRounds: state.maxRounds,
     winner: state.winner,
     cityOwnership,
@@ -287,6 +291,7 @@ export function deserializeGameState(data: SerializableGameState): GameState {
     },
     round: deserializeRoundState(data.round),
     map: deserializeGameMap(data.map),
+    unitStats: data.unitStats,
     maxRounds: data.maxRounds,
     winner: data.winner,
     cityOwnership,

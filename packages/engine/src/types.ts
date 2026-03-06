@@ -166,6 +166,7 @@ export interface GameState {
   players: Record<PlayerId, PlayerState>;
   round: RoundState;
   map: GameMap;
+  unitStats: Record<UnitType, UnitStats>;
   maxRounds: number;
   winner: PlayerId | null;
   cityOwnership: Map<string, PlayerId | null>;
@@ -215,6 +216,7 @@ export interface DirectiveContext {
   modifiers: Map<string, HexModifier>;
   centralObjective: CubeCoord;
   cities: Map<string, PlayerId | null>;
+  unitStats: Record<UnitType, UnitStats>;
 }
 
 export interface ResolvedTarget {

@@ -19,7 +19,7 @@ import type {
   DirectiveContext,
 } from './types';
 import { generateMap } from './map-gen';
-import { createUnit, UNIT_STATS } from './units';
+import { createUnit, UNIT_STATS, scaledUnitStats } from './units';
 import { canAfford, calculateIncome, applyCarryover, applyMaintenance } from './economy';
 import { createCommandPool, spendCommand } from './commands';
 import { hexToKey, cubeDistance, hexNeighbors } from './hex';
@@ -70,6 +70,7 @@ export function createGame(seed?: number): GameState {
       unitsKilledThisRound: { player1: 0, player2: 0 },
     },
     map,
+    unitStats: scaledUnitStats(map.mapRadius * 2),
     maxRounds: 3,
     winner: null,
     cityOwnership,
@@ -283,6 +284,7 @@ function executeUnitDirective(
     modifiers: state.map.modifiers,
     centralObjective: state.map.centralObjective,
     cities: state.cityOwnership,
+    unitStats: state.unitStats,
   };
 
   const action = executeDirective(unit, context);

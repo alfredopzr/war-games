@@ -7,7 +7,6 @@
 
 import type { Unit, UnitAction, DirectiveContext, CubeCoord, ResolvedTarget } from './types';
 import { cubeDistance, hexToKey, hexNeighbors, createHex } from './hex';
-import { UNIT_STATS } from './units';
 import { canAttack } from './combat';
 import { findPath } from './pathfinding';
 import { getMoveCost } from './terrain';
@@ -307,7 +306,6 @@ function moveToward(
   context: DirectiveContext,
   target: CubeCoord,
 ): UnitAction {
-  const stats = UNIT_STATS[unit.type];
   const occupied = buildOccupiedSet(unit, context);
 
   const path = findPath(
@@ -326,7 +324,7 @@ function moveToward(
   }
 
   // Walk path spending movement budget (cost-based, not step-based)
-  let costBudget = stats.moveRange;
+  let costBudget = context.unitStats[unit.type].moveRange;
   let lastValidIndex = 0;
   for (let i = 1; i < path.length; i++) {
     const prevKey = hexToKey(path[i - 1]!);
@@ -454,7 +452,6 @@ function retreatFrom(
  * This pushes the scout into unexplored territory.
  */
 function scoutExplore(unit: Unit, context: DirectiveContext): UnitAction {
-  const stats = UNIT_STATS[unit.type];
   const occupied = buildOccupiedSet(unit, context);
 
   // Evaluate all hexes on the map, find the one farthest from all friendly units
@@ -503,7 +500,7 @@ function scoutExplore(unit: Unit, context: DirectiveContext): UnitAction {
   }
 
   // Walk path spending movement budget (cost-based)
-  let costBudget = stats.moveRange;
+  let costBudget = context.unitStats[unit.type].moveRange;
   let lastValidIndex = 0;
   for (let i = 1; i < path.length; i++) {
     const prevKey = hexToKey(path[i - 1]!);
