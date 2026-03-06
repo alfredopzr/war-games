@@ -33,6 +33,19 @@ interface UnitModel3D {
 const unitModels = new Map<string, UnitModel3D>();
 
 // ---------------------------------------------------------------------------
+// Position tweening (used during turn replay)
+// ---------------------------------------------------------------------------
+
+interface UnitTween {
+  startPos: THREE.Vector3;
+  endPos: THREE.Vector3;
+  elapsed: number;
+  duration: number;
+}
+
+const activeTweens = new Map<string, UnitTween>();
+
+// ---------------------------------------------------------------------------
 // Directive symbols
 // ---------------------------------------------------------------------------
 
@@ -255,6 +268,23 @@ export function playUnitAnimation(unitId: string, action: AnimAction): void {
   playAnimation(model, action);
 }
 
+/** Smoothly move a unit model from current position to target over duration seconds. */
+export function tweenUnitTo(unitId: string, x: number, y: number, z: number, duration: number): void {
+  const model = unitModels.get(unitId);
+  if (!model) return;
+  activeTweens.set(unitId, {
+    startPos: model.object.position.clone(),
+    endPos: new THREE.Vector3(x, y, z),
+    elapsed: 0,
+    duration,
+  });
+}
+
+/** Cancel all active tweens (used when skipping replay). */
+export function clearAllTweens(): void {
+  activeTweens.clear();
+}
+
 // ---------------------------------------------------------------------------
 // Sync all unit models to game state
 // ---------------------------------------------------------------------------
@@ -282,10 +312,12 @@ export function syncUnitModels(
       const existing = unitModels.get(unit.id);
 
       if (existing) {
-        // Update position using engine world coordinates
-        const elev = elevationMap.get(key) ?? 0;
-        const world = cachedHexToWorld(unit.position, elev);
-        existing.object.position.set(world.x, world.y, world.z);
+        // Skip position snap for units being tweened (during replay)
+        if (!activeTweens.has(unit.id)) {
+          const elev = elevationMap.get(key) ?? 0;
+          const world = cachedHexToWorld(unit.position, elev);
+          existing.object.position.set(world.x, world.y, world.z);
+        }
 
         // Update HP bar
         const maxHp = UNIT_STATS[unit.type].maxHp;
@@ -316,6 +348,18 @@ export function syncUnitModels(
 export function advanceAnimations(deltaSec: number): void {
   for (const [, model] of unitModels) {
     model.mixer.update(deltaSec);
+  }
+
+  for (const [id, tween] of activeTweens) {
+    tween.elapsed += deltaSec;
+    const t = Math.min(1, tween.elapsed / tween.duration);
+    const model = unitModels.get(id);
+    if (model) {
+      model.object.position.lerpVectors(tween.startPos, tween.endPos, t);
+    }
+    if (t >= 1) {
+      activeTweens.delete(id);
+    }
   }
 }
 

@@ -6,7 +6,7 @@ import {
   spawnDeathMarker,
   clearEffects,
 } from './effects-renderer';
-import { playUnitAnimation } from './unit-model';
+import { playUnitAnimation, tweenUnitTo, clearAllTweens } from './unit-model';
 
 // ---------------------------------------------------------------------------
 // TurnEvent type
@@ -16,7 +16,11 @@ export type TurnEvent =
   | { type: 'move'; unitId: string; from: CubeCoord; to: CubeCoord }
   | { type: 'attack'; attackerId: string; defenderId: string; damage: number; attackerPos: CubeCoord; defenderPos: CubeCoord }
   | { type: 'kill'; unitId: string; position: CubeCoord; killedBy: string }
-  | { type: 'capture'; cityHex: CubeCoord; newOwner: PlayerId };
+  | { type: 'capture'; cityHex: CubeCoord; newOwner: PlayerId }
+  // TODO: melee events need meleeRating values (OD-1) before diffTurnEvents can detect them.
+  // For now the type is wired up so the sequencer is ready when the 10-phase pipeline lands.
+  | { type: 'melee'; unitA: string; unitB: string; position: CubeCoord }
+  | { type: 'climb'; unitId: string; from: CubeCoord; to: CubeCoord };
 
 // ---------------------------------------------------------------------------
 // Diff function — generates TurnEvent[] from before/after state snapshots
@@ -87,9 +91,14 @@ export function isReplayActive(): boolean {
   return replayActive;
 }
 
-export function startReplay(events: TurnEvent[], elevationMap: Map<string, number>, onComplete: () => void): void {
+export interface ReplayCallbacks {
+  onComplete: () => void;
+  onUnitArrived?: (unitId: string, to: CubeCoord) => void;
+}
+
+export function startReplay(events: TurnEvent[], elevationMap: Map<string, number>, callbacks: ReplayCallbacks): void {
   replayActive = true;
-  replayOnComplete = onComplete;
+  replayOnComplete = callbacks.onComplete;
   replayTimers = [];
 
   const elev = (coord: CubeCoord): number => elevationMap.get(hexToKey(coord)) ?? 0;
@@ -101,14 +110,19 @@ export function startReplay(events: TurnEvent[], elevationMap: Map<string, numbe
 
     switch (event.type) {
       case 'move': {
+        const moveDuration = 0.8;
         const timer = setTimeout(() => {
           playUnitAnimation(event.unitId, 'move');
-          const from = hexToWorld(event.from, elev(event.from));
           const to = hexToWorld(event.to, elev(event.to));
-          spawnAttackTracer(from.x, from.y, from.z, to.x, to.y, to.z);
+          tweenUnitTo(event.unitId, to.x, to.y, to.z, moveDuration);
         }, currentDelay);
         replayTimers.push(timer);
-        delay += 300;
+        // Notify fog update partway through the tween
+        const arriveTimer = setTimeout(() => {
+          callbacks.onUnitArrived?.(event.unitId, event.to);
+        }, currentDelay + moveDuration * 500);
+        replayTimers.push(arriveTimer);
+        delay += 900;
         break;
       }
       case 'attack': {
@@ -120,7 +134,7 @@ export function startReplay(events: TurnEvent[], elevationMap: Map<string, numbe
           spawnDamageNumber(defPos.x, defPos.y, defPos.z, event.damage);
         }, currentDelay);
         replayTimers.push(timer);
-        delay += 400;
+        delay += 600;
         break;
       }
       case 'kill': {
@@ -130,7 +144,7 @@ export function startReplay(events: TurnEvent[], elevationMap: Map<string, numbe
           spawnDeathMarker(pos.x, pos.y, pos.z);
         }, currentDelay);
         replayTimers.push(timer);
-        delay += 500;
+        delay += 800;
         break;
       }
       case 'capture': {
@@ -139,7 +153,33 @@ export function startReplay(events: TurnEvent[], elevationMap: Map<string, numbe
           spawnDamageNumber(pos.x, pos.y + 0.3, pos.z, 0);
         }, currentDelay);
         replayTimers.push(timer);
-        delay += 300;
+        delay += 500;
+        break;
+      }
+      // TODO: melee animation needs meleeRating values (OD-1) and adjacent-contact
+      // detection from the 10-phase pipeline. Placeholder plays the melee clip.
+      case 'melee': {
+        const timer = setTimeout(() => {
+          playUnitAnimation(event.unitA, 'melee');
+          playUnitAnimation(event.unitB, 'melee');
+        }, currentDelay);
+        replayTimers.push(timer);
+        delay += 1000;
+        break;
+      }
+      case 'climb': {
+        const climbDuration = 1.0;
+        const timer = setTimeout(() => {
+          playUnitAnimation(event.unitId, 'climb');
+          const to = hexToWorld(event.to, elev(event.to));
+          tweenUnitTo(event.unitId, to.x, to.y, to.z, climbDuration);
+        }, currentDelay);
+        replayTimers.push(timer);
+        const climbArriveTimer = setTimeout(() => {
+          callbacks.onUnitArrived?.(event.unitId, event.to);
+        }, currentDelay + climbDuration * 500);
+        replayTimers.push(climbArriveTimer);
+        delay += 1100;
         break;
       }
     }
@@ -147,7 +187,7 @@ export function startReplay(events: TurnEvent[], elevationMap: Map<string, numbe
 
   const finishTimer = setTimeout(() => {
     finishReplay();
-  }, delay + 200);
+  }, delay + 300);
   replayTimers.push(finishTimer);
 }
 
@@ -158,6 +198,7 @@ export function skipReplay(): void {
   }
   replayTimers = [];
   clearEffects();
+  clearAllTweens();
   finishReplay();
 }
 

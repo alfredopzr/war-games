@@ -1,5 +1,5 @@
 import { io as socketIo, Socket } from 'socket.io-client';
-import { deserializeGameState } from '@hexwar/engine';
+import { deserializeGameState, calculateVisibility } from '@hexwar/engine';
 import type {
   PlayerId,
   UnitType,
@@ -7,8 +7,10 @@ import type {
   DirectiveType,
   Command,
   SerializableGameState,
+  Unit,
 } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
+import { diffTurnEvents, startReplay } from '../renderer/replay-sequencer';
 
 const DEFAULT_SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -215,21 +217,90 @@ class NetworkManager {
         state: SerializableGameState;
         events: Array<{ type: string; actingPlayer: PlayerId; message: string }>;
       }) => {
-        const gameState = deserializeGameState(data.state);
+        const newState = deserializeGameState(data.state);
         const s = store();
-        s.setGameState(gameState);
-        s.setWaitingForServer(false);
-        s.setCommandsSubmitted(false);
-        s.setOpponentCommandsSubmitted(false);
 
+        // Snapshot current units for replay diff
+        const currentState = s.gameState;
+        const unitsBefore = new Map<string, { position: CubeCoord; hp: number; owner: PlayerId }>();
+        const citiesBefore = new Map<string, PlayerId | null>();
+        if (currentState) {
+          for (const pid of ['player1', 'player2'] as PlayerId[]) {
+            for (const unit of currentState.players[pid].units) {
+              unitsBefore.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: pid });
+            }
+          }
+          for (const [k, v] of currentState.cityOwnership) citiesBefore.set(k, v);
+        }
+
+        // Snapshot incoming state
+        const unitsAfter = new Map<string, { position: CubeCoord; hp: number; owner: PlayerId }>();
+        for (const pid of ['player1', 'player2'] as PlayerId[]) {
+          for (const unit of newState.players[pid].units) {
+            unitsAfter.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: pid });
+          }
+        }
+        const citiesAfter = new Map(newState.cityOwnership);
+
+        const replayEvents = diffTurnEvents(unitsBefore, unitsAfter, citiesBefore, citiesAfter);
+
+        // Battle log (immediate)
         if (data.events.length > 0) {
           const entries = data.events.map((e) => ({
-            turn: gameState.round.turnNumber,
+            turn: newState.round.turnNumber,
             player: e.actingPlayer,
             type: e.type as 'kill' | 'damage' | 'capture' | 'recapture',
             message: e.message,
           }));
           s.addBattleLogEntries(entries);
+        }
+
+        s.setWaitingForServer(false);
+        s.setCommandsSubmitted(false);
+        s.setOpponentCommandsSubmitted(false);
+
+        const applyState = (): void => {
+          useGameStore.getState().setGameState(newState);
+        };
+
+        if (replayEvents.length > 0 && currentState) {
+          // Track intermediate positions for progressive fog clearing
+          const myPlayer = useGameStore.getState().myPlayerId ?? 'player1';
+          const replayPositions = new Map<string, CubeCoord>();
+          for (const [id, snap] of unitsBefore) {
+            if (snap.owner === myPlayer) {
+              replayPositions.set(id, { ...snap.position });
+            }
+          }
+
+          s.setReplayPlaying(true);
+          startReplay(replayEvents, newState.map.elevation, {
+            onComplete: () => {
+              useGameStore.getState().setReplayPlaying(false);
+              applyState();
+            },
+            onUnitArrived: (unitId: string, to: CubeCoord) => {
+              if (!replayPositions.has(unitId)) return;
+              replayPositions.set(unitId, to);
+              const syntheticUnits: Unit[] = [];
+              for (const [id, pos] of replayPositions) {
+                const orig = currentState.players[myPlayer].units.find((u) => u.id === id);
+                if (orig) {
+                  syntheticUnits.push({ ...orig, position: pos });
+                }
+              }
+              const vis = calculateVisibility(syntheticUnits, newState.map.terrain, newState.map.elevation);
+              useGameStore.getState().setVisibleHexes(vis);
+              const prevExplored = useGameStore.getState().exploredHexes;
+              const merged = new Set(prevExplored);
+              for (const k of vis) merged.add(k);
+              if (merged.size !== prevExplored.size) {
+                useGameStore.setState({ exploredHexes: merged });
+              }
+            },
+          });
+        } else {
+          applyState();
         }
       },
     );

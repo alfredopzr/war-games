@@ -3,13 +3,13 @@ import {
   executeTurn, filterValidCommands, checkRoundEnd, scoreRound,
   CP_PER_ROUND, UNIT_STATS,
   calculateIncome, applyCarryover, applyMaintenance,
-  aiBattlePhase, createCommandPool,
+  aiBattlePhase, createCommandPool, calculateVisibility,
 } from '@hexwar/engine';
-import type { PlayerId, ObjectiveState, GameState } from '@hexwar/engine';
+import type { PlayerId, ObjectiveState, GameState, CubeCoord, Unit } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 import type { BattleLogEntry } from '../store/game-store';
 import { perf } from '../perf-monitor';
-import { skipReplay } from '../renderer/replay-sequencer';
+import { skipReplay, diffTurnEvents, startReplay } from '../renderer/replay-sequencer';
 
 function phaseClass(phase: string): string {
   switch (phase) {
@@ -121,13 +121,14 @@ function resolveSimultaneousLocal(
     console.log(`  P2 ${u.type} [${u.directive}] hp=${u.hp} @ (${u.position.q},${u.position.r})`);
   }
 
-  // Snapshot before any resolution
-  const allUnitsBefore = new Map<string, number>();
-  for (const player of Object.values(gameState.players)) {
-    for (const unit of player.units) {
-      allUnitsBefore.set(unit.id, unit.hp);
+  // Snapshot before any resolution — positions, HP, cities (for replay diff)
+  const unitsBefore = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
+  for (const pid of ['player1', 'player2'] as PlayerId[]) {
+    for (const unit of gameState.players[pid].units) {
+      unitsBefore.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: pid });
     }
   }
+  const citiesBefore = new Map(gameState.cityOwnership);
   const turnsHeldBefore = gameState.round.objective.turnsHeld;
   const occupierBefore = gameState.round.objective.occupiedBy;
 
@@ -194,14 +195,24 @@ function resolveSimultaneousLocal(
   gameState.round.turnsPlayed += 1;
   gameState.round.turnNumber += 1;
 
-  // Flash damaged units
+  // Snapshot after resolution
+  const unitsAfter = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
+  for (const pid of ['player1', 'player2'] as PlayerId[]) {
+    for (const unit of gameState.players[pid].units) {
+      unitsAfter.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: pid });
+    }
+  }
+  const citiesAfter = new Map(gameState.cityOwnership);
+
+  // Generate replay events from state diff
+  const replayEvents = diffTurnEvents(unitsBefore, unitsAfter, citiesBefore, citiesAfter);
+
+  // Flash damaged units (immediate — CSS effect on HP bars)
   const updated = new Map(store.damagedUnits);
-  for (const player of Object.values(gameState.players)) {
-    for (const unit of player.units) {
-      const prevHp = allUnitsBefore.get(unit.id);
-      if (prevHp !== undefined && unit.hp < prevHp) {
-        updated.set(unit.id, Date.now());
-      }
+  for (const [id, before] of unitsBefore) {
+    const after = unitsAfter.get(id);
+    if (after && after.hp < before.hp) {
+      updated.set(id, Date.now());
     }
   }
   useGameStore.setState({ damagedUnits: updated });
@@ -213,45 +224,88 @@ function resolveSimultaneousLocal(
   // Check round end
   const roundEnd = earlyRoundEnd.roundOver ? earlyRoundEnd : checkRoundEnd(gameState);
 
-  if (roundEnd.roundOver) {
-    const winnerLabel = roundEnd.winner === 'player1' ? 'P1' : roundEnd.winner === 'player2' ? 'P2' : 'No one';
-    const reasonLabel = roundEnd.reason === 'king-of-the-hill' ? 'King of the Hill'
-      : roundEnd.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
-    store.addBattleLogEntries([{
-      turn: turnNum,
-      player: roundEnd.winner ?? 'player1',
-      type: 'round-end',
-      message: `${winnerLabel} wins the round (${reasonLabel})`,
-    }]);
-
-    const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', roundEnd.winner);
-    const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', roundEnd.winner);
-    scoreRound(gameState, roundEnd.winner);
-
-    if (gameState.phase === 'game-over' && gameState.winner) {
-      const gameWinnerLabel = gameState.winner === 'player1' ? 'P1' : 'P2';
-      store.addBattleLogEntries([{
+  // Deferred state application — called after replay finishes (or immediately if no events)
+  const applyFinalState = (): void => {
+    if (roundEnd.roundOver) {
+      const winnerLabel = roundEnd.winner === 'player1' ? 'P1' : roundEnd.winner === 'player2' ? 'P2' : 'No one';
+      const reasonLabel = roundEnd.reason === 'king-of-the-hill' ? 'King of the Hill'
+        : roundEnd.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
+      useGameStore.getState().addBattleLogEntries([{
         turn: turnNum,
-        player: gameState.winner,
-        type: 'game-end',
-        message: `${gameWinnerLabel} wins the game!`,
+        player: roundEnd.winner ?? 'player1',
+        type: 'round-end',
+        message: `${winnerLabel} wins the round (${reasonLabel})`,
       }]);
+
+      const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', roundEnd.winner);
+      const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', roundEnd.winner);
+      scoreRound(gameState, roundEnd.winner);
+
+      if (gameState.phase === 'game-over' && gameState.winner) {
+        const gameWinnerLabel = gameState.winner === 'player1' ? 'P1' : 'P2';
+        useGameStore.getState().addBattleLogEntries([{
+          turn: turnNum,
+          player: gameState.winner,
+          type: 'game-end',
+          message: `${gameWinnerLabel} wins the game!`,
+        }]);
+      }
+
+      useGameStore.getState().setGameState({ ...gameState });
+      useGameStore.getState().showRoundResultScreen(roundEnd.winner, roundEnd.reason ?? 'unknown', p1Breakdown, p2Breakdown);
+      return;
     }
 
-    store.setGameState({ ...gameState });
-    store.showRoundResultScreen(roundEnd.winner, roundEnd.reason ?? 'unknown', p1Breakdown, p2Breakdown);
-    return;
-  }
+    // Round not over — reset for player1's next planning phase
+    gameState.round.currentPlayer = 'player1';
+    gameState.round.commandPool = createCommandPool();
+    for (const unit of gameState.players.player1.units) {
+      unit.hasActed = false;
+    }
 
-  // Round not over — reset for player1's next planning phase
-  // After simultaneous resolution, currentPlayer should be player1 for next planning window
-  gameState.round.currentPlayer = 'player1';
-  gameState.round.commandPool = createCommandPool();
-  for (const unit of gameState.players.player1.units) {
-    unit.hasActed = false;
-  }
+    useGameStore.getState().setGameState({ ...gameState });
+  };
 
-  store.setGameState({ ...gameState });
+  if (replayEvents.length > 0) {
+    // Track intermediate positions for progressive fog clearing
+    const replayPositions = new Map<string, CubeCoord>();
+    for (const [id, snap] of unitsBefore) {
+      if (snap.owner === 'player1') {
+        replayPositions.set(id, { ...snap.position });
+      }
+    }
+
+    store.setReplayPlaying(true);
+    startReplay(replayEvents, gameState.map.elevation, {
+      onComplete: () => {
+        store.setReplayPlaying(false);
+        applyFinalState();
+      },
+      onUnitArrived: (unitId: string, to: CubeCoord) => {
+        if (!replayPositions.has(unitId)) return;
+        replayPositions.set(unitId, to);
+        // Build synthetic unit list with current replay positions
+        const syntheticUnits: Unit[] = [];
+        for (const [id, pos] of replayPositions) {
+          const orig = gameState.players.player1.units.find((u) => u.id === id);
+          if (orig) {
+            syntheticUnits.push({ ...orig, position: pos });
+          }
+        }
+        const vis = calculateVisibility(syntheticUnits, gameState.map.terrain, gameState.map.elevation);
+        useGameStore.getState().setVisibleHexes(vis);
+        // Accumulate explored
+        const prevExplored = useGameStore.getState().exploredHexes;
+        const merged = new Set(prevExplored);
+        for (const k of vis) merged.add(k);
+        if (merged.size !== prevExplored.size) {
+          useGameStore.setState({ exploredHexes: merged });
+        }
+      },
+    });
+  } else {
+    applyFinalState();
+  }
 }
 
 export function BattleHUD(): ReactElement | null {
