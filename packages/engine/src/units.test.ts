@@ -140,6 +140,35 @@ describe('getTypeAdvantage', () => {
   });
 });
 
+describe('engineer', () => {
+  it('has correct stats', () => {
+    const stats = UNIT_STATS.engineer;
+    expect(stats.cost).toBe(75);
+    expect(stats.maxHp).toBe(2);
+    expect(stats.atk).toBe(1);
+    expect(stats.def).toBe(1);
+    expect(stats.moveRange).toBe(3);
+    expect(stats.attackRange).toBe(1);
+    expect(stats.minAttackRange).toBe(1);
+    expect(stats.visionRange).toBe(3);
+  });
+
+  it('is weak against all combat units', () => {
+    expect(getTypeAdvantage('infantry', 'engineer')).toBe(1.5);
+    expect(getTypeAdvantage('tank', 'engineer')).toBe(1.5);
+    expect(getTypeAdvantage('artillery', 'engineer')).toBe(1.2);
+    expect(getTypeAdvantage('recon', 'engineer')).toBe(1.2);
+  });
+
+  it('is weak when attacking combat units', () => {
+    expect(getTypeAdvantage('engineer', 'infantry')).toBe(0.5);
+    expect(getTypeAdvantage('engineer', 'tank')).toBe(0.3);
+    expect(getTypeAdvantage('engineer', 'artillery')).toBe(0.8);
+    expect(getTypeAdvantage('engineer', 'recon')).toBe(0.5);
+    expect(getTypeAdvantage('engineer', 'engineer')).toBe(1.0);
+  });
+});
+
 describe('resetUnitIdCounter', () => {
   it('resets IDs to start from 1 again', () => {
     const pos: CubeCoord = { q: 0, r: 0, s: 0 };
