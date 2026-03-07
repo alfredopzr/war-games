@@ -58,6 +58,7 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 - **Directive-aware path visualization**: Per-directive rendering — advance shows solid A* path, flank shows dashed simulated multi-turn arc (via `simulateFlankTrajectory` with cached trajectories), scout shows patrol circle (radius 8 hex ring around target). ROE icons at target hex: crosshair (shoot-on-sight), chevrons (skirmish/retreat), arrow (hunt). Targets persist for all friendly units after deselection. Reactive selection rendering decoupled from heavy renderScene.
 - Three.js renderer: hex-of-hexes terrain meshes, elevation-corrected click detection, unit GLB models (skeletal Meshy animations), fog of war with explored state + LoS border ring, deploy zones, selection highlights (electric blue move mode), HP bars, pending command visuals (Line2 move paths with elevation awareness, attack crosshairs), move range highlight on selection
 - **Animation system**: Multi-clip mapping per game action (`AnimAction` type: idle/move/attack/melee/hit/death/climb). Per-model `clipMap` tables map raw Meshy clip names to game actions with random selection from candidates. Infantry models (Engineer + Caravaner) have 13-14 skeletal animation clips each.
+- **Structured event log** (0.5): 16-variant `BattleEvent` discriminated union emitted inline at point of origin during `executeTurn()`. Replaces server snapshot-diffing (~80 lines deleted from game-loop.ts). Events carry full causal data: attacker/defender IDs, types, positions, damage, terrain. `formatBattleEvent()` pure formatter in `battle-events.ts`. `GameState.pendingEvents` accumulates events, server drains after each `executeTurn()`. Client `BattleLogEntry` wraps `BattleEvent` directly. 4 future event types defined (intercept, counter, melee, reveal) for Sprint 3/4. Schema locked in `EVENT_LOG_SPEC.md`. 28 new tests (17 formatter + 11 emission).
 - Server: Socket.io game loop, room management, build/battle phases, reconnection, simultaneous resolution with deterministic RNG, fog-of-war state filtering with `unitStats`
 - Client: React + Zustand, BattleHUD, UnitInfoPanel, compose-based OrderMatrix (movement + ROE columns with live order name), CommandMenu with target selection mode (crosshair cursor, blue target highlights), DeployManifest, move/attack range highlights
 - **Simultaneous resolution** (0.3): server buffers both players' commands, resolves when both received or timeout. Client vsAI mode uses `resolveSimultaneousLocal` with same pattern. Randomized resolution order per turn. turnsHeld double-increment fix. Hotseat mode removed entirely.
@@ -70,13 +71,13 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 - Counter-attacks
 - Melee system
 - Intercept mechanics during movement
-- Structured event log - STARTED
+- ~~Structured event log~~ DONE (Mar 6) — 16-variant discriminated union emitted inline during executeTurn(), replaces snapshot-diffing. `formatBattleEvent()` formatter, EVENT_LOG_SPEC.md contract. Server drains pendingEvents directly. 28 new tests.
 - Reveal animation (event log playback)
 - Multi-city win condition (currently KotH)
 - ~~Parametric map constants (currently hardcoded to 20×14)~~ Partially done — hex-of-hexes map + movement scaling done. maxTurns, CP_PER_ROUND not yet derived from map size
-- HP/stat scaling (currently 2-4 HP, needs ×10)
-- Clean RPS matrix (currently artillery is generalist)
-- Fixed damage formula (currently DEF×terrainDef, needs (1-terrainDef) percentage)
+- ~~HP/stat scaling (currently 2-4 HP, needs ×10)~~ DONE (Mar 6) — Infantry 30/10/2, Tank 40/14/2, Artillery 20/10/1, Recon 20/7/1. Invariant: ATK=HP×0.35, DEF=max(1,round(HP×0.05)).
+- ~~Clean RPS matrix (currently artillery is generalist)~~ DONE (Mar 6) — Tank→Infantry→Recon→Artillery→Tank. Each unit: one 2.0× counter, one 0.6× disadvantage, all else 1.0×.
+- ~~Fixed damage formula (currently DEF×terrainDef, needs (1-terrainDef) percentage)~~ DONE (Mar 6) — `max(1, floor((ATK × typeMul × rng) × (1 - terrainDef) - DEF))`. DEF now works on plains. `balance.json` is single source of truth, replaces xlsx.
 - ~~Cost-based movement (currently step-counting)~~ DONE (Mar 6) — A* pathfinding + cost budget
 - ~~Two-layer directives (movement + ROE split)~~ DONE (Mar 6) — full 5×5 matrix with specialty modifiers
 - ~~LoS check on attacks (currently distance-only)~~ DONE (Mar 6) — canAttack gates on visibleHexes
@@ -134,7 +135,7 @@ The big one. Replace `executeTurn()` with the 10-phase pipeline. Event log built
 - [E] **Phase 4**: Engagement detection. Scan for in-range pairs. LoS check. ROE filter.
 - [E] **Phase 5-6**: Initiative fire + counter fire. Response time ordering with modifiers (flanking, terrain, ROE). Cancel-on-death.
 - [E] **Phase 8-10**: Support heal, city capture (HP cost), round end check
-- [E] **Event log** (0.5): typed events emitted from every phase. `MOVE`, `INTERCEPT`, `ATTACK`, `COUNTER`, `KILL`, `CAPTURE`, `HEAL`
+- [E] ~~**Event log** (0.5)~~ DONE (Mar 6) — 16-variant BattleEvent discriminated union emitted inline during executeTurn(). Schema locked in EVENT_LOG_SPEC.md. 28 new tests. Server snapshot-diffing deleted. 4 future types (intercept, counter, melee, reveal) defined for phases 3-6.
 
 **Phase 7 (melee) deferred** — needs numeric meleeRating values. See open decision D6.
 
@@ -146,16 +147,18 @@ The big one. Replace `executeTurn()` with the 10-phase pipeline. Event log built
 
 Layer 1. Implement the math model. Layer 0 is complete — these can be built in any order within the sprint.
 
-- [E] **Clean RPS matrix** (1.1): Replace `TYPE_ADVANTAGE` with clean 4-unit cycle. Each unit: one 2.0× counter, one 0.6× disadvantage, all else 1.0×
-- [E] **HP/stat scaling** (1.2): Apply `ATK = HP × 0.35`, `DEF = max(1, round(HP × 0.05))` invariant. Infantry 30/10/2, Tank 40/14/2, Artillery 20/10/1, Recon 20/7/1
-- [E] **Damage formula update** (1.3): `max(1, floor((ATK × typeMul × rng) × (1 - terrainDef) - DEF))`. Fixes DEF-on-plains bug (risk 8.5)
-- [E] **Response time system** (1.4): Add `responseTime` stat to unit definitions. Wire Phase 5/6 ordering with modifiers (flanking, terrain, ROE)
-- [E] **Intercept mechanics** (1.5): Wire Phase 3 Step 2 intercept checks. `INTERCEPT_CAP = 1`. Skirmish attack cap.
-- [E] **Update all tests** for new stats, formula, timing
+- [E] ~~**Clean RPS matrix** (1.1)~~ DONE (Mar 6) — 4-unit clean cycle in `balance.json`. Tank→Infantry→Recon→Artillery→Tank.
+- [E] ~~**HP/stat scaling** (1.2)~~ DONE (Mar 6) — ×10 HP, invariant ratios applied, all four units updated.
+- [E] ~~**Damage formula update** (1.3)~~ DONE (Mar 6) — percentage terrain reduction first, flat DEF after. DEF-on-plains bug fixed.
+- [E] **Response time system** (1.4): Add `responseTime` stat to unit definitions. Wire Phase 5/6 ordering with modifiers (flanking, terrain, ROE). **NOTE: this is now part of Sprint 3 pipeline (Phase 5/6) — will be delivered with S3, not separately.**
+- [E] **Intercept mechanics** (1.5): Wire Phase 3 Step 2 intercept checks. `INTERCEPT_CAP = 1`. Skirmish attack cap. **NOTE: this is now part of Sprint 3 pipeline (Phase 3) — will be delivered with S3, not separately.**
+- [E] **Update all tests** for response time and intercept behavior
+
+**1.4 + 1.5 merged into Sprint 3** — response time (Phase 5/6) and intercepts (Phase 3) are delivered as part of the combat timeline pipeline. Sprint 4 scope reduced accordingly.
 
 **1.6 (melee) deferred** — OD-1 still open.
 
-**Exit criteria:** Kill timing matches math model targets: counter ~2 hits, neutral 3-4 hits, disadvantaged 6-7 hits on plains. Response time ordering works. Intercepts fire during movement.
+**Exit criteria:** ~~Kill timing matches math model targets: counter ~2 hits, neutral 3-4 hits, disadvantaged 6-7 hits on plains.~~ DONE (Mar 6, verified in commit 9078c93). Response time ordering works. Intercepts fire during movement.
 
 ---
 
@@ -241,6 +244,7 @@ These need resolution before the sprint that depends on them. Tracked here, deci
 | OD-4 | Fog during reveal — full "show your hands" or fog-gated? | Sprint 5 | Full reveal (poker model) |
 | OD-5 | Noise frequency scaling with map size | Sprint 6 | Fixed frequencies (more features at larger scale) |
 | OD-6 | Archetype commitment structure (Fork 1: hard lock vs soft lock vs free pivot) | Sprint 7 | Soft lock, but needs playtest data |
+| OD-9 | Hold DEF modifier value — must be sized against ATK/HP/DEF ratios from kill timing targets | Sprint 4 balance pass | Deferred — number depends on S4 stats being locked first |
 
 ---
 
@@ -273,6 +277,8 @@ DATE       | SPRINT | CHANGE                                          | REASON
 2026-03-06 | —      | Terrain simplification (unplanned).                | Physics-based model: elevation = pure LoS occlusion, forest = concealment (-2 vision, invisible from outside), mountain/city defense zeroed. canAttack() gates on LoS visibility. Improves player legibility — fewer invisible knobs.
 2026-03-06 | —      | Directive-aware path visualization (unplanned).    | Per-directive rendering: advance=solid A* path, flank=dashed simulated multi-turn arc (computeFlankWaypoint extracted to engine), scout=patrol circle (radius 8). ROE icons at target (crosshair/chevrons/arrow). Cached trajectories. Targets persist for all friendly units.
 2026-03-06 | S1+S2  | Sprints 1 and 2 marked COMPLETE.                   | All exit criteria met. S1 delivered Mar 6 (4 days early vs Mar 10 end). S2 was already mostly done, 4.1 was the last blocker. Next up: S3 combat timeline.
+2026-03-06 | S3     | Event log (0.5) completed early.                   | 16-variant BattleEvent union emitted inline during executeTurn(). Replaces ~80 lines of server snapshot-diffing. Full causal data (attacker/defender IDs, types, positions, damage, terrain). formatBattleEvent() formatter, EVENT_LOG_SPEC.md schema contract. 28 new tests. 4 future types (intercept, counter, melee, reveal) defined for S3/S4 phases. S3 remaining: phases 1-6, 8-10 pipeline replacement.
+2026-03-06 | S4     | Items 1.1, 1.2, 1.3 completed early (commit 9078c93). | balance.json as single source of truth. ×10 HP scaling, clean RPS cycle, fixed damage formula. Kill timing verified for counter/neutral/disadvantaged matchups. strategy_game_balance_master.xlsx deleted. S4 scope now: response time system (1.4) and intercept mechanics (1.5), both of which are delivered as part of S3 pipeline phases 3 + 5/6.
 ```
 
 ---

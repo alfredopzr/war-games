@@ -16,6 +16,7 @@ describe('UNIT_STATS', () => {
       minAttackRange: 1,
       visionRange: 3,
       canClimb: true,
+      responseTime: 2,
     });
   });
 
@@ -32,6 +33,7 @@ describe('UNIT_STATS', () => {
       minAttackRange: 1,
       visionRange: 3,
       canClimb: false,
+      responseTime: 3,
     });
   });
 
@@ -48,6 +50,7 @@ describe('UNIT_STATS', () => {
       minAttackRange: 2,
       visionRange: 3,
       canClimb: false,
+      responseTime: 4,
     });
   });
 
@@ -64,6 +67,7 @@ describe('UNIT_STATS', () => {
       minAttackRange: 1,
       visionRange: 6,
       canClimb: true,
+      responseTime: 1,
     });
   });
 });

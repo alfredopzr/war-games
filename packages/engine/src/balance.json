@@ -1,9 +1,9 @@
 {
   "units": {
-    "infantry":  { "cost": 100, "maxHp": 30, "atk": 10, "def": 2, "moveRange": 3, "attackRange": 1, "minAttackRange": 1, "visionRange": 3, "canClimb": true },
-    "tank":      { "cost": 250, "maxHp": 40, "atk": 14, "def": 2, "moveRange": 4, "attackRange": 1, "minAttackRange": 1, "visionRange": 3, "canClimb": false },
-    "artillery": { "cost": 200, "maxHp": 20, "atk": 10, "def": 1, "moveRange": 2, "attackRange": 3, "minAttackRange": 2, "visionRange": 3, "canClimb": false },
-    "recon":     { "cost": 100, "maxHp": 20, "atk":  7, "def": 1, "moveRange": 5, "attackRange": 1, "minAttackRange": 1, "visionRange": 6, "canClimb": true }
+    "infantry":  { "cost": 100, "maxHp": 30, "atk": 10, "def": 2, "moveRange": 3, "attackRange": 1, "minAttackRange": 1, "visionRange": 3, "canClimb": true,  "responseTime": 2 },
+    "tank":      { "cost": 250, "maxHp": 40, "atk": 14, "def": 2, "moveRange": 4, "attackRange": 1, "minAttackRange": 1, "visionRange": 3, "canClimb": false, "responseTime": 3 },
+    "artillery": { "cost": 200, "maxHp": 20, "atk": 10, "def": 1, "moveRange": 2, "attackRange": 3, "minAttackRange": 2, "visionRange": 3, "canClimb": false, "responseTime": 4 },
+    "recon":     { "cost": 100, "maxHp": 20, "atk":  7, "def": 1, "moveRange": 5, "attackRange": 1, "minAttackRange": 1, "visionRange": 6, "canClimb": true,  "responseTime": 1 }
   },
   "typeAdvantage": {
     "infantry":  { "infantry": 1.0, "tank": 0.6, "artillery": 1.0, "recon": 2.0 },

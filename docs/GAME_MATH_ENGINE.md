@@ -225,10 +225,10 @@ Full matrix:
 |-----------|----------|------|-----------|-------|
 | **Infantry** | 1.0 | 0.6 | 1.0 | 2.0 |
 | **Tank** | 2.0 | 1.0 | 0.6 | 1.0 |
-| **Artillery** | 1.0 | 2.0 | 1.0 | 1.0 |
-| **Recon** | 1.0 | 1.0 | 2.0 | 1.0 |
+| **Artillery** | 1.0 | 2.0 | 1.0 | 0.6 |
+| **Recon** | 0.6 | 1.0 | 2.0 | 1.0 |
 
-Disadvantaged slots use 0.6×, not 0.5×. Mirror slots (Tank disadvantaged vs Artillery, Infantry disadvantaged vs Tank) are symmetric.
+Disadvantaged slots use 0.6×, not 0.5×. All four counter relationships are symmetric — if A counters B at 2.0×, B attacking A is 0.6×.
 
 ---
 

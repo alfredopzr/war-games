@@ -10,6 +10,8 @@ export type {
   UnitAction, Command, CommandPool,
   GamePhase, ObjectiveState, PlayerState, RoundState, GameState, GameMap,
   IncomeParams, MapValidation, RoundEndResult, DirectiveContext, ResolvedTarget,
+  // Resolution pipeline
+  ApproachCategory, TurnIntent, Engagement,
   // Battle events
   BattleEvent, BattleEventType, BattleEventPhase,
   BattleEventMove, BattleEventDamage, BattleEventKill,

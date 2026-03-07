@@ -71,6 +71,7 @@ export interface UnitStats {
   readonly minAttackRange: number;
   readonly visionRange: number;
   readonly canClimb: boolean;
+  readonly responseTime: number;
 }
 
 export type MovementDirective = 'advance' | 'flank-left' | 'flank-right' | 'scout' | 'hold';
@@ -230,6 +231,32 @@ export interface DirectiveContext {
 export interface ResolvedTarget {
   readonly hex: CubeCoord;
   readonly isValid: boolean;
+}
+
+// -----------------------------------------------------------------------------
+// Resolution Pipeline
+// -----------------------------------------------------------------------------
+
+export type ApproachCategory = 'rear' | 'flank' | 'front';
+
+export interface TurnIntent {
+  readonly unitId: string;
+  readonly owner: PlayerId;
+  readonly movementDirective: MovementDirective;
+  readonly attackDirective: AttackDirective;
+  readonly specialtyModifier: SpecialtyModifier | null;
+  readonly targetHex: CubeCoord;
+  readonly path: CubeCoord[];
+  readonly facing: CubeCoord;
+}
+
+export interface Engagement {
+  readonly attackerId: string;
+  readonly defenderId: string;
+  readonly distance: number;
+  readonly approachCategory: ApproachCategory;
+  readonly isIntercept: boolean;
+  responseTime: number;
 }
 
 // =============================================================================
