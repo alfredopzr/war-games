@@ -297,6 +297,7 @@ export interface BattleEventMove extends BattleEventBase {
   readonly type: 'move';
   readonly unitId: string;
   readonly unitType: UnitType;
+  readonly movementDirective: MovementDirective;
   readonly from: CubeCoord;
   readonly to: CubeCoord;
 }
@@ -421,11 +422,14 @@ export interface BattleEventCounter extends BattleEventBase {
   readonly attackerId: string;
   readonly attackerType: UnitType;
   readonly attackerPosition: CubeCoord;
+  readonly attackerAttackDirective: AttackDirective;
   readonly defenderId: string;
   readonly defenderType: UnitType;
   readonly defenderPosition: CubeCoord;
   readonly damage: number;
   readonly defenderHpAfter: number;
+  readonly defenderTerrain: TerrainType;
+  readonly approachCategory: ApproachCategory;
 }
 
 export interface BattleEventMelee extends BattleEventBase {
@@ -445,7 +449,19 @@ export interface BattleEventReveal extends BattleEventBase {
   readonly hexes: CubeCoord[];
 }
 
+export interface BattleEventTurnStart extends BattleEventBase {
+  readonly type: 'turn-start';
+  readonly turnNumber: number;
+  readonly p1CommandsRemaining: number;
+  readonly p2CommandsRemaining: number;
+  readonly p1UnitsAlive: number;
+  readonly p2UnitsAlive: number;
+  readonly p1OutOfRangeUnits: number;
+  readonly p2OutOfRangeUnits: number;
+}
+
 export type BattleEvent =
+  | BattleEventTurnStart
   | BattleEventMove
   | BattleEventDamage
   | BattleEventKill

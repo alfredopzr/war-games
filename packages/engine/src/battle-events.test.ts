@@ -3,13 +3,25 @@ import { formatBattleEvent } from './battle-events';
 import type { BattleEvent } from './types';
 
 describe('formatBattleEvent', () => {
+  it('formats turn-start event', () => {
+    const event: BattleEvent = {
+      type: 'turn-start', actingPlayer: 'player1', phase: 'movement', pipelinePhase: 0,
+      turnNumber: 3,
+      p1CommandsRemaining: 5, p2CommandsRemaining: 4,
+      p1UnitsAlive: 8, p2UnitsAlive: 7,
+      p1OutOfRangeUnits: 2, p2OutOfRangeUnits: 1,
+    };
+    expect(formatBattleEvent(event)).toBe('Turn 3 | P1: 8 units 5 CP (2 OOR) | P2: 7 units 4 CP (1 OOR)');
+  });
+
   it('formats move event', () => {
     const event: BattleEvent = {
       type: 'move', actingPlayer: 'player1', phase: 'movement', pipelinePhase: 0,
       unitId: 'u1', unitType: 'infantry',
+      movementDirective: 'advance',
       from: { q: 0, r: 0, s: 0 }, to: { q: 1, r: -1, s: 0 },
     };
-    expect(formatBattleEvent(event)).toBe('P1 Infantry moved to (1,-1)');
+    expect(formatBattleEvent(event)).toBe('P1 Infantry [advance] moved to (1,-1)');
   });
 
   it('formats damage event', () => {
@@ -170,9 +182,12 @@ describe('formatBattleEvent', () => {
       type: 'counter', actingPlayer: 'player2', phase: 'combat', pipelinePhase: 0,
       attackerId: 'u3', attackerType: 'infantry',
       attackerPosition: { q: 0, r: 0, s: 0 },
+      attackerAttackDirective: 'shoot-on-sight',
       defenderId: 'u4', defenderType: 'tank',
       defenderPosition: { q: 1, r: -1, s: 0 },
       damage: 1, defenderHpAfter: 3,
+      defenderTerrain: 'plains',
+      approachCategory: 'front',
     };
     expect(formatBattleEvent(event)).toBe('Infantry counter-fired at Tank for 1 damage');
   });

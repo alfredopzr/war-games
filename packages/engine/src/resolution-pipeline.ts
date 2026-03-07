@@ -768,6 +768,7 @@ function resolveMovement(
         pipelinePhase: 3,
         unitId: unit.id,
         unitType: unit.type,
+        movementDirective: unit.movementDirective,
         from: oldPos,
         to: newPos,
       });
@@ -1199,11 +1200,14 @@ function resolveCounterFire(
         attackerId: attacker.id,
         attackerType: attacker.type,
         attackerPosition: { ...attacker.position },
+        attackerAttackDirective: attacker.attackDirective,
         defenderId: defender.id,
         defenderType: defender.type,
         defenderPosition: { ...defender.position },
         damage,
         defenderHpAfter: defender.hp,
+        defenderTerrain,
+        approachCategory: eng.approachCategory,
       });
     }
   }
@@ -1508,6 +1512,37 @@ export function resolveTurn(
   randomFn: () => number,
 ): void {
   state.pendingEvents = [];
+
+  // Turn-start event — emitted before any phase executes
+  const p1Units = state.players.player1.units;
+  const p2Units = state.players.player2.units;
+  const allUnitsForTurnStart = [...p1Units, ...p2Units];
+  const outOfRangeCount = (ownerUnits: typeof p1Units, enemies: typeof p2Units): number => {
+    let count = 0;
+    for (const u of ownerUnits) {
+      if (!OFFENSIVE_ROE.has(u.attackDirective)) continue;
+      const stats = state.unitStats[u.type];
+      const hasTarget = enemies.some(
+        (e) => { const d = cubeDistance(u.position, e.position); return d >= stats.minAttackRange && d <= stats.attackRange; },
+      );
+      if (!hasTarget) count++;
+    }
+    return count;
+  };
+  void allUnitsForTurnStart; // silence unused warning
+  state.pendingEvents.push({
+    type: 'turn-start',
+    actingPlayer: state.round.currentPlayer,
+    phase: 'movement',
+    pipelinePhase: 0,
+    turnNumber: state.round.turnNumber,
+    p1CommandsRemaining: state.round.commandPools.player1.remaining,
+    p2CommandsRemaining: state.round.commandPools.player2.remaining,
+    p1UnitsAlive: p1Units.length,
+    p2UnitsAlive: p2Units.length,
+    p1OutOfRangeUnits: outOfRangeCount(p1Units, p2Units),
+    p2OutOfRangeUnits: outOfRangeCount(p2Units, p1Units),
+  });
 
   // Phase 1: Snapshot
   const snapshot = takeSnapshot(state);
