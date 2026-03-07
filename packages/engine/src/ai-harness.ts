@@ -349,9 +349,6 @@ export function runMatch(seed: number, log = false): MatchResult {
         }
       }
 
-      state.round.turnsPlayed++;
-      state.round.turnNumber++;
-
       const roundEnd = checkRoundEnd(state);
       if (roundEnd.roundOver) {
         const p1Alive = state.players.player1.units.length;

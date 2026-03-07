@@ -50,7 +50,7 @@ export { calculateDamage, canAttack } from './combat';
 export { findPath, pathCost, getReachableHexes } from './pathfinding';
 
 // Vision
-export { calculateVisibility, isUnitVisible } from './vision';
+export { calculateVisibility, isUnitVisible, canSeeHex } from './vision';
 
 // Economy
 export {

@@ -283,7 +283,7 @@ export interface Engagement {
 // Each variant maps to a phase in the 10-phase resolution pipeline.
 // -----------------------------------------------------------------------------
 
-export type BattleEventPhase = 'movement' | 'combat' | 'capture' | 'objective' | 'round';
+export type BattleEventPhase = 'planning' | 'movement' | 'combat' | 'capture' | 'objective' | 'round';
 
 interface BattleEventBase {
   readonly actingPlayer: PlayerId;
@@ -292,6 +292,15 @@ interface BattleEventBase {
 }
 
 // --- Emitted now ---
+
+export interface BattleEventRedirect extends BattleEventBase {
+  readonly type: 'redirect';
+  readonly unitId: string;
+  readonly unitType: UnitType;
+  readonly newMovementDirective: MovementDirective;
+  readonly newAttackDirective: AttackDirective;
+  readonly newSpecialtyModifier: SpecialtyModifier;
+}
 
 export interface BattleEventMove extends BattleEventBase {
   readonly type: 'move';
@@ -461,6 +470,7 @@ export interface BattleEventTurnStart extends BattleEventBase {
 }
 
 export type BattleEvent =
+  | BattleEventRedirect
   | BattleEventTurnStart
   | BattleEventMove
   | BattleEventDamage

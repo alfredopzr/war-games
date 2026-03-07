@@ -360,6 +360,8 @@ destinationMap: hex → [units]
 
 After all movement is resolved, determine which units are in combat range.
 
+**Visibility contract:** Engagement detection uses **team visibility** — the union of all friendly units' vision — not per-unit visibility. If any of your units can see an enemy hex, all of your units can target it. This models shared battlefield intelligence (spotters, radio comms). A recon on high ground grants targeting data to artillery across the map. This is intentional.
+
 For each unit pair (A, B) where A.owner ≠ B.owner:
 
 ```

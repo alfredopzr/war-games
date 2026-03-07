@@ -133,7 +133,7 @@ const roundRows: string[] = [];
 for (const seed of SEEDS) {
   const result = runMatch(seed);
   if (result.winner === 'player1') p1WinTotal++;
-  else p2WinTotal++;
+  else if (result.winner === 'player2') p2WinTotal++;
 
   for (const round of result.roundResults) {
     if (round.reason === 'king-of-the-hill') kothWins++;
@@ -148,7 +148,8 @@ for (const seed of SEEDS) {
 for (const row of roundRows) console.log(row);
 
 const totalRounds = kothWins + elimWins + turnLimitWins;
-console.log(`\n  P1 wins: ${p1WinTotal}/20   P2 wins: ${p2WinTotal}/20`);
+const drawTotal = SEEDS.length - p1WinTotal - p2WinTotal;
+console.log(`\n  P1 wins: ${p1WinTotal}/20   P2 wins: ${p2WinTotal}/20   Draws: ${drawTotal}/20`);
 console.log(`  Round endings: KotH=${kothWins} (${Math.round(kothWins/totalRounds*100)}%)  Elim=${elimWins} (${Math.round(elimWins/totalRounds*100)}%)  TurnLimit=${turnLimitWins} (${Math.round(turnLimitWins/totalRounds*100)}%)`);
 if (kothWins / totalRounds > 0.7) console.log('  ⚠️  >70% of rounds end via KotH — map geometry dominates outcomes');
 else console.log('  ✓  Round endings are mixed — KotH not dominant');

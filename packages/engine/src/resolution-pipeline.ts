@@ -18,12 +18,11 @@ import type {
   DirectiveContext,
   AttackDirective,
 } from './types';
-import { cubeDistance, hexToKey, hexNeighbors, hexLineDraw, hexesInRadius, CUBE_DIRECTIONS } from './hex';
+import { cubeDistance, hexToKey, hexNeighbors, hexesInRadius, CUBE_DIRECTIONS } from './hex';
 import { canAttack, calculateDamage } from './combat';
-import { calculateVisibility } from './vision';
+import { canSeeHex } from './vision';
 import { findPath } from './pathfinding';
-import { getMoveCost, getVisionBonus } from './terrain';
-import { FOREST_VISION_PENALTY, LOS_EYE_HEIGHT } from './map-gen-params';
+import { getMoveCost } from './terrain';
 import { UNIT_STATS } from './units';
 import { spendCommand } from './commands';
 import { resolveTarget, computeFlankWaypoint } from './directives';
@@ -261,42 +260,37 @@ function resolveHuntLockOn(
   unit: Unit,
   context: DirectiveContext,
 ): { targetHex: CubeCoord | null; huntTargetId?: string; huntLockTurns: number } {
-  const visibility = calculateVisibility([unit], context.terrain, context.elevation, context.unitStats);
+  const canSee = (hex: CubeCoord): boolean =>
+    canSeeHex(unit, hex, context.terrain, context.elevation, context.unitStats);
 
   // Check existing lock-on
   if (unit.huntTargetId) {
     const target = context.enemyUnits.find(e => e.id === unit.huntTargetId);
 
     if (!target) {
-      // Target dead or gone — break lock-on
       return { targetHex: null, huntTargetId: undefined, huntLockTurns: 0 };
     }
 
     // Priority override: if locked onto a non-priority type and a priority target enters vision, switch
     if (unit.huntPriorityType && target.type !== unit.huntPriorityType) {
       const priorityTarget = context.enemyUnits.find(
-        e => e.type === unit.huntPriorityType && visibility.has(hexToKey(e.position)),
+        e => e.type === unit.huntPriorityType && canSee(e.position),
       );
       if (priorityTarget) {
         return { targetHex: priorityTarget.position, huntTargetId: priorityTarget.id, huntLockTurns: 0 };
       }
     }
 
-    const targetVisible = visibility.has(hexToKey(target.position));
-
-    if (targetVisible) {
-      // Target visible — pursue, reset counter
+    if (canSee(target.position)) {
       return { targetHex: target.position, huntTargetId: target.id, huntLockTurns: 0 };
     }
 
     // Target not visible — pursue last known position
     const lockTurns = (unit.huntLockTurns ?? 0) + 1;
     if (lockTurns >= HUNT_LOCK_MAX_TURNS) {
-      // Timeout — break lock-on
       return { targetHex: null, huntTargetId: undefined, huntLockTurns: 0 };
     }
 
-    // Arrived at last known position? Break lock-on
     if (hexToKey(unit.position) === hexToKey(target.position)) {
       return { targetHex: null, huntTargetId: undefined, huntLockTurns: 0 };
     }
@@ -305,14 +299,13 @@ function resolveHuntLockOn(
   }
 
   // No existing lock-on — acquire new target
-  // If priority type is set, prefer that type; fall back to nearest visible
   let bestTarget: Unit | null = null;
   let bestDist = Infinity;
   let bestPriorityTarget: Unit | null = null;
   let bestPriorityDist = Infinity;
 
   for (const enemy of context.enemyUnits) {
-    if (!visibility.has(hexToKey(enemy.position))) continue;
+    if (!canSee(enemy.position)) continue;
     const dist = cubeDistance(unit.position, enemy.position);
     if (dist < bestDist) {
       bestDist = dist;
@@ -369,7 +362,6 @@ function computePatrolOrbitStep(
   }
 
   const validCount = ring.filter(h => context.terrain.has(hexToKey(h))).length;
-  console.log(`[PATROL:ORBIT] ${unit.type} (${unit.position.q},${unit.position.r}) → ring r=${radius} around (${targetHex.q},${targetHex.r}) | dist=${cubeDistance(unit.position, targetHex)}, ring=${ring.length} hexes, ${validCount} on-map, bestIdx=${bestIdx}`);
 
   // Try clockwise offsets, then counter-clockwise
   for (const offset of [1, 2, 3, -1, -2, -3, 4, 5, 6]) {
@@ -387,11 +379,9 @@ function computePatrolOrbitStep(
     if (truncated.length === 0) continue;
 
     const dest = truncated[truncated.length - 1]!;
-    console.log(`[PATROL:ORBIT]   +${offset} → (${candidate.q},${candidate.r}) path=${path?.length ?? 0} → (${dest.q},${dest.r})`);
     return truncated;
   }
 
-  console.log(`[PATROL:ORBIT]   ALL BLOCKED — hold`);
   return [];
 }
 
@@ -477,12 +467,6 @@ function collectIntents(
       const moveResult = computeMovementIntent(unit, context);
       const facing = computeFacing(unit, moveResult.path, moveResult.targetHex, enemyUnits);
 
-      if (typeof console !== 'undefined') {
-        const p = unit.position;
-        const t = moveResult.targetHex;
-        console.log(`[PIPELINE] ${playerId} ${unit.type} (${p.q},${p.r}) → target (${t.q},${t.r}) | ${unit.movementDirective}/${unit.attackDirective} | path: ${moveResult.path.length} steps`);
-      }
-
       intents.set(unit.id, {
         unitId: unit.id,
         owner: playerId,
@@ -510,8 +494,6 @@ function applyRedirects(state: GameState, playerId: PlayerId, commands: Command[
     if (!unit) continue;
     commandPool = spendCommand(commandPool, command);
 
-    console.log(`[P1:REDIRECT] ${playerId} ${unit.type} ${unit.id} → ${command.newMovementDirective}/${command.newAttackDirective} (CP ${commandPool.remaining} left)`);
-
     unit.movementDirective = command.newMovementDirective;
     unit.attackDirective = command.newAttackDirective;
     unit.specialtyModifier = command.newSpecialtyModifier;
@@ -520,6 +502,18 @@ function applyRedirects(state: GameState, playerId: PlayerId, commands: Command[
     }
     unit.patrolRadius = command.patrolRadius;
     unit.huntPriorityType = command.huntPriorityType;
+
+    state.pendingEvents.push({
+      type: 'redirect',
+      actingPlayer: playerId,
+      phase: 'planning',
+      pipelinePhase: 2,
+      unitId: unit.id,
+      unitType: unit.type,
+      newMovementDirective: command.newMovementDirective,
+      newAttackDirective: command.newAttackDirective,
+      newSpecialtyModifier: command.newSpecialtyModifier,
+    });
   }
 
   state.round.commandPools[playerId] = commandPool;
@@ -756,9 +750,6 @@ function resolveMovement(
     const oldPos = snapshot.get(unitId)?.position;
     if (!oldPos) continue;
 
-    if (typeof console !== 'undefined') {
-      console.log(`[PIPELINE:MOVE] ${unit.owner} ${unit.type} old=(${oldPos.q},${oldPos.r}) proposed=(${newPos.q},${newPos.r}) moved=${hexToKey(oldPos) !== hexToKey(newPos)}`);
-    }
     if (hexToKey(oldPos) !== hexToKey(newPos)) {
       unit.position = newPos;
       state.pendingEvents.push({
@@ -972,67 +963,39 @@ function detectEngagements(
     existingPairs.add(`${eng.attackerId}->${eng.defenderId}`);
   }
 
-  for (const attacker of allUnits) {
-    if (!OFFENSIVE_ROE.has(attacker.attackDirective)) {
-      console.log(`[P4:ENGAGE] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) skipped — ROE ${attacker.attackDirective} is not offensive`);
-      continue;
+  // Team visibility: cache which defender hexes are visible to each player.
+  // Uses fast point-to-point LoS checks instead of full-map visibility scan.
+  const teamCanSee = new Map<string, Set<string>>(); // playerId -> visible enemy hex keys
+  for (const playerId of ['player1', 'player2'] as const) {
+    const seen = new Set<string>();
+    const friendlies = state.players[playerId].units;
+    const enemyId = playerId === 'player1' ? 'player2' : 'player1';
+    const enemies = state.players[enemyId].units;
+    for (const enemy of enemies) {
+      for (const friendly of friendlies) {
+        if (canSeeHex(friendly, enemy.position, state.map.terrain, state.map.elevation, state.unitStats)) {
+          seen.add(hexToKey(enemy.position));
+          break; // one spotter is enough
+        }
+      }
     }
+    teamCanSee.set(playerId, seen);
+  }
 
-    const attackerVis = calculateVisibility([attacker], state.map.terrain, state.map.elevation, state.unitStats);
-    const enemies = allUnits.filter(u => u.owner !== attacker.owner);
-    console.log(`[P4:ENGAGE] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) [${attacker.attackDirective}] — sees ${attackerVis.size} hexes, ${enemies.length} enemies exist`);
+  for (const attacker of allUnits) {
+    if (!OFFENSIVE_ROE.has(attacker.attackDirective)) continue;
+
+    const visibleEnemies = teamCanSee.get(attacker.owner)!;
 
     for (const defender of allUnits) {
       if (defender.owner === attacker.owner) continue;
-
-      const dist = cubeDistance(attacker.position, defender.position);
-      const inVision = attackerVis.has(hexToKey(defender.position));
-      const attackStats = UNIT_STATS[attacker.type];
-      const inRange = dist >= attackStats.minAttackRange && dist <= attackStats.attackRange;
-
-      if (!canAttack(attacker, defender, attackerVis)) {
-        if (!inVision) {
-          // Diagnose WHY not visible: out of range vs LoS blocked
-          const attackerElev = state.map.elevation.get(hexToKey(attacker.position)) ?? 0;
-          const attackerTerrain = state.map.terrain.get(hexToKey(attacker.position));
-          const baseVision = state.unitStats[attacker.type].visionRange;
-          const visionBonus = getVisionBonus(attackerElev, baseVision);
-          let effectiveVision = baseVision + visionBonus;
-          if (attackerTerrain === 'forest') effectiveVision -= FOREST_VISION_PENALTY;
-
-          if (dist > effectiveVision) {
-            console.log(`[P4:ENGAGE]   ✗ ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) — too far (dist=${dist}, effectiveVision=${effectiveVision} = base ${baseVision} + elevBonus ${visionBonus}${attackerTerrain === 'forest' ? ` - forest ${FOREST_VISION_PENALTY}` : ''})`);
-          } else {
-            // Within vision range but LoS blocked — find the blocker
-            const line = hexLineDraw(attacker.position, defender.position);
-            const defenderElev = state.map.elevation.get(hexToKey(defender.position)) ?? 0;
-            const totalSteps = line.length - 1;
-            let blockerInfo = 'unknown';
-            for (let i = 1; i < line.length - 1; i++) {
-              const iKey = hexToKey(line[i]!);
-              const iElev = state.map.elevation.get(iKey) ?? 0;
-              const sightHeight = attackerElev + LOS_EYE_HEIGHT + (defenderElev - attackerElev) * (i / totalSteps);
-              if (iElev > sightHeight) {
-                const iTerrain = state.map.terrain.get(iKey) ?? '?';
-                blockerInfo = `blocked by (${line[i]!.q},${line[i]!.r}) ${iTerrain} elev=${iElev} (sightLine=${sightHeight.toFixed(1)}, step ${i}/${totalSteps})`;
-                break;
-              }
-            }
-            console.log(`[P4:ENGAGE]   ✗ ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) — LoS blocked (dist=${dist}, attElev=${attackerElev}, defElev=${defenderElev}) ${blockerInfo}`);
-          }
-        } else if (!inRange) {
-          console.log(`[P4:ENGAGE]   ✗ ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) — visible but out of range (dist=${dist}, range=${attackStats.minAttackRange}-${attackStats.attackRange})`);
-        }
-        continue;
-      }
+      if (!canAttack(attacker, defender, visibleEnemies)) continue;
 
       const pairKey = `${attacker.id}->${defender.id}`;
       if (existingPairs.has(pairKey)) continue;
 
       const defenderFacing = intents.get(defender.id)?.facing ?? CUBE_DIRECTIONS[0]!;
       const approach = computeApproachAngle(attacker.position, defender.position, defenderFacing);
-
-      console.log(`[P4:ENGAGE]   ✓ ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) — dist=${dist}, approach=${approach}`);
 
       engagements.push({
         attackerId: attacker.id,
@@ -1045,7 +1008,6 @@ function detectEngagements(
     }
   }
 
-  console.log(`[P4:ENGAGE] Total engagements: ${engagements.length} (${interceptEngagements.length} from intercepts)`);
   return engagements;
 }
 
@@ -1105,8 +1067,6 @@ function resolveInitiativeFire(
     return initiativeTiebreak.get(`${a.attackerId}->${a.defenderId}`)! - initiativeTiebreak.get(`${b.attackerId}->${b.defenderId}`)!;
   });
 
-  // Resolve
-  console.log(`[P5:INITIATIVE] ${engagements.length} engagements sorted by responseTime`);
   const deadUnits = new Set<string>();
 
   for (const eng of engagements) {
@@ -1125,8 +1085,6 @@ function resolveInitiativeFire(
     const defenderModifier = state.map.modifiers.get(hexToKey(defender.position));
     const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn, defenderModifier);
     defender.hp -= damage;
-
-    console.log(`[P5:INITIATIVE] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) → ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) | dmg=${damage} hp=${defender.hp}/${state.unitStats[defender.type].maxHp} rt=${eng.responseTime} ${eng.approachCategory}${defender.hp <= 0 ? ' KILL' : ''}`);
 
     if (defender.hp <= 0) {
       state.pendingEvents.push({
@@ -1228,8 +1186,6 @@ function resolveCounterFire(
     return counterTiebreak.get(`${a.attackerId}->${a.defenderId}`)! - counterTiebreak.get(`${b.attackerId}->${b.defenderId}`)!;
   });
 
-  console.log(`[P6:COUNTER] ${counterEngagements.length} counter-fire engagements`);
-
   for (const eng of counterEngagements) {
     const attacker = unitById.get(eng.attackerId);
     const defender = unitById.get(eng.defenderId);
@@ -1240,8 +1196,6 @@ function resolveCounterFire(
     const defenderModifier = state.map.modifiers.get(hexToKey(defender.position));
     const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn, defenderModifier);
     defender.hp -= damage;
-
-    console.log(`[P6:COUNTER] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) → ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) | dmg=${damage} hp=${defender.hp}/${state.unitStats[defender.type].maxHp}${defender.hp <= 0 ? ' KILL' : ''}`);
 
     if (defender.hp <= 0) {
       state.pendingEvents.push({
@@ -1346,12 +1300,11 @@ function resolveDirectiveEffects(
       // Patrol reveal
       const intent = intents.get(unit.id);
       if (intent && intent.movementDirective === 'patrol') {
-        const visibility = calculateVisibility([unit], state.map.terrain, state.map.elevation, state.unitStats);
         const enemyUnits = state.players[enemyId].units;
         const revealedHexes: CubeCoord[] = [];
 
         for (const enemy of enemyUnits) {
-          if (visibility.has(hexToKey(enemy.position))) {
+          if (canSeeHex(unit, enemy.position, state.map.terrain, state.map.elevation, state.unitStats)) {
             revealedHexes.push({ ...enemy.position });
           }
         }
@@ -1456,7 +1409,10 @@ function resolveRoundEnd(state: GameState): void {
   const objectiveKey = hexToKey(state.map.centralObjective);
   const allUnits = [...state.players.player1.units, ...state.players.player2.units];
 
-  const unitOnObjective = allUnits.find(u => hexToKey(u.position) === objectiveKey);
+  // Find ALL units on the objective — if both factions present, it's contested (no occupier)
+  const unitsOnObjective = allUnits.filter(u => hexToKey(u.position) === objectiveKey);
+  const owners = new Set(unitsOnObjective.map(u => u.owner));
+  const unitOnObjective = owners.size === 1 ? unitsOnObjective[0]! : undefined;
   const previousOccupier = state.round.objective.occupiedBy;
 
   if (!unitOnObjective) {
@@ -1654,6 +1610,5 @@ export function resolveTurn(
     for (const e of state.pendingEvents) {
       counts[e.type] = (counts[e.type] ?? 0) + 1;
     }
-    console.log(`[PIPELINE:SUMMARY] ${state.pendingEvents.length} events:`, counts);
   }
 }

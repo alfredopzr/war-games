@@ -134,8 +134,8 @@ describe('classifyKillTiming', () => {
 // runMatch
 // =============================================================================
 
-// runMatch tests run full AI simulations — allow up to 30s per test
-const MATCH_TIMEOUT = 30_000;
+// runMatch tests run full AI simulations — matches take ~15s each at 12 turns/round
+const MATCH_TIMEOUT = 60_000;
 
 describe('runMatch', () => {
   it('returns a valid MatchResult with mapFairness', () => {

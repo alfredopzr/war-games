@@ -205,8 +205,7 @@ export function checkRoundEnd(state: GameState): RoundEndResult {
     return { roundOver: true, winner: 'player1', reason: 'elimination' };
   }
   if (p1Units === 0 && p2Units === 0) {
-    // Both eliminated — first-mover tiebreak
-    return { roundOver: true, winner: 'player1', reason: 'elimination' };
+    return { roundOver: true, winner: null, reason: 'elimination' };
   }
 
   // c. Turn limit — draw, no winner

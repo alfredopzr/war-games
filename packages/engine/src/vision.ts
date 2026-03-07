@@ -99,6 +99,52 @@ export function calculateVisibility(
 }
 
 // -----------------------------------------------------------------------------
+// canSeeHex — fast point-to-point LoS check (no full-map scan)
+// -----------------------------------------------------------------------------
+
+/**
+ * Check if a specific observer unit can see a specific target hex.
+ * Same LoS rules as calculateVisibility but O(vision_range) instead of O(all_hexes).
+ */
+export function canSeeHex(
+  observer: Unit,
+  targetHex: { q: number; r: number; s: number },
+  terrainMap: Map<string, TerrainType>,
+  elevationMap: Map<string, number>,
+  unitStats?: Record<string, { visionRange: number }>,
+): boolean {
+  const observerKey = hexToKey(observer.position);
+  const targetKey = hexToKey(targetHex);
+  if (observerKey === targetKey) return true;
+
+  const stats = unitStats ?? UNIT_STATS;
+  const baseVision = stats[observer.type].visionRange;
+  const observerElev = elevationMap.get(observerKey) ?? 0;
+  const visionBonus = getVisionBonus(observerElev, baseVision);
+  let effectiveVision = baseVision + visionBonus;
+
+  const observerTerrain = terrainMap.get(observerKey);
+  if (observerTerrain === 'forest') effectiveVision -= FOREST_VISION_PENALTY;
+
+  const dist = cubeDistance(observer.position, targetHex);
+  if (dist > effectiveVision) return false;
+
+  const line = hexLineDraw(observer.position, targetHex);
+  const elevA = observerElev;
+  const elevB = elevationMap.get(targetKey) ?? 0;
+  const totalSteps = line.length - 1;
+
+  for (let i = 1; i < line.length - 1; i++) {
+    const intermediateKey = hexToKey(line[i]!);
+    const intermediateElev = elevationMap.get(intermediateKey) ?? 0;
+    const sightHeight = elevA + LOS_EYE_HEIGHT + (elevB - elevA) * (i / totalSteps);
+    if (intermediateElev > sightHeight) return false;
+  }
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
 // isUnitVisible
 // -----------------------------------------------------------------------------
 
