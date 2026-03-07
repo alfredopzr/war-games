@@ -339,8 +339,25 @@ function applyCommand(
         throw new Error('Target hex is out of move range');
       }
 
-      unit.position = command.targetHex;
-      checkMines(state, unit, currentPlayer);
+      // Pathfind and walk step-by-step, checking mines at each hex
+      const occupied = new Set(
+        allUnits.filter((u) => u.id !== unit.id).map((u) => hexToKey(u.position)),
+      );
+      const path = findPath(
+        unit.position,
+        command.targetHex,
+        state.map.terrain,
+        unit.type,
+        occupied,
+        unit.directive,
+      );
+      if (path && path.length > 1) {
+        moveAlongPath(state, unit, path, currentPlayer);
+      } else {
+        // Fallback: direct teleport (adjacent hex, no path needed)
+        unit.position = command.targetHex;
+        checkMines(state, unit, currentPlayer);
+      }
       unit.hasActed = true;
       break;
     }
@@ -477,8 +494,7 @@ function applyCommand(
         );
         if (path && path.length > 1) {
           const stepIndex = Math.min(stats.moveRange, path.length - 1);
-          unit.position = path[stepIndex]!;
-          checkMines(state, unit, currentPlayer);
+          moveAlongPath(state, unit, path.slice(0, stepIndex + 1), currentPlayer);
         }
       }
 
@@ -512,8 +528,24 @@ function applyDirectiveAction(
       );
       if (isOccupied) break;
 
-      unit.position = action.targetHex;
-      checkMines(state, unit, currentPlayer);
+      // Pathfind and walk step-by-step, checking mines at each hex
+      const occupied = new Set(
+        allUnits.filter((u) => u.id !== unit.id).map((u) => hexToKey(u.position)),
+      );
+      const path = findPath(
+        unit.position,
+        action.targetHex,
+        state.map.terrain,
+        unit.type,
+        occupied,
+        unit.directive,
+      );
+      if (path && path.length > 1) {
+        moveAlongPath(state, unit, path, currentPlayer);
+      } else {
+        unit.position = action.targetHex;
+        checkMines(state, unit, currentPlayer);
+      }
       break;
     }
 
@@ -536,6 +568,9 @@ function applyDirectiveAction(
     }
 
     case 'hold':
+      break;
+
+    case 'build':
       break;
   }
 }
@@ -783,6 +818,7 @@ function updateCityOwnership(state: GameState): void {
     tank: 'Tank',
     artillery: 'Artillery',
     recon: 'Recon',
+    engineer: 'Engineer',
   };
 
   for (const cityKey of state.cityOwnership.keys()) {
@@ -819,12 +855,12 @@ function updateCityOwnership(state: GameState): void {
 // Helpers
 // -----------------------------------------------------------------------------
 
-function checkMines(state: GameState, unit: Unit, owner: PlayerId): void {
+function checkMines(state: GameState, unit: Unit, owner: PlayerId): boolean {
   const posKey = hexToKey(unit.position);
   const mineIdx = state.buildings.findIndex(
     (b) => b.type === 'mines' && b.owner !== owner && hexToKey(b.position) === posKey,
   );
-  if (mineIdx === -1) return;
+  if (mineIdx === -1) return false;
 
   const mine = state.buildings[mineIdx]!;
   const damage = BUILDING_STATS.mines.damage ?? 2;
@@ -843,6 +879,25 @@ function checkMines(state: GameState, unit: Unit, owner: PlayerId): void {
     removeUnit(state.players[owner].units, unit.id);
     const enemy: PlayerId = owner === 'player1' ? 'player2' : 'player1';
     state.round.unitsKilledThisRound[enemy] += 1;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Move a unit along a path, checking mines at each intermediate hex.
+ * Stops early if the unit is killed by a mine.
+ */
+function moveAlongPath(
+  state: GameState,
+  unit: Unit,
+  path: CubeCoord[],
+  owner: PlayerId,
+): void {
+  for (let i = 1; i < path.length; i++) {
+    unit.position = path[i]!;
+    const killed = checkMines(state, unit, owner);
+    if (killed) return;
   }
 }
 
@@ -884,8 +939,7 @@ function fireMortars(state: GameState, firingPlayer: PlayerId): void {
       terrainDef += BUILDING_STATS['defensive-position'].defenseBonus ?? 0.5;
     }
 
-    const effectiveDef = defenderStats.def + (nearestEnemy.directive === 'hold' ? 1 : 0);
-    const damage = Math.max(1, Math.floor(atk - effectiveDef * terrainDef));
+    const damage = Math.max(1, Math.floor(atk - defenderStats.def * terrainDef));
     nearestEnemy.hp -= damage;
 
     const label = firingPlayer === 'player1' ? 'P1' : 'P2';
