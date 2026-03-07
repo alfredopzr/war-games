@@ -15,11 +15,7 @@ import type {
   TerrainType,
 } from '@hexwar/engine';
 
-import {
-  calculateVisibility,
-  hexToKey,
-  serializeGameState,
-} from '@hexwar/engine';
+import { calculateVisibility, hexToKey, serializeGameState } from '@hexwar/engine';
 
 import type { SerializableGameState } from '@hexwar/engine';
 
@@ -37,22 +33,14 @@ import type { SerializableGameState } from '@hexwar/engine';
  * The returned object is fully serialized (no Map/Set) and safe to send
  * over the wire.
  */
-export function filterStateForPlayer(
-  state: GameState,
-  playerId: PlayerId,
-): SerializableGameState {
+export function filterStateForPlayer(state: GameState, playerId: PlayerId): SerializableGameState {
   const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
 
   const ownUnits = state.players[playerId].units;
   const enemyUnits = state.players[enemyId].units;
 
   // Determine which enemy units to include
-  const filteredEnemyUnits = filterEnemyUnits(
-    state.phase,
-    ownUnits,
-    enemyUnits,
-    state.map.terrain,
-  );
+  const filteredEnemyUnits = filterEnemyUnits(state.phase, ownUnits, enemyUnits, state.map.terrain);
 
   // Build a new GameState with filtered data (no mutation of original)
   const filtered: GameState = {
@@ -72,6 +60,7 @@ export function filterStateForPlayer(
     winner: state.winner,
     cityOwnership: new Map(state.cityOwnership),
     pendingEvents: [],
+    buildings: state.buildings.map((b) => ({ ...b, position: { ...b.position } })),
   };
 
   return serializeGameState(filtered);
@@ -95,9 +84,7 @@ function filterEnemyUnits(
   // Battle phase: only include enemies on visible hexes
   const visibleKeys = calculateVisibility(ownUnits, terrain);
 
-  return enemyUnits
-    .filter((unit) => visibleKeys.has(hexToKey(unit.position)))
-    .map(stripDirective);
+  return enemyUnits.filter((unit) => visibleKeys.has(hexToKey(unit.position))).map(stripDirective);
 }
 
 /**

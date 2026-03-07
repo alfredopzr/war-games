@@ -121,11 +121,7 @@ function executeHold(unit: Unit, context: DirectiveContext): UnitAction {
   return { type: 'hold' };
 }
 
-function executeFlank(
-  unit: Unit,
-  context: DirectiveContext,
-  side: 'left' | 'right',
-): UnitAction {
+function executeFlank(unit: Unit, context: DirectiveContext, side: 'left' | 'right'): UnitAction {
   const attackAction = tryAttackClosest(unit, context);
   if (attackAction) return attackAction;
 
@@ -153,10 +149,7 @@ function executeFlank(
   }
 
   // If the intermediate target is the same as our position, just go to objective
-  if (
-    intermediateTarget.q === unit.position.q &&
-    intermediateTarget.r === unit.position.r
-  ) {
+  if (intermediateTarget.q === unit.position.q && intermediateTarget.r === unit.position.r) {
     intermediateTarget = objective;
   }
 
@@ -301,11 +294,7 @@ function buildOccupiedSet(unit: Unit, context: DirectiveContext): Set<string> {
  * Move toward a target hex, limited by unit's moveRange.
  * Returns hold if no path exists.
  */
-function moveToward(
-  unit: Unit,
-  context: DirectiveContext,
-  target: CubeCoord,
-): UnitAction {
+function moveToward(unit: Unit, context: DirectiveContext, target: CubeCoord): UnitAction {
   const stats = UNIT_STATS[unit.type];
   const occupied = buildOccupiedSet(unit, context);
 
@@ -348,11 +337,7 @@ function findNearestEnemy(unit: Unit, context: DirectiveContext): Unit | null {
 /**
  * Find the nearest friendly unit (not self) within maxRange.
  */
-function findNearestFriendly(
-  unit: Unit,
-  context: DirectiveContext,
-  maxRange: number,
-): Unit | null {
+function findNearestFriendly(unit: Unit, context: DirectiveContext, maxRange: number): Unit | null {
   let nearest: Unit | null = null;
   let nearestDist = Infinity;
 
@@ -394,11 +379,7 @@ function findNearestEnemyCity(
  * Retreat from an enemy: pick the neighbor hex that maximizes distance
  * from the threat, is on the map, and is not occupied.
  */
-function retreatFrom(
-  unit: Unit,
-  context: DirectiveContext,
-  threat: Unit,
-): UnitAction {
+function retreatFrom(unit: Unit, context: DirectiveContext, threat: Unit): UnitAction {
   const neighbors = hexNeighbors(unit.position);
   const occupied = buildOccupiedSet(unit, context);
 

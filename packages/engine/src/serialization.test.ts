@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { serializeGameState, deserializeGameState } from './serialization';
 import { createGame, placeUnit } from './game-state';
 import { resetUnitIdCounter } from './units';
+import { createBuilding, resetBuildingIdCounter } from './buildings';
+import { createHex } from './hex';
 import type { GameState } from './types';
 
 describe('serialization', () => {
@@ -190,5 +192,30 @@ describe('serialization', () => {
       expect(serialized.round.commandPool.commandedUnitIds).toContain('a');
       expect(serialized.round.commandPool.commandedUnitIds).toContain('b');
     });
+  });
+});
+
+describe('building serialization', () => {
+  beforeEach(() => {
+    resetBuildingIdCounter();
+  });
+
+  it('round-trips buildings through serialize/deserialize', () => {
+    const state = createGame(42);
+    state.buildings.push(
+      createBuilding('recon-tower', 'player1', createHex(2, 3)),
+      createBuilding('mines', 'player2', createHex(4, 1)),
+    );
+
+    const serialized = serializeGameState(state);
+    const deserialized = deserializeGameState(serialized);
+
+    expect(deserialized.buildings.length).toBe(2);
+    expect(deserialized.buildings[0]!.type).toBe('recon-tower');
+    expect(deserialized.buildings[0]!.owner).toBe('player1');
+    expect(deserialized.buildings[0]!.isRevealed).toBe(true);
+    expect(deserialized.buildings[1]!.type).toBe('mines');
+    expect(deserialized.buildings[1]!.isRevealed).toBe(false);
+    expect(deserialized.buildings[1]!.position).toEqual(createHex(4, 1));
   });
 });

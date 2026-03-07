@@ -83,7 +83,7 @@ export function renderTerrain(state: GameState): void {
     const hexKey = hexToKey(hex);
     const terrain = state.map.terrain.get(hexKey) ?? 'plains';
     const elev = state.map.elevation.get(hexKey) ?? 0;
-    const fill = ASH_EMBER_TERRAIN[terrain] ?? 0x6A6A58;
+    const fill = ASH_EMBER_TERRAIN[terrain] ?? 0x6a6a58;
 
     const center = hexToWorld(hex, elev);
 
@@ -112,7 +112,14 @@ export function renderTerrain(state: GameState): void {
       const botVerts = hexWorldVertices(hex, 0);
 
       // All 6 edges
-      const edges = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]];
+      const edges = [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 5],
+        [5, 0],
+      ];
       for (const [a, b] of edges) {
         const ta = topVerts[a!]!;
         const tb = topVerts[b!]!;
@@ -121,12 +128,24 @@ export function renderTerrain(state: GameState): void {
 
         const sideGeo = new THREE.BufferGeometry();
         const vertices = new Float32Array([
-          ta.x, ta.y, ta.z,
-          tb.x, tb.y, tb.z,
-          bb.x, bb.y, bb.z,
-          ta.x, ta.y, ta.z,
-          bb.x, bb.y, bb.z,
-          ba.x, ba.y, ba.z,
+          ta.x,
+          ta.y,
+          ta.z,
+          tb.x,
+          tb.y,
+          tb.z,
+          bb.x,
+          bb.y,
+          bb.z,
+          ta.x,
+          ta.y,
+          ta.z,
+          bb.x,
+          bb.y,
+          bb.z,
+          ba.x,
+          ba.y,
+          ba.z,
         ]);
         sideGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
         sideGeo.computeVertexNormals();

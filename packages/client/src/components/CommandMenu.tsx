@@ -1,22 +1,45 @@
 import { useCallback, useState, type ReactElement } from 'react';
-import { canIssueCommand, CP_PER_ROUND, cubeDistance, canAttack, getAllHexes, hexToKey, UNIT_STATS } from '@hexwar/engine';
+import {
+  canIssueCommand,
+  CP_PER_ROUND,
+  cubeDistance,
+  canAttack,
+  getAllHexes,
+  hexToKey,
+  UNIT_STATS,
+} from '@hexwar/engine';
 import type { DirectiveType, CommandPool } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
 const DIRECTIVES: readonly DirectiveType[] = [
-  'advance', 'hold', 'flank-left', 'flank-right', 'scout', 'support', 'hunt', 'capture',
+  'advance',
+  'hold',
+  'flank-left',
+  'flank-right',
+  'scout',
+  'support',
+  'hunt',
+  'capture',
 ] as const;
 
 function directiveLabel(d: DirectiveType): string {
   switch (d) {
-    case 'advance': return 'Advance';
-    case 'hold': return 'Hold';
-    case 'flank-left': return 'Flank L';
-    case 'flank-right': return 'Flank R';
-    case 'scout': return 'Scout';
-    case 'support': return 'Support';
-    case 'hunt': return 'Hunt';
-    case 'capture': return 'Capture';
+    case 'advance':
+      return 'Advance';
+    case 'hold':
+      return 'Hold';
+    case 'flank-left':
+      return 'Flank L';
+    case 'flank-right':
+      return 'Flank R';
+    case 'scout':
+      return 'Scout';
+    case 'support':
+      return 'Support';
+    case 'hunt':
+      return 'Hunt';
+    case 'capture':
+      return 'Capture';
   }
 }
 
@@ -38,18 +61,21 @@ export function CommandMenu(): ReactElement | null {
     selectUnit(null);
   }, [selectedUnit, addPendingCommand, selectUnit]);
 
-  const handleRedirect = useCallback((directive: DirectiveType): void => {
-    if (!selectedUnit) return;
-    if (directive === 'hunt' || directive === 'capture') {
-      const store = useGameStore.getState();
-      store.setTargetSelectionMode(true, directive);
+  const handleRedirect = useCallback(
+    (directive: DirectiveType): void => {
+      if (!selectedUnit) return;
+      if (directive === 'hunt' || directive === 'capture') {
+        const store = useGameStore.getState();
+        store.setTargetSelectionMode(true, directive);
+        setShowDirectives(false);
+        return;
+      }
+      addPendingCommand({ type: 'redirect', unitId: selectedUnit.id, newDirective: directive });
       setShowDirectives(false);
-      return;
-    }
-    addPendingCommand({ type: 'redirect', unitId: selectedUnit.id, newDirective: directive });
-    setShowDirectives(false);
-    selectUnit(null);
-  }, [selectedUnit, addPendingCommand, selectUnit]);
+      selectUnit(null);
+    },
+    [selectedUnit, addPendingCommand, selectUnit],
+  );
 
   const handleMoveMode = useCallback((): void => {
     if (commandMode === 'move') {
@@ -64,13 +90,21 @@ export function CommandMenu(): ReactElement | null {
         const unit = store.selectedUnit;
         const stats = UNIT_STATS[unit.type];
         const allHexes = getAllHexes(store.gameState.map.gridSize);
-        const allUnits = [...store.gameState.players.player1.units, ...store.gameState.players.player2.units];
+        const allUnits = [
+          ...store.gameState.players.player1.units,
+          ...store.gameState.players.player2.units,
+        ];
         const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
         const reachable = new Set<string>();
         for (const hex of allHexes) {
           const key = hexToKey(hex);
           const dist = cubeDistance(unit.position, hex);
-          if (dist > 0 && dist <= stats.moveRange && !occupiedKeys.has(key) && store.gameState.map.terrain.has(key)) {
+          if (
+            dist > 0 &&
+            dist <= stats.moveRange &&
+            !occupiedKeys.has(key) &&
+            store.gameState.map.terrain.has(key)
+          ) {
             reachable.add(key);
           }
         }
@@ -165,12 +199,7 @@ export function CommandMenu(): ReactElement | null {
           </div>
         )}
       </div>
-      <button
-        className="command-btn"
-        onClick={handleRetreat}
-        disabled={!canCommand}
-        type="button"
-      >
+      <button className="command-btn" onClick={handleRetreat} disabled={!canCommand} type="button">
         Retreat
       </button>
     </div>

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { GameState, PlayerId, CubeCoord, Command } from './types';
 import { resetUnitIdCounter, UNIT_STATS } from './units';
-import { hexToKey, createHex } from './hex';
+import { hexToKey, createHex, hexNeighbors, cubeDistance } from './hex';
+import { createBuilding, resetBuildingIdCounter } from './buildings';
 import {
   createGame,
   placeUnit,
@@ -23,18 +24,12 @@ function makeGame(seed: number = 42): GameState {
 
 /** Get a valid deployment hex for the given player. */
 function getDeploymentHex(state: GameState, player: PlayerId, index: number = 0): CubeCoord {
-  const zone = player === 'player1'
-    ? state.map.player1Deployment
-    : state.map.player2Deployment;
+  const zone = player === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
   return zone[index]!;
 }
 
 /** Place infantry in the first available deployment hex. */
-function placeInfantry(
-  state: GameState,
-  player: PlayerId,
-  index: number = 0,
-): GameState {
+function placeInfantry(state: GameState, player: PlayerId, index: number = 0): GameState {
   const hex = getDeploymentHex(state, player, index);
   return placeUnit(state, player, 'infantry', hex);
 }
@@ -127,9 +122,9 @@ describe('placeUnit', () => {
   it('rejects placement outside deployment zone', () => {
     const state = makeGame();
     // Central objective is not in any deployment zone
-    expect(() =>
-      placeUnit(state, 'player1', 'infantry', state.map.centralObjective),
-    ).toThrow('Position is not in deployment zone');
+    expect(() => placeUnit(state, 'player1', 'infantry', state.map.centralObjective)).toThrow(
+      'Position is not in deployment zone',
+    );
   });
 
   it('rejects placement when cannot afford', () => {
@@ -137,9 +132,7 @@ describe('placeUnit', () => {
     state.players.player1.resources = 0;
     const hex = getDeploymentHex(state, 'player1', 0);
 
-    expect(() =>
-      placeUnit(state, 'player1', 'infantry', hex),
-    ).toThrow('Cannot afford unit');
+    expect(() => placeUnit(state, 'player1', 'infantry', hex)).toThrow('Cannot afford unit');
   });
 
   it('rejects placement on occupied hex', () => {
@@ -147,9 +140,7 @@ describe('placeUnit', () => {
     const hex = getDeploymentHex(state, 'player1', 0);
     state = placeUnit(state, 'player1', 'infantry', hex);
 
-    expect(() =>
-      placeUnit(state, 'player1', 'tank', hex),
-    ).toThrow('Hex is already occupied');
+    expect(() => placeUnit(state, 'player1', 'tank', hex)).toThrow('Hex is already occupied');
   });
 
   it('rejects placement during battle phase', () => {
@@ -159,9 +150,9 @@ describe('placeUnit', () => {
     state = startBattlePhase(state);
 
     const hex = getDeploymentHex(state, 'player1', 1);
-    expect(() =>
-      placeUnit(state, 'player1', 'infantry', hex),
-    ).toThrow('Can only place units during build phase');
+    expect(() => placeUnit(state, 'player1', 'infantry', hex)).toThrow(
+      'Can only place units during build phase',
+    );
   });
 
   it('places unit with custom directive', () => {
@@ -257,9 +248,7 @@ describe('executeTurn', () => {
     const targetHex = findValidMoveTarget(state, unit);
     if (!targetHex) return; // Skip if no valid target (unlikely)
 
-    const commands: Command[] = [
-      { type: 'direct-move', unitId, targetHex },
-    ];
+    const commands: Command[] = [{ type: 'direct-move', unitId, targetHex }];
 
     state = executeTurn(state, commands);
 
@@ -280,9 +269,7 @@ describe('executeTurn', () => {
     // (they all have 'advance' directive, so they should try to move)
     const unitPositionsAfter = state.players.player1.units.map((u) => hexToKey(u.position));
     // At least one unit should have changed position (advance toward objective)
-    const anyMoved = unitPositionsBefore.some(
-      (pos, i) => pos !== unitPositionsAfter[i],
-    );
+    const anyMoved = unitPositionsBefore.some((pos, i) => pos !== unitPositionsAfter[i]);
     expect(anyMoved).toBe(true);
   });
 
@@ -381,9 +368,7 @@ describe('executeTurn', () => {
     const unit = state.players.player1.units[0]!;
     expect(unit.directive).toBe('advance');
 
-    const commands: Command[] = [
-      { type: 'redirect', unitId: unit.id, newDirective: 'hold' },
-    ];
+    const commands: Command[] = [{ type: 'redirect', unitId: unit.id, newDirective: 'hold' }];
 
     state = executeTurn(state, commands);
     // Directive should be changed
@@ -1050,7 +1035,239 @@ describe('city ownership', () => {
       expect(owner).toBeNull();
     }
   });
+});
 
+// ---------------------------------------------------------------------------
+// direct-build command
+// ---------------------------------------------------------------------------
+
+describe('direct-build command', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('engineer builds a recon-tower on adjacent hex', () => {
+    const state = createGame(42);
+    // Find a deployment hex that has a valid adjacent non-DZ non-mountain hex
+    const dzKeys = new Set([
+      ...state.map.player1Deployment.map(hexToKey),
+      ...state.map.player2Deployment.map(hexToKey),
+    ]);
+
+    let deployHex: CubeCoord | undefined;
+    let buildTarget: CubeCoord | undefined;
+
+    for (const dh of state.map.player1Deployment) {
+      const adj = hexNeighbors(dh).find((h) => {
+        const key = hexToKey(h);
+        return (
+          state.map.terrain.has(key) &&
+          state.map.terrain.get(key) !== 'mountain' &&
+          !dzKeys.has(key)
+        );
+      });
+      if (adj) {
+        deployHex = dh;
+        buildTarget = adj;
+        break;
+      }
+    }
+
+    expect(deployHex).toBeDefined();
+    expect(buildTarget).toBeDefined();
+
+    placeUnit(state, 'player1', 'engineer', deployHex!);
+    startBattlePhase(state);
+
+    const engineer = state.players.player1.units[0]!;
+    const resourcesBefore = state.players.player1.resources;
+
+    executeTurn(state, [
+      {
+        type: 'direct-build',
+        unitId: engineer.id,
+        buildingType: 'recon-tower',
+        targetHex: buildTarget!,
+      },
+    ]);
+
+    expect(state.buildings.length).toBe(1);
+    expect(state.buildings[0]!.type).toBe('recon-tower');
+    expect(state.buildings[0]!.owner).toBe('player1');
+    expect(hexToKey(state.buildings[0]!.position)).toBe(hexToKey(buildTarget!));
+    // Resources should have decreased by building cost (75)
+    expect(state.players.player1.resources).toBe(resourcesBefore - 75);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// attack-building command
+// ---------------------------------------------------------------------------
+
+describe('attack-building command', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('unit destroys an enemy building', () => {
+    const state = createGame(42);
+    const p1Deploy = state.map.player1Deployment[0]!;
+    placeUnit(state, 'player1', 'infantry', p1Deploy);
+    startBattlePhase(state);
+
+    const infantry = state.players.player1.units[0]!;
+    // Place an enemy building adjacent to infantry
+    const adjHex = hexNeighbors(infantry.position).find((h) => state.map.terrain.has(hexToKey(h)))!;
+    state.buildings.push(createBuilding('mortar', 'player2', adjHex));
+    expect(state.buildings.length).toBe(1);
+
+    executeTurn(state, [
+      { type: 'attack-building', unitId: infantry.id, targetBuildingId: state.buildings[0]!.id },
+    ]);
+
+    expect(state.buildings.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mine triggering
+// ---------------------------------------------------------------------------
+
+describe('mine triggering', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('mine deals damage when unit moves onto hex via direct-move', () => {
+    const state = createGame(42);
+    const p1Deploy = state.map.player1Deployment[0]!;
+    placeUnit(state, 'player1', 'infantry', p1Deploy);
+    startBattlePhase(state);
+
+    const infantry = state.players.player1.units[0]!;
+    const mineHex = hexNeighbors(infantry.position).find((h) => {
+      const key = hexToKey(h);
+      return state.map.terrain.has(key) && state.map.terrain.get(key) !== 'mountain';
+    })!;
+
+    state.buildings.push(createBuilding('mines', 'player2', mineHex));
+
+    const hpBefore = infantry.hp; // should be 3
+    executeTurn(state, [{ type: 'direct-move', unitId: infantry.id, targetHex: mineHex }]);
+
+    // Mine destroyed
+    expect(state.buildings.length).toBe(0);
+    // Infantry took 2 damage
+    const inf = state.players.player1.units.find((u) => u.id === infantry.id);
+    expect(inf).toBeDefined();
+    expect(inf!.hp).toBe(hpBefore - 2);
+  });
+
+  it('mine kills unit if damage exceeds HP', () => {
+    const state = createGame(42);
+    const p1Deploy = state.map.player1Deployment[0]!;
+    placeUnit(state, 'player1', 'recon', p1Deploy); // recon has 2 HP
+    startBattlePhase(state);
+
+    const recon = state.players.player1.units[0]!;
+    expect(recon.hp).toBe(2);
+
+    const mineHex = hexNeighbors(recon.position).find((h) => {
+      const key = hexToKey(h);
+      return state.map.terrain.has(key) && state.map.terrain.get(key) !== 'mountain';
+    })!;
+
+    state.buildings.push(createBuilding('mines', 'player2', mineHex));
+
+    executeTurn(state, [{ type: 'direct-move', unitId: recon.id, targetHex: mineHex }]);
+
+    expect(state.buildings.length).toBe(0);
+    // Recon should be dead (2 HP - 2 damage = 0)
+    expect(state.players.player1.units.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mortar firing
+// ---------------------------------------------------------------------------
+
+describe('mortar firing', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('mortar attacks nearest enemy in range after all units act', () => {
+    const state = createGame(42);
+    placeUnit(state, 'player1', 'infantry', state.map.player1Deployment[0]!);
+    placeUnit(state, 'player2', 'infantry', state.map.player2Deployment[0]!);
+    startBattlePhase(state);
+
+    const p2Inf = state.players.player2.units[0]!;
+
+    // Find a hex 2-3 from p2 infantry that's on the map
+    let mortarPos: CubeCoord | undefined;
+    for (const key of state.map.terrain.keys()) {
+      const [qStr, rStr] = key.split(',');
+      const hex = createHex(Number(qStr), Number(rStr));
+      const dist = cubeDistance(hex, p2Inf.position);
+      if (dist >= 2 && dist <= 3) {
+        mortarPos = hex;
+        break;
+      }
+    }
+    expect(mortarPos).toBeDefined();
+
+    state.buildings.push(createBuilding('mortar', 'player1', mortarPos!));
+
+    const hpBefore = p2Inf.hp;
+
+    // Execute turn with no commands — directives run, then mortar fires
+    executeTurn(state, []);
+
+    // Check mortar fired (may have killed or damaged)
+    const p2InfAfter = state.players.player2.units.find((u) => u.id === p2Inf.id);
+    if (p2InfAfter) {
+      expect(p2InfAfter.hp).toBeLessThan(hpBefore);
+    } else {
+      // Unit was killed
+      expect(state.players.player2.units.length).toBe(0);
+    }
+  });
+
+  it('mortar does not fire at enemies outside range', () => {
+    const state = createGame(42);
+    placeUnit(state, 'player1', 'infantry', state.map.player1Deployment[0]!);
+    placeUnit(state, 'player2', 'infantry', state.map.player2Deployment[0]!);
+    startBattlePhase(state);
+
+    const p2Inf = state.players.player2.units[0]!;
+
+    // Place mortar far away (distance > 3)
+    let farHex: CubeCoord | undefined;
+    for (const key of state.map.terrain.keys()) {
+      const [qStr, rStr] = key.split(',');
+      const hex = createHex(Number(qStr), Number(rStr));
+      const dist = cubeDistance(hex, p2Inf.position);
+      if (dist > 5) {
+        farHex = hex;
+        break;
+      }
+    }
+    if (!farHex) return; // skip if no hex far enough
+
+    state.buildings.push(createBuilding('mortar', 'player1', farHex));
+
+    executeTurn(state, []);
+
+    // p2 infantry may have moved due to directives, but mortar should not have fired from far away
+    // Check no mortar-fire events
+    const mortarEvents = state.pendingEvents.filter((e) => e.type === 'mortar-fire');
+    expect(mortarEvents.length).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1064,7 +1281,10 @@ function findCoordForKey(_state: GameState, key: string): CubeCoord | null {
   return createHex(parts[0]!, parts[1]!);
 }
 
-function findValidMoveTarget(state: GameState, unit: { position: CubeCoord; type: string }): CubeCoord | null {
+function findValidMoveTarget(
+  state: GameState,
+  unit: { position: CubeCoord; type: string },
+): CubeCoord | null {
   const neighbors = [
     createHex(unit.position.q + 1, unit.position.r),
     createHex(unit.position.q - 1, unit.position.r),
@@ -1085,3 +1305,33 @@ function findValidMoveTarget(state: GameState, unit: { position: CubeCoord; type
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Round lifecycle — buildings
+// ---------------------------------------------------------------------------
+
+describe('round lifecycle buildings', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('clears all buildings when scoring a round', () => {
+    const state = createGame(42);
+    placeUnit(state, 'player1', 'infantry', state.map.player1Deployment[0]!);
+    placeUnit(state, 'player2', 'infantry', state.map.player2Deployment[0]!);
+    startBattlePhase(state);
+
+    // Add some buildings
+    state.buildings.push(
+      createBuilding('recon-tower', 'player1', createHex(3, 3)),
+      createBuilding('mines', 'player2', createHex(4, 4)),
+    );
+    expect(state.buildings.length).toBe(2);
+
+    // Score the round
+    scoreRound(state, 'player1');
+
+    expect(state.buildings.length).toBe(0);
+  });
+});

@@ -30,9 +30,7 @@ export function TurnTransition(): ReactElement | null {
 
   return (
     <div className="turn-transition" onClick={dismissTransition} role="button" tabIndex={0}>
-      <h1 className={playerTextClass(nextPlayer)}>
-        {heading}
-      </h1>
+      <h1 className={playerTextClass(nextPlayer)}>{heading}</h1>
       <p className="transition-hint">{hint}</p>
       <p>Click anywhere to continue</p>
     </div>

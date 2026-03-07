@@ -41,7 +41,7 @@ export function renderFog(
 
     const elev = elevationMap.get(key) ?? 0;
     const center = hexToWorld(hex, elev);
-    const alpha = (exploredHexes && exploredHexes.has(key)) ? 0.5 : 0.85;
+    const alpha = exploredHexes && exploredHexes.has(key) ? 0.5 : 0.85;
 
     const verts = hexWorldVertices(hex, elev);
     const shape = new THREE.Shape();

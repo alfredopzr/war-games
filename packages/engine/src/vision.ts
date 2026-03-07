@@ -2,10 +2,11 @@
 // HexWar — Vision System (Fog of War)
 // =============================================================================
 
-import type { Unit, TerrainType } from './types';
+import type { Unit, TerrainType, Building } from './types';
 import { cubeDistance, hexToKey, hexLineDraw } from './hex';
 import { TERRAIN } from './terrain';
 import { UNIT_STATS } from './units';
+import { BUILDING_STATS } from './buildings';
 
 // -----------------------------------------------------------------------------
 // calculateVisibility
@@ -25,6 +26,7 @@ import { UNIT_STATS } from './units';
 export function calculateVisibility(
   friendlyUnits: Unit[],
   terrainMap: Map<string, TerrainType>,
+  buildings?: Building[],
 ): Set<string> {
   const visible = new Set<string>();
 
@@ -69,6 +71,40 @@ export function calculateVisibility(
     }
   }
 
+  if (buildings) {
+    for (const building of buildings) {
+      if (building.type !== 'recon-tower') continue;
+      const range = BUILDING_STATS['recon-tower'].visionRange ?? 4;
+      const bKey = hexToKey(building.position);
+      visible.add(bKey);
+
+      for (const key of terrainMap.keys()) {
+        const [qStr, rStr] = key.split(',');
+        const tq = Number(qStr);
+        const tr = Number(rStr);
+        const targetCoord = { q: tq, r: tr, s: -tq - tr };
+
+        const dist = cubeDistance(building.position, targetCoord);
+        if (dist > range || dist === 0) continue;
+
+        const line = hexLineDraw(building.position, targetCoord);
+        let blocked = false;
+        for (let i = 1; i < line.length - 1; i++) {
+          const intermediateKey = hexToKey(line[i]!);
+          const intermediateTerrain = terrainMap.get(intermediateKey);
+          if (intermediateTerrain && TERRAIN[intermediateTerrain].blocksLoS) {
+            visible.add(intermediateKey);
+            blocked = true;
+            break;
+          }
+        }
+        if (!blocked) {
+          visible.add(key);
+        }
+      }
+    }
+  }
+
   return visible;
 }
 
@@ -92,9 +128,7 @@ export function isUnitVisible(
 
   // Forest concealment: only adjacent observers can see units in forest
   if (targetTerrain === 'forest') {
-    return observingUnits.some(
-      (obs) => cubeDistance(obs.position, target.position) <= 1,
-    );
+    return observingUnits.some((obs) => cubeDistance(obs.position, target.position) <= 1);
   }
 
   // Otherwise check if target hex is in the combined visibility set

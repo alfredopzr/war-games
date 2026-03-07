@@ -101,18 +101,13 @@ describe('filterStateForPlayer — battle phase', () => {
     const p1Filtered = filterStateForPlayer(state, 'player1');
 
     // Calculate what player1 should actually see
-    const visibleKeys = calculateVisibility(
-      state.players.player1.units,
-      state.map.terrain,
-    );
+    const visibleKeys = calculateVisibility(state.players.player1.units, state.map.terrain);
 
     const expectedVisibleEnemies = state.players.player2.units.filter((u) =>
       visibleKeys.has(hexToKey(u.position)),
     );
 
-    expect(p1Filtered.players.player2.units).toHaveLength(
-      expectedVisibleEnemies.length,
-    );
+    expect(p1Filtered.players.player2.units).toHaveLength(expectedVisibleEnemies.length);
   });
 
   it('should strip directives from all visible enemy units', () => {
@@ -159,9 +154,7 @@ describe('filterStateForPlayer — battle phase', () => {
     const filtered = filterStateForPlayer(state, 'player1');
 
     // Own units keep their real directives
-    const ownDirectives = filtered.players.player1.units.map(
-      (u) => u.directive,
-    );
+    const ownDirectives = filtered.players.player1.units.map((u) => u.directive);
     expect(ownDirectives).toContain('advance');
     expect(ownDirectives).toContain('scout');
     expect(ownDirectives).toContain('hold');
@@ -178,14 +171,8 @@ describe('filterStateForPlayer — battle phase', () => {
 
     // Check that NOT all enemies are visible from the starting positions
     // (they start on opposite sides of the map)
-    const p1VisibleKeys = calculateVisibility(
-      state.players.player1.units,
-      state.map.terrain,
-    );
-    const p2VisibleKeys = calculateVisibility(
-      state.players.player2.units,
-      state.map.terrain,
-    );
+    const p1VisibleKeys = calculateVisibility(state.players.player1.units, state.map.terrain);
+    const p2VisibleKeys = calculateVisibility(state.players.player2.units, state.map.terrain);
 
     const p2UnitsVisibleToP1 = state.players.player2.units.filter((u) =>
       p1VisibleKeys.has(hexToKey(u.position)),
@@ -194,12 +181,8 @@ describe('filterStateForPlayer — battle phase', () => {
       p2VisibleKeys.has(hexToKey(u.position)),
     );
 
-    expect(p1Filtered.players.player2.units).toHaveLength(
-      p2UnitsVisibleToP1.length,
-    );
-    expect(p2Filtered.players.player1.units).toHaveLength(
-      p1UnitsVisibleToP2.length,
-    );
+    expect(p1Filtered.players.player2.units).toHaveLength(p2UnitsVisibleToP1.length);
+    expect(p2Filtered.players.player1.units).toHaveLength(p1UnitsVisibleToP2.length);
   });
 });
 
@@ -336,17 +319,13 @@ describe('filterStateForPlayer — mutation safety', () => {
   it('should not mutate the original game state', () => {
     const state = setupGameWithUnits();
     const originalP2UnitCount = state.players.player2.units.length;
-    const originalP2Directives = state.players.player2.units.map(
-      (u) => u.directive,
-    );
+    const originalP2Directives = state.players.player2.units.map((u) => u.directive);
 
     filterStateForPlayer(state, 'player1');
 
     // Original state must be unchanged
     expect(state.players.player2.units).toHaveLength(originalP2UnitCount);
-    const afterDirectives = state.players.player2.units.map(
-      (u) => u.directive,
-    );
+    const afterDirectives = state.players.player2.units.map((u) => u.directive);
     expect(afterDirectives).toEqual(originalP2Directives);
   });
 });

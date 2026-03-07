@@ -24,11 +24,7 @@ export function TerrainLegend(): ReactElement | null {
     <div className="terrain-legend">
       <div className="terrain-legend-header">
         <span>Terrain</span>
-        <button
-          className="terrain-legend-close"
-          onClick={() => setCollapsed(true)}
-          type="button"
-        >
+        <button className="terrain-legend-close" onClick={() => setCollapsed(true)} type="button">
           x
         </button>
       </div>

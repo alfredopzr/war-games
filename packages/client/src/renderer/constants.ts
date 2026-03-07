@@ -1,14 +1,14 @@
 import type { PlayerId, UnitType } from '@hexwar/engine';
 
 export const ASH_EMBER_TERRAIN: Record<string, number> = {
-  plains: 0x6A6A58,
-  forest: 0x3A4030,
+  plains: 0x6a6a58,
+  forest: 0x3a4030,
   mountain: 0x505058,
-  city: 0x7A6048,
+  city: 0x7a6048,
 };
 
-export const OBJECTIVE_COLOR = 0xA08A40;
-export const FOG_NEVER_SEEN = 0x16160E;
+export const OBJECTIVE_COLOR = 0xa08a40;
+export const FOG_NEVER_SEEN = 0x16160e;
 
 export const PLAYER_COLORS = {
   player1: { fill: '#6a7a5a', stroke: '#4a5a3a', light: '#8a9a7a' },
@@ -39,15 +39,17 @@ interface ModelEntry {
 
 export const MODEL_MANIFEST: Record<Faction, Record<UnitType, ModelEntry>> = {
   engineer: {
-    infantry:  { glbPath: '/models/infantry_engineer.glb' },
-    tank:      { glbPath: '/models/tank_engineer.glb' },
+    infantry: { glbPath: '/models/infantry_engineer.glb' },
+    tank: { glbPath: '/models/tank_engineer.glb' },
     artillery: { glbPath: '/models/artillery_engineer.glb' },
-    recon:     { glbPath: '/models/scout_engineer.glb' },
+    recon: { glbPath: '/models/scout_engineer.glb' },
+    engineer: { glbPath: '/models/infantry_engineer.glb' },
   },
   caravaner: {
-    infantry:  { glbPath: '/models/infantry_caravaner.glb' },
-    tank:      { glbPath: '/models/tank_caravaner.glb' },
+    infantry: { glbPath: '/models/infantry_caravaner.glb' },
+    tank: { glbPath: '/models/tank_caravaner.glb' },
     artillery: { glbPath: '/models/artillery_caravaner.glb' },
-    recon:     { glbPath: '/models/scout_caravaner.glb' },
+    recon: { glbPath: '/models/scout_caravaner.glb' },
+    engineer: { glbPath: '/models/infantry_caravaner.glb' },
   },
 };

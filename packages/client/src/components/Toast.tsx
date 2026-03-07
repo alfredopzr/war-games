@@ -6,7 +6,5 @@ export function Toast(): ReactElement | null {
 
   if (!toastMessage) return null;
 
-  return (
-    <div className="toast">{toastMessage}</div>
-  );
+  return <div className="toast">{toastMessage}</div>;
 }

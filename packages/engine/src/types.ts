@@ -51,7 +51,7 @@ export interface HexTile {
 // Units
 // -----------------------------------------------------------------------------
 
-export type UnitType = 'infantry' | 'tank' | 'artillery' | 'recon';
+export type UnitType = 'infantry' | 'tank' | 'artillery' | 'recon' | 'engineer';
 
 export interface UnitStats {
   readonly type: UnitType;
@@ -65,9 +65,22 @@ export interface UnitStats {
   readonly visionRange: number;
 }
 
-export type DirectiveType = 'advance' | 'hold' | 'flank-left' | 'flank-right' | 'scout' | 'support' | 'hunt' | 'capture';
+export type DirectiveType =
+  | 'advance'
+  | 'hold'
+  | 'flank-left'
+  | 'flank-right'
+  | 'scout'
+  | 'support'
+  | 'hunt'
+  | 'capture';
 
-export type DirectiveTargetType = 'central-objective' | 'city' | 'enemy-unit' | 'friendly-unit' | 'hex';
+export type DirectiveTargetType =
+  | 'central-objective'
+  | 'city'
+  | 'enemy-unit'
+  | 'friendly-unit'
+  | 'hex';
 
 export interface DirectiveTarget {
   readonly type: DirectiveTargetType;
@@ -90,18 +103,46 @@ export interface Unit {
 }
 
 // -----------------------------------------------------------------------------
+// Buildings
+// -----------------------------------------------------------------------------
+
+export type BuildingType = 'recon-tower' | 'mortar' | 'mines' | 'defensive-position';
+
+export interface BuildingStats {
+  readonly type: BuildingType;
+  readonly cost: number;
+  readonly visionRange?: number;
+  readonly attackRange?: number;
+  readonly minAttackRange?: number;
+  readonly atk?: number;
+  readonly damage?: number;
+  readonly defenseBonus?: number;
+}
+
+export interface Building {
+  readonly id: string;
+  readonly type: BuildingType;
+  readonly owner: PlayerId;
+  readonly position: CubeCoord;
+  isRevealed: boolean;
+}
+
+// -----------------------------------------------------------------------------
 // Actions & Commands
 // -----------------------------------------------------------------------------
 
 export type UnitAction =
   | { type: 'move'; targetHex: CubeCoord }
   | { type: 'attack'; targetUnitId: string }
-  | { type: 'hold' };
+  | { type: 'hold' }
+  | { type: 'build'; buildingType: BuildingType; targetHex: CubeCoord };
 
 export type Command =
   | { type: 'redirect'; unitId: string; newDirective: DirectiveType; target?: DirectiveTarget }
   | { type: 'direct-move'; unitId: string; targetHex: CubeCoord }
   | { type: 'direct-attack'; unitId: string; targetUnitId: string }
+  | { type: 'direct-build'; unitId: string; buildingType: BuildingType; targetHex: CubeCoord }
+  | { type: 'attack-building'; unitId: string; targetBuildingId: string }
   | { type: 'retreat'; unitId: string };
 
 export interface CommandPool {
@@ -156,6 +197,7 @@ export interface GameState {
   winner: PlayerId | null;
   cityOwnership: Map<string, PlayerId | null>;
   pendingEvents: BattleEvent[];
+  buildings: Building[];
 }
 
 // -----------------------------------------------------------------------------
@@ -221,10 +263,19 @@ export interface ResolvedTarget {
 // -----------------------------------------------------------------------------
 
 export type BattleEventType =
-  | 'kill' | 'damage' | 'capture' | 'recapture'
-  | 'capture-damage' | 'capture-death'
-  | 'objective-change' | 'koth-progress'
-  | 'round-end' | 'game-end';
+  | 'kill'
+  | 'damage'
+  | 'capture'
+  | 'recapture'
+  | 'capture-damage'
+  | 'capture-death'
+  | 'objective-change'
+  | 'koth-progress'
+  | 'round-end'
+  | 'game-end'
+  | 'mine-triggered'
+  | 'mortar-fire'
+  | 'building-destroyed';
 
 export interface BattleEvent {
   readonly type: BattleEventType;

@@ -8,14 +8,14 @@ function ownerLabel(owner: string): string {
 }
 
 const DIRECTIVE_INFO: Record<DirectiveType, { name: string; desc: string }> = {
-  'advance': { name: 'Advance', desc: 'Move toward the objective aggressively' },
-  'hold': { name: 'Hold', desc: 'Stay in position and defend' },
+  advance: { name: 'Advance', desc: 'Move toward the objective aggressively' },
+  hold: { name: 'Hold', desc: 'Stay in position and defend' },
   'flank-left': { name: 'Flank Left', desc: 'Circle around the left side' },
   'flank-right': { name: 'Flank Right', desc: 'Circle around the right side' },
-  'scout': { name: 'Scout', desc: 'Explore and reveal enemy positions' },
-  'support': { name: 'Support', desc: 'Stay back and provide fire support' },
-  'hunt': { name: 'Hunt', desc: 'Pursue and destroy a target enemy' },
-  'capture': { name: 'Capture', desc: 'Move to city, occupy, then hold' },
+  scout: { name: 'Scout', desc: 'Explore and reveal enemy positions' },
+  support: { name: 'Support', desc: 'Stay back and provide fire support' },
+  hunt: { name: 'Hunt', desc: 'Pursue and destroy a target enemy' },
+  capture: { name: 'Capture', desc: 'Move to city, occupy, then hold' },
 };
 
 export function UnitInfoPanel(): ReactElement | null {
@@ -71,12 +71,11 @@ function HpBar({ current, max }: { current: number; max: number }): ReactElement
     <div className="hp-bar-container">
       <span className="stat-label">HP</span>
       <div className="hp-bar-track">
-        <div
-          className="hp-bar-fill"
-          style={{ width: `${pct * 100}%`, backgroundColor: color }}
-        />
+        <div className="hp-bar-fill" style={{ width: `${pct * 100}%`, backgroundColor: color }} />
       </div>
-      <span className="hp-bar-text">{current}/{max}</span>
+      <span className="hp-bar-text">
+        {current}/{max}
+      </span>
     </div>
   );
 }

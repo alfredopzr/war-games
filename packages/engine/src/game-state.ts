@@ -26,6 +26,8 @@ import { hexToKey, cubeDistance, hexNeighbors } from './hex';
 import { canAttack, calculateDamage } from './combat';
 import { findPath } from './pathfinding';
 import { executeDirective } from './directives';
+import { validateBuild, createBuilding, BUILDING_STATS } from './buildings';
+import { getDefenseModifier } from './terrain';
 
 // -----------------------------------------------------------------------------
 // createGame
@@ -73,6 +75,7 @@ export function createGame(seed?: number): GameState {
     winner: null,
     cityOwnership,
     pendingEvents: [],
+    buildings: [],
   };
 }
 
@@ -92,9 +95,8 @@ export function placeUnit(
     throw new Error('Can only place units during build phase');
   }
 
-  const deploymentZone = playerId === 'player1'
-    ? state.map.player1Deployment
-    : state.map.player2Deployment;
+  const deploymentZone =
+    playerId === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
 
   const posKey = hexToKey(position);
   const inZone = deploymentZone.some((hex) => hexToKey(hex) === posKey);
@@ -188,14 +190,33 @@ export function executeTurn(
   // Pass 1: Scout units act first
   for (const unit of [...friendlyUnits]) {
     if (unit.directive !== 'scout') continue;
-    executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
+    executeUnitDirective(
+      state,
+      unit,
+      commandedUnitIds,
+      friendlyUnits,
+      currentPlayer,
+      enemyPlayer,
+      randomFn,
+    );
   }
 
   // Pass 2: All other non-commanded units
   for (const unit of [...friendlyUnits]) {
     if (unit.directive === 'scout') continue;
-    executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
+    executeUnitDirective(
+      state,
+      unit,
+      commandedUnitIds,
+      friendlyUnits,
+      currentPlayer,
+      enemyPlayer,
+      randomFn,
+    );
   }
+
+  // Mortar buildings fire (after all units have moved)
+  fireMortars(state, currentPlayer);
 
   // Update city ownership BEFORE objective tracking (so KotH gate has current data)
   updateCityOwnership(state);
@@ -318,7 +339,25 @@ function applyCommand(
         throw new Error('Target hex is out of move range');
       }
 
-      unit.position = command.targetHex;
+      // Pathfind and walk step-by-step, checking mines at each hex
+      const occupied = new Set(
+        allUnits.filter((u) => u.id !== unit.id).map((u) => hexToKey(u.position)),
+      );
+      const path = findPath(
+        unit.position,
+        command.targetHex,
+        state.map.terrain,
+        unit.type,
+        occupied,
+        unit.directive,
+      );
+      if (path && path.length > 1) {
+        moveAlongPath(state, unit, path, currentPlayer);
+      } else {
+        // Fallback: direct teleport (adjacent hex, no path needed)
+        unit.position = command.targetHex;
+        checkMines(state, unit, currentPlayer);
+      }
       unit.hasActed = true;
       break;
     }
@@ -336,7 +375,13 @@ function applyCommand(
       }
 
       const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
-      const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn);
+      const damage = calculateDamage(
+        attacker,
+        defender,
+        defenderTerrain,
+        randomFn,
+        state.buildings,
+      );
       defender.hp -= damage;
 
       if (defender.hp <= 0) {
@@ -359,13 +404,63 @@ function applyCommand(
       break;
     }
 
+    case 'direct-build': {
+      const unit = findUnitById(friendlyUnits, command.unitId);
+      if (!unit) return;
+
+      const validation = validateBuild(
+        state,
+        command.unitId,
+        currentPlayer,
+        command.buildingType,
+        command.targetHex,
+      );
+      if (!validation.valid) {
+        throw new Error(validation.reason ?? 'Invalid build');
+      }
+
+      const cost = BUILDING_STATS[command.buildingType].cost;
+      state.players[currentPlayer].resources -= cost;
+      state.buildings.push(createBuilding(command.buildingType, currentPlayer, command.targetHex));
+      unit.hasActed = true;
+      break;
+    }
+
+    case 'attack-building': {
+      const attacker = findUnitById(friendlyUnits, command.unitId);
+      if (!attacker) return;
+
+      const buildingIdx = state.buildings.findIndex((b) => b.id === command.targetBuildingId);
+      if (buildingIdx === -1) return;
+
+      const building = state.buildings[buildingIdx]!;
+      if (building.owner === currentPlayer) {
+        throw new Error('Cannot attack own building');
+      }
+
+      const dist = cubeDistance(attacker.position, building.position);
+      const stats = UNIT_STATS[attacker.type];
+      if (dist < stats.minAttackRange || dist > stats.attackRange) {
+        throw new Error('Building out of attack range');
+      }
+
+      state.buildings.splice(buildingIdx, 1);
+      attacker.hasActed = true;
+
+      state.pendingEvents.push({
+        type: 'building-destroyed',
+        actingPlayer: currentPlayer,
+        message: `${currentPlayer === 'player1' ? 'P1' : 'P2'} destroyed a ${building.type}`,
+      });
+      break;
+    }
+
     case 'retreat': {
       const unit = findUnitById(friendlyUnits, command.unitId);
       if (!unit) return;
 
-      const deploymentZone = currentPlayer === 'player1'
-        ? state.map.player1Deployment
-        : state.map.player2Deployment;
+      const deploymentZone =
+        currentPlayer === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
 
       // Find closest deployment zone hex
       const allUnits = [...state.players.player1.units, ...state.players.player2.units];
@@ -399,7 +494,7 @@ function applyCommand(
         );
         if (path && path.length > 1) {
           const stepIndex = Math.min(stats.moveRange, path.length - 1);
-          unit.position = path[stepIndex]!;
+          moveAlongPath(state, unit, path.slice(0, stepIndex + 1), currentPlayer);
         }
       }
 
@@ -433,7 +528,24 @@ function applyDirectiveAction(
       );
       if (isOccupied) break;
 
-      unit.position = action.targetHex;
+      // Pathfind and walk step-by-step, checking mines at each hex
+      const occupied = new Set(
+        allUnits.filter((u) => u.id !== unit.id).map((u) => hexToKey(u.position)),
+      );
+      const path = findPath(
+        unit.position,
+        action.targetHex,
+        state.map.terrain,
+        unit.type,
+        occupied,
+        unit.directive,
+      );
+      if (path && path.length > 1) {
+        moveAlongPath(state, unit, path, currentPlayer);
+      } else {
+        unit.position = action.targetHex;
+        checkMines(state, unit, currentPlayer);
+      }
       break;
     }
 
@@ -445,7 +557,7 @@ function applyDirectiveAction(
       if (!canAttack(unit, defender)) break;
 
       const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
-      const damage = calculateDamage(unit, defender, defenderTerrain, randomFn);
+      const damage = calculateDamage(unit, defender, defenderTerrain, randomFn, state.buildings);
       defender.hp -= damage;
 
       if (defender.hp <= 0) {
@@ -456,6 +568,9 @@ function applyDirectiveAction(
     }
 
     case 'hold':
+      break;
+
+    case 'build':
       break;
   }
 }
@@ -468,9 +583,7 @@ function updateObjective(state: GameState): void {
   const objectiveKey = hexToKey(state.map.centralObjective);
   const allUnits = [...state.players.player1.units, ...state.players.player2.units];
 
-  const unitOnObjective = allUnits.find(
-    (u) => hexToKey(u.position) === objectiveKey,
-  );
+  const unitOnObjective = allUnits.find((u) => hexToKey(u.position) === objectiveKey);
 
   const previousOccupier = state.round.objective.occupiedBy;
 
@@ -529,10 +642,7 @@ function updateObjective(state: GameState): void {
 
 export function checkRoundEnd(state: GameState): RoundEndResult {
   // a. King of the Hill
-  if (
-    state.round.objective.occupiedBy !== null &&
-    state.round.objective.turnsHeld >= 2
-  ) {
+  if (state.round.objective.occupiedBy !== null && state.round.objective.turnsHeld >= 2) {
     return {
       roundOver: true,
       winner: state.round.objective.occupiedBy,
@@ -557,10 +667,7 @@ export function checkRoundEnd(state: GameState): RoundEndResult {
 
   // c. Turn limit
   const { maxTurnsPerSide, turnsPlayed } = state.round;
-  if (
-    turnsPlayed.player1 >= maxTurnsPerSide &&
-    turnsPlayed.player2 >= maxTurnsPerSide
-  ) {
+  if (turnsPlayed.player1 >= maxTurnsPerSide && turnsPlayed.player2 >= maxTurnsPerSide) {
     const winner = resolveTurnLimitTiebreaker(state);
     return { roundOver: true, winner, reason: 'turn-limit' };
   }
@@ -572,12 +679,8 @@ function resolveTurnLimitTiebreaker(state: GameState): PlayerId {
   const objectiveKey = hexToKey(state.map.centralObjective);
 
   // 1. Who has a unit on the central hex
-  const p1OnCenter = state.players.player1.units.some(
-    (u) => hexToKey(u.position) === objectiveKey,
-  );
-  const p2OnCenter = state.players.player2.units.some(
-    (u) => hexToKey(u.position) === objectiveKey,
-  );
+  const p1OnCenter = state.players.player1.units.some((u) => hexToKey(u.position) === objectiveKey);
+  const p2OnCenter = state.players.player2.units.some((u) => hexToKey(u.position) === objectiveKey);
 
   if (p1OnCenter && !p2OnCenter) return 'player1';
   if (p2OnCenter && !p1OnCenter) return 'player2';
@@ -604,10 +707,7 @@ function resolveTurnLimitTiebreaker(state: GameState): PlayerId {
 // scoreRound
 // -----------------------------------------------------------------------------
 
-export function scoreRound(
-  state: GameState,
-  roundWinner: PlayerId | null,
-): GameState {
+export function scoreRound(state: GameState, roundWinner: PlayerId | null): GameState {
   // Increment winner's roundsWon
   if (roundWinner) {
     state.players[roundWinner].roundsWon += 1;
@@ -671,6 +771,9 @@ export function scoreRound(
   state.round.objective = { occupiedBy: null, turnsHeld: 0 };
   state.round.unitsKilledThisRound = { player1: 0, player2: 0 };
 
+  // Clear all buildings for the new round
+  state.buildings = [];
+
   // Reset city ownership to neutral
   for (const key of state.cityOwnership.keys()) {
     state.cityOwnership.set(key, null);
@@ -710,7 +813,13 @@ function updateCityOwnership(state: GameState): void {
     unitByHex.set(hexToKey(unit.position), unit);
   }
 
-  const unitLabels: Record<string, string> = { infantry: 'Infantry', tank: 'Tank', artillery: 'Artillery', recon: 'Recon' };
+  const unitLabels: Record<string, string> = {
+    infantry: 'Infantry',
+    tank: 'Tank',
+    artillery: 'Artillery',
+    recon: 'Recon',
+    engineer: 'Engineer',
+  };
 
   for (const cityKey of state.cityOwnership.keys()) {
     const unit = unitByHex.get(cityKey);
@@ -746,6 +855,107 @@ function updateCityOwnership(state: GameState): void {
 // Helpers
 // -----------------------------------------------------------------------------
 
+function checkMines(state: GameState, unit: Unit, owner: PlayerId): boolean {
+  const posKey = hexToKey(unit.position);
+  const mineIdx = state.buildings.findIndex(
+    (b) => b.type === 'mines' && b.owner !== owner && hexToKey(b.position) === posKey,
+  );
+  if (mineIdx === -1) return false;
+
+  const mine = state.buildings[mineIdx]!;
+  const damage = BUILDING_STATS.mines.damage ?? 2;
+  unit.hp -= damage;
+
+  state.buildings.splice(mineIdx, 1);
+
+  const label = owner === 'player1' ? 'P1' : 'P2';
+  state.pendingEvents.push({
+    type: 'mine-triggered',
+    actingPlayer: mine.owner,
+    message: `${label} unit triggered a mine for ${damage} damage`,
+  });
+
+  if (unit.hp <= 0) {
+    removeUnit(state.players[owner].units, unit.id);
+    const enemy: PlayerId = owner === 'player1' ? 'player2' : 'player1';
+    state.round.unitsKilledThisRound[enemy] += 1;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Move a unit along a path, checking mines at each intermediate hex.
+ * Stops early if the unit is killed by a mine.
+ */
+function moveAlongPath(
+  state: GameState,
+  unit: Unit,
+  path: CubeCoord[],
+  owner: PlayerId,
+): void {
+  for (let i = 1; i < path.length; i++) {
+    unit.position = path[i]!;
+    const killed = checkMines(state, unit, owner);
+    if (killed) return;
+  }
+}
+
+function fireMortars(state: GameState, firingPlayer: PlayerId): void {
+  const enemyPlayer: PlayerId = firingPlayer === 'player1' ? 'player2' : 'player1';
+  const mortars = state.buildings.filter((b) => b.type === 'mortar' && b.owner === firingPlayer);
+
+  for (const mortar of mortars) {
+    const atk = BUILDING_STATS.mortar.atk ?? 2;
+    const range = BUILDING_STATS.mortar.attackRange ?? 3;
+    const minRange = BUILDING_STATS.mortar.minAttackRange ?? 2;
+
+    let nearestEnemy: Unit | null = null;
+    let nearestDist = Infinity;
+
+    for (const enemy of state.players[enemyPlayer].units) {
+      const dist = cubeDistance(mortar.position, enemy.position);
+      if (dist >= minRange && dist <= range && dist < nearestDist) {
+        nearestDist = dist;
+        nearestEnemy = enemy;
+      }
+    }
+
+    if (!nearestEnemy) continue;
+
+    const defenderStats = UNIT_STATS[nearestEnemy.type];
+    const terrainKey = hexToKey(nearestEnemy.position);
+    const terrainType = state.map.terrain.get(terrainKey) ?? 'plains';
+    let terrainDef = getDefenseModifier(terrainType);
+
+    // Defensive position bonus for target
+    const hasDP = state.buildings.some(
+      (b) =>
+        b.type === 'defensive-position' &&
+        b.owner === nearestEnemy!.owner &&
+        hexToKey(b.position) === terrainKey,
+    );
+    if (hasDP) {
+      terrainDef += BUILDING_STATS['defensive-position'].defenseBonus ?? 0.5;
+    }
+
+    const damage = Math.max(1, Math.floor(atk - defenderStats.def * terrainDef));
+    nearestEnemy.hp -= damage;
+
+    const label = firingPlayer === 'player1' ? 'P1' : 'P2';
+    state.pendingEvents.push({
+      type: 'mortar-fire',
+      actingPlayer: firingPlayer,
+      message: `${label} mortar dealt ${damage} damage`,
+    });
+
+    if (nearestEnemy.hp <= 0) {
+      removeUnit(state.players[enemyPlayer].units, nearestEnemy.id);
+      state.round.unitsKilledThisRound[firingPlayer] += 1;
+    }
+  }
+}
+
 function findUnitById(units: Unit[], id: string): Unit | undefined {
   return units.find((u) => u.id === id);
 }
@@ -777,18 +987,15 @@ function countCitiesHeld(state: GameState, playerId: PlayerId): number {
 }
 
 function resetUnitsToDeployment(state: GameState, playerId: PlayerId): void {
-  const deploymentZone = playerId === 'player1'
-    ? state.map.player1Deployment
-    : state.map.player2Deployment;
+  const deploymentZone =
+    playerId === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
 
   const units = state.players[playerId].units;
   if (units.length === 0) return;
 
   // Hexes occupied by the other player's units are off-limits
   const otherPlayer: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
-  const otherOccupied = new Set(
-    state.players[otherPlayer].units.map((u) => hexToKey(u.position)),
-  );
+  const otherOccupied = new Set(state.players[otherPlayer].units.map((u) => hexToKey(u.position)));
 
   // Filter to available hexes, sort left-to-right then front-to-back
   const available = deploymentZone.filter((h) => !otherOccupied.has(hexToKey(h)));

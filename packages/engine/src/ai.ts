@@ -39,18 +39,24 @@ export interface AiBuildAction {
 type BudgetAllocation = { unitType: UnitType; fraction: number };
 
 const BUDGET_ALLOCATION: BudgetAllocation[] = [
-  { unitType: 'tank',      fraction: 0.40 },
-  { unitType: 'infantry',  fraction: 0.30 },
-  { unitType: 'artillery', fraction: 0.20 },
-  { unitType: 'recon',     fraction: 0.10 },
+  { unitType: 'tank', fraction: 0.4 },
+  { unitType: 'infantry', fraction: 0.3 },
+  { unitType: 'artillery', fraction: 0.2 },
+  { unitType: 'recon', fraction: 0.1 },
 ];
 
 function directiveForUnit(unitType: UnitType, index: number): DirectiveType {
   switch (unitType) {
-    case 'tank':      return 'advance';
-    case 'infantry':  return index % 3 === 0 ? 'flank-left' : index % 3 === 1 ? 'flank-right' : 'advance';
-    case 'artillery': return 'support';
-    case 'recon':     return 'scout';
+    case 'tank':
+      return 'advance';
+    case 'infantry':
+      return index % 3 === 0 ? 'flank-left' : index % 3 === 1 ? 'flank-right' : 'advance';
+    case 'artillery':
+      return 'support';
+    case 'recon':
+      return 'scout';
+    case 'engineer':
+      return 'support';
   }
 }
 
@@ -60,9 +66,8 @@ function directiveForUnit(unitType: UnitType, index: number): DirectiveType {
 
 export function aiBuildPhase(state: GameState, playerId: PlayerId): AiBuildAction[] {
   const budget = state.players[playerId].resources;
-  const deploymentZone = playerId === 'player1'
-    ? state.map.player1Deployment
-    : state.map.player2Deployment;
+  const deploymentZone =
+    playerId === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
 
   // Build set of occupied hex keys
   const allUnits = [...state.players.player1.units, ...state.players.player2.units];
@@ -133,8 +138,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
   const usedUnitIds = new Set<string>();
 
   // Helper: get terrain for a unit's position
-  const getUnitTerrain = (unit: Unit) =>
-    state.map.terrain.get(hexToKey(unit.position)) ?? 'plains';
+  const getUnitTerrain = (unit: Unit) => state.map.terrain.get(hexToKey(unit.position)) ?? 'plains';
 
   // Priority 1: kill shots — find any unit that can kill an enemy this turn
   for (const unit of myUnits) {
@@ -149,7 +153,11 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
       if (estimatedDamage >= enemy.hp) {
         const cmd: Command = { type: 'direct-attack', unitId: unit.id, targetUnitId: enemy.id };
         commands.push(cmd);
-        pool = { ...pool, remaining: pool.remaining - 1, commandedUnitIds: new Set([...pool.commandedUnitIds, unit.id]) };
+        pool = {
+          ...pool,
+          remaining: pool.remaining - 1,
+          commandedUnitIds: new Set([...pool.commandedUnitIds, unit.id]),
+        };
         usedUnitIds.add(unit.id);
         break;
       }
@@ -165,9 +173,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
     const myStats = UNIT_STATS[unit.type];
 
     // Find adjacent enemies
-    const adjacentEnemies = enemyUnits.filter(
-      (e) => cubeDistance(unit.position, e.position) === 1,
-    );
+    const adjacentEnemies = enemyUnits.filter((e) => cubeDistance(unit.position, e.position) === 1);
 
     if (adjacentEnemies.length === 0) continue;
 
@@ -180,14 +186,11 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
     if (!threatEnemy) continue;
 
     // Check retreat is safe: deployment zone has a free hex
-    const deploymentZone = playerId === 'player1'
-      ? state.map.player1Deployment
-      : state.map.player2Deployment;
+    const deploymentZone =
+      playerId === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
 
     const allPositions = new Set<string>(
-      [...myUnits, ...enemyUnits]
-        .filter((u) => u.id !== unit.id)
-        .map((u) => hexToKey(u.position)),
+      [...myUnits, ...enemyUnits].filter((u) => u.id !== unit.id).map((u) => hexToKey(u.position)),
     );
 
     const hasRetreatHex = deploymentZone.some((h) => !allPositions.has(hexToKey(h)));
@@ -195,7 +198,11 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
 
     const cmd: Command = { type: 'retreat', unitId: unit.id };
     commands.push(cmd);
-    pool = { ...pool, remaining: pool.remaining - 1, commandedUnitIds: new Set([...pool.commandedUnitIds, unit.id]) };
+    pool = {
+      ...pool,
+      remaining: pool.remaining - 1,
+      commandedUnitIds: new Set([...pool.commandedUnitIds, unit.id]),
+    };
     usedUnitIds.add(unit.id);
   }
 
@@ -213,7 +220,11 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
 
       const cmd: Command = { type: 'redirect', unitId: unit.id, newDirective: 'advance' };
       commands.push(cmd);
-      pool = { ...pool, remaining: pool.remaining - 1, commandedUnitIds: new Set([...pool.commandedUnitIds, unit.id]) };
+      pool = {
+        ...pool,
+        remaining: pool.remaining - 1,
+        commandedUnitIds: new Set([...pool.commandedUnitIds, unit.id]),
+      };
       usedUnitIds.add(unit.id);
     }
   }

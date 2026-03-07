@@ -37,10 +37,7 @@ export function canIssueCommand(pool: CommandPool, unitId: string): boolean {
   return pool.remaining > 0 && !pool.commandedUnitIds.has(unitId);
 }
 
-export function validateDirectiveTarget(
-  directive: DirectiveType,
-  target: DirectiveTarget,
-): void {
+export function validateDirectiveTarget(directive: DirectiveType, target: DirectiveTarget): void {
   if (directive === 'hunt' && target.type !== 'enemy-unit') {
     throw new Error('Hunt directive requires an enemy-unit target');
   }

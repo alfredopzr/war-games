@@ -31,9 +31,7 @@ export function BuildTimer(): ReactElement | null {
 
   return (
     <div className="build-timer">
-      <div className={timerClass(buildTimeRemaining)}>
-        {formatTime(buildTimeRemaining)}
-      </div>
+      <div className={timerClass(buildTimeRemaining)}>{formatTime(buildTimeRemaining)}</div>
       <button className="ready-btn" onClick={confirmBuild} type="button">
         Ready
       </button>

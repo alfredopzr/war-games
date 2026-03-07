@@ -94,15 +94,15 @@ describe('generateMap', () => {
     for (const seed of [1, 42, 100, 999]) {
       const map = generateMap(seed);
       const cityKeys = new Set(
-        [...map.terrain.entries()]
-          .filter(([, t]) => t === 'city')
-          .map(([k]) => k),
+        [...map.terrain.entries()].filter(([, t]) => t === 'city').map(([k]) => k),
       );
       const deployKeys = new Set([
         ...map.player1Deployment.map(hexToKey),
         ...map.player2Deployment.map(hexToKey),
       ]);
-      const sideCities = [...cityKeys].filter((k) => k !== hexToKey(map.centralObjective) && !deployKeys.has(k));
+      const sideCities = [...cityKeys].filter(
+        (k) => k !== hexToKey(map.centralObjective) && !deployKeys.has(k),
+      );
       expect(sideCities.length).toBe(6);
     }
   });
@@ -113,7 +113,7 @@ describe('generateMap', () => {
       .filter(([, t]) => t === 'city')
       .map(([k]) => {
         const [q, r] = k.split(',').map(Number);
-        return { q: q!, r: r!, s: (-q! - r!) || 0 };
+        return { q: q!, r: r!, s: -q! - r! || 0 };
       });
 
     for (let i = 0; i < cityCoords.length; i++) {

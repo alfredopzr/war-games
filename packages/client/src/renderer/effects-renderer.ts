@@ -48,7 +48,8 @@ function getEffectsGroup(): THREE.Group {
 export function spawnDamageNumber(x: number, y: number, z: number, damage: number): void {
   const el = document.createElement('div');
   el.textContent = damage > 0 ? `-${damage}` : 'CAPTURED';
-  el.style.cssText = 'font-family:monospace; font-size:16px; font-weight:bold; color:#9a4a3a; pointer-events:none;';
+  el.style.cssText =
+    'font-family:monospace; font-size:16px; font-weight:bold; color:#9a4a3a; pointer-events:none;';
 
   const cssObj = new CSS2DObject(el);
   cssObj.position.set(x, y + 0.5, z);
@@ -65,8 +66,12 @@ export function spawnDamageNumber(x: number, y: number, z: number, damage: numbe
 
 /** Spawn an attack tracer line between two world positions. */
 export function spawnAttackTracer(
-  fromX: number, fromY: number, fromZ: number,
-  toX: number, toY: number, toZ: number,
+  fromX: number,
+  fromY: number,
+  fromZ: number,
+  toX: number,
+  toY: number,
+  toZ: number,
 ): void {
   const points = [
     new THREE.Vector3(fromX, fromY + 0.3, fromZ),
@@ -98,11 +103,11 @@ export function spawnDeathMarker(x: number, y: number, z: number): void {
 
   const materials: THREE.LineBasicMaterial[] = [];
 
-  for (const [dx1, dz1, dx2, dz2] of [[-size, -size, size, size], [size, -size, -size, size]]) {
-    const points = [
-      new THREE.Vector3(dx1, 0, dz1),
-      new THREE.Vector3(dx2, 0, dz2),
-    ];
+  for (const [dx1, dz1, dx2, dz2] of [
+    [-size, -size, size, size],
+    [size, -size, -size, size],
+  ]) {
+    const points = [new THREE.Vector3(dx1, 0, dz1), new THREE.Vector3(dx2, 0, dz2)];
     const geo = new THREE.BufferGeometry().setFromPoints(points);
     const mat = new THREE.LineBasicMaterial({
       color: 0xff2222,

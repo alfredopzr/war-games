@@ -3,11 +3,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import type { Unit, PlayerId, GameState } from '@hexwar/engine';
 import { hexToKey, hexToWorld, UNIT_STATS, WORLD_HEX_SIZE } from '@hexwar/engine';
-import {
-  MODEL_MANIFEST,
-  PLAYER_FACTION,
-  type Faction,
-} from './constants';
+import { MODEL_MANIFEST, PLAYER_FACTION, type Faction } from './constants';
 import { getModelFromCache } from './model-loader';
 import { getThreeContext } from './three-scene';
 
@@ -37,14 +33,14 @@ const unitModels = new Map<string, UnitModel3D>();
 // ---------------------------------------------------------------------------
 
 const DIRECTIVE_ICONS: Record<string, string> = {
-  'advance': '\u25B2',
-  'hold': '\u25A0',
+  advance: '\u25B2',
+  hold: '\u25A0',
   'flank-left': '\u25C4',
   'flank-right': '\u25BA',
-  'scout': '\u25CF',
-  'support': '\u25C6',
-  'hunt': '\u2666',
-  'capture': '\u2691',
+  scout: '\u25CF',
+  support: '\u25C6',
+  hunt: '\u2666',
+  capture: '\u2691',
 };
 
 // ---------------------------------------------------------------------------
@@ -52,10 +48,10 @@ const DIRECTIVE_ICONS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 const UNIT_SCALE: Record<string, number> = {
-  infantry:  1.20,
-  tank:      1.80,
-  artillery: 1.50,
-  recon:     1.30,
+  infantry: 1.2,
+  tank: 1.8,
+  artillery: 1.5,
+  recon: 1.3,
 };
 
 // ---------------------------------------------------------------------------
@@ -105,7 +101,8 @@ function createUnitModel(
   const modelHeight = origSize.y;
 
   const hpWrapper = document.createElement('div');
-  hpWrapper.style.cssText = 'pointer-events:none; width:28px; height:4px; background:#333; border-radius:1px; overflow:hidden;';
+  hpWrapper.style.cssText =
+    'pointer-events:none; width:28px; height:4px; background:#333; border-radius:1px; overflow:hidden;';
 
   const hpFill = document.createElement('div');
   const maxHp = UNIT_STATS[unit.type].maxHp;
@@ -222,7 +219,7 @@ export function syncUnitModels(
     for (const unit of units) {
       const key = hexToKey(unit.position);
       const isOwn = pid === currentPlayerView;
-      const isVisible = isBuildPhase ? isOwn : (isOwn || visibleHexes.has(key));
+      const isVisible = isBuildPhase ? isOwn : isOwn || visibleHexes.has(key);
 
       if (!isVisible) continue;
 

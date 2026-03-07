@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import {
-  executeTurn, checkRoundEnd, scoreRound,
-  CP_PER_ROUND, UNIT_STATS,
-  calculateIncome, applyCarryover, applyMaintenance,
+  executeTurn,
+  checkRoundEnd,
+  scoreRound,
+  CP_PER_ROUND,
+  UNIT_STATS,
+  calculateIncome,
+  applyCarryover,
+  applyMaintenance,
   aiBattlePhase,
 } from '@hexwar/engine';
 import type { PlayerId, ObjectiveState, GameState, Unit } from '@hexwar/engine';
@@ -12,10 +17,14 @@ import { diffTurnEvents, startReplay, skipReplay } from '../renderer/replay-sequ
 
 function phaseClass(phase: string): string {
   switch (phase) {
-    case 'build': return 'phase-badge phase-build';
-    case 'battle': return 'phase-badge phase-battle';
-    case 'scoring': return 'phase-badge phase-scoring';
-    default: return 'phase-badge';
+    case 'build':
+      return 'phase-badge phase-build';
+    case 'battle':
+      return 'phase-badge phase-battle';
+    case 'scoring':
+      return 'phase-badge phase-scoring';
+    default:
+      return 'phase-badge';
   }
 }
 
@@ -86,9 +95,7 @@ function computeIncomeBreakdown(
   });
 
   const carryover = applyCarryover(player.resources);
-  const maintenance = applyMaintenance(
-    player.units.map((u) => UNIT_STATS[u.type].cost),
-  );
+  const maintenance = applyMaintenance(player.units.map((u) => UNIT_STATS[u.type].cost));
 
   return {
     income,
@@ -105,7 +112,12 @@ function diffBattleLog(
   turnNumber: number,
 ): BattleLogEntry[] {
   const entries: BattleLogEntry[] = [];
-  const unitLabels: Record<string, string> = { infantry: 'Infantry', tank: 'Tank', artillery: 'Artillery', recon: 'Recon' };
+  const unitLabels: Record<string, string> = {
+    infantry: 'Infantry',
+    tank: 'Tank',
+    artillery: 'Artillery',
+    recon: 'Recon',
+  };
 
   // Check for kills
   for (const [id, unit] of before.units) {
@@ -195,15 +207,22 @@ function executeAiTurn(gameState: GameState): void {
   // Check if round ended after AI turn
   const result = checkRoundEnd(gameState);
   if (result.roundOver) {
-    const winnerLabel = result.winner === 'player1' ? 'P1' : result.winner === 'player2' ? 'P2' : 'No one';
-    const reasonLabel = result.reason === 'king-of-the-hill' ? 'King of the Hill'
-      : result.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
-    store.addBattleLogEntries([{
-      turn: turnNum,
-      player: result.winner ?? 'player1',
-      type: 'round-end',
-      message: `${winnerLabel} wins the round (${reasonLabel})`,
-    }]);
+    const winnerLabel =
+      result.winner === 'player1' ? 'P1' : result.winner === 'player2' ? 'P2' : 'No one';
+    const reasonLabel =
+      result.reason === 'king-of-the-hill'
+        ? 'King of the Hill'
+        : result.reason === 'elimination'
+          ? 'Elimination'
+          : 'Turn Limit';
+    store.addBattleLogEntries([
+      {
+        turn: turnNum,
+        player: result.winner ?? 'player1',
+        type: 'round-end',
+        message: `${winnerLabel} wins the round (${reasonLabel})`,
+      },
+    ]);
 
     const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
     const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
@@ -211,16 +230,23 @@ function executeAiTurn(gameState: GameState): void {
 
     if (gameState.phase === 'game-over' && gameState.winner) {
       const gameWinnerLabel = gameState.winner === 'player1' ? 'P1' : 'P2';
-      store.addBattleLogEntries([{
-        turn: turnNum,
-        player: gameState.winner,
-        type: 'game-end',
-        message: `${gameWinnerLabel} wins the game!`,
-      }]);
+      store.addBattleLogEntries([
+        {
+          turn: turnNum,
+          player: gameState.winner,
+          type: 'game-end',
+          message: `${gameWinnerLabel} wins the game!`,
+        },
+      ]);
     }
 
     store.setGameState({ ...gameState });
-    store.showRoundResultScreen(result.winner, result.reason ?? 'unknown', p1Breakdown, p2Breakdown);
+    store.showRoundResultScreen(
+      result.winner,
+      result.reason ?? 'unknown',
+      p1Breakdown,
+      p2Breakdown,
+    );
     return;
   }
 
@@ -296,10 +322,17 @@ export function BattleHUD(): ReactElement | null {
     }
 
     // Snapshot for replay diff (position + hp + owner)
-    const replayUnitsBefore = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
+    const replayUnitsBefore = new Map<
+      string,
+      { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }
+    >();
     for (const player of Object.values(gameState.players)) {
       for (const unit of player.units) {
-        replayUnitsBefore.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: unit.owner });
+        replayUnitsBefore.set(unit.id, {
+          position: { ...unit.position },
+          hp: unit.hp,
+          owner: unit.owner,
+        });
       }
     }
     const replayCitiesBefore = new Map(gameState.cityOwnership);
@@ -344,27 +377,46 @@ export function BattleHUD(): ReactElement | null {
     useGameStore.setState({ damagedUnits: updated });
 
     // Generate replay events from before/after diff
-    const replayUnitsAfter = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
+    const replayUnitsAfter = new Map<
+      string,
+      { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }
+    >();
     for (const player of Object.values(gameState.players)) {
       for (const unit of player.units) {
-        replayUnitsAfter.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: unit.owner });
+        replayUnitsAfter.set(unit.id, {
+          position: { ...unit.position },
+          hp: unit.hp,
+          owner: unit.owner,
+        });
       }
     }
-    const replayEvents = diffTurnEvents(replayUnitsBefore, replayUnitsAfter, replayCitiesBefore, gameState.cityOwnership);
+    const replayEvents = diffTurnEvents(
+      replayUnitsBefore,
+      replayUnitsAfter,
+      replayCitiesBefore,
+      gameState.cityOwnership,
+    );
 
     // Post-turn flow: check round end, then continue to next player
     const finishPostTurn = (): void => {
       const result = checkRoundEnd(gameState);
       if (result.roundOver) {
-        const winnerLabel = result.winner === 'player1' ? 'P1' : result.winner === 'player2' ? 'P2' : 'No one';
-        const reasonLabel = result.reason === 'king-of-the-hill' ? 'King of the Hill'
-          : result.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
-        useGameStore.getState().addBattleLogEntries([{
-          turn: gameState.round.turnNumber,
-          player: result.winner ?? 'player1',
-          type: 'round-end',
-          message: `${winnerLabel} wins the round (${reasonLabel})`,
-        }]);
+        const winnerLabel =
+          result.winner === 'player1' ? 'P1' : result.winner === 'player2' ? 'P2' : 'No one';
+        const reasonLabel =
+          result.reason === 'king-of-the-hill'
+            ? 'King of the Hill'
+            : result.reason === 'elimination'
+              ? 'Elimination'
+              : 'Turn Limit';
+        useGameStore.getState().addBattleLogEntries([
+          {
+            turn: gameState.round.turnNumber,
+            player: result.winner ?? 'player1',
+            type: 'round-end',
+            message: `${winnerLabel} wins the round (${reasonLabel})`,
+          },
+        ]);
 
         const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', result.winner);
         const p2Breakdown = computeIncomeBreakdown(gameState, 'player2', result.winner);
@@ -374,19 +426,28 @@ export function BattleHUD(): ReactElement | null {
         // Check if game is over after scoring
         if (gameState.phase === 'game-over' && gameState.winner) {
           const gameWinnerLabel = gameState.winner === 'player1' ? 'P1' : 'P2';
-          useGameStore.getState().addBattleLogEntries([{
-            turn: gameState.round.turnNumber,
-            player: gameState.winner,
-            type: 'game-end',
-            message: `${gameWinnerLabel} wins the game!`,
-          }]);
+          useGameStore.getState().addBattleLogEntries([
+            {
+              turn: gameState.round.turnNumber,
+              player: gameState.winner,
+              type: 'game-end',
+              message: `${gameWinnerLabel} wins the game!`,
+            },
+          ]);
         }
 
         clearPendingCommands();
         selectUnit(null);
 
         setGameState({ ...gameState });
-        useGameStore.getState().showRoundResultScreen(result.winner, result.reason ?? 'unknown', p1Breakdown, p2Breakdown);
+        useGameStore
+          .getState()
+          .showRoundResultScreen(
+            result.winner,
+            result.reason ?? 'unknown',
+            p1Breakdown,
+            p2Breakdown,
+          );
         return;
       }
 
@@ -424,7 +485,16 @@ export function BattleHUD(): ReactElement | null {
     } else {
       finishPostTurn();
     }
-  }, [gameState, pendingCommands, gameMode, currentPlayerView, clearPendingCommands, selectUnit, setGameState, aiThinking]);
+  }, [
+    gameState,
+    pendingCommands,
+    gameMode,
+    currentPlayerView,
+    clearPendingCommands,
+    selectUnit,
+    setGameState,
+    aiThinking,
+  ]);
 
   if (!gameState) return null;
 
@@ -436,15 +506,18 @@ export function BattleHUD(): ReactElement | null {
   const isBuildPhase = phase === 'build';
   const isBattlePhase = phase === 'battle';
   const isCurrentPlayersTurn = round.currentPlayer === currentPlayerView;
-  const showEndTurn = isBattlePhase && isCurrentPlayersTurn
-    && (gameMode !== 'online' || myPlayerId === round.currentPlayer);
+  const showEndTurn =
+    isBattlePhase &&
+    isCurrentPlayersTurn &&
+    (gameMode !== 'online' || myPlayerId === round.currentPlayer);
 
   if (isBuildPhase) {
-    const timerColorClass = buildTimeRemaining <= 10
-      ? 'hud-timer-critical'
-      : buildTimeRemaining <= 30
-        ? 'hud-timer-warning'
-        : 'hud-timer-normal';
+    const timerColorClass =
+      buildTimeRemaining <= 10
+        ? 'hud-timer-critical'
+        : buildTimeRemaining <= 30
+          ? 'hud-timer-warning'
+          : 'hud-timer-normal';
     const m = Math.floor(buildTimeRemaining / 60);
     const s = buildTimeRemaining % 60;
     const timerText = `${m}:${s.toString().padStart(2, '0')}`;
@@ -469,7 +542,8 @@ export function BattleHUD(): ReactElement | null {
             Round {round.roundNumber}/{gameState.maxRounds}
           </span>
           <span className="round-info">
-            Wins: P1 {gameState.players.player1.roundsWon} | P2 {gameState.players.player2.roundsWon}
+            Wins: P1 {gameState.players.player1.roundsWon} | P2{' '}
+            {gameState.players.player2.roundsWon}
           </span>
           <span className={`hud-timer ${timerColorClass}`}>{timerText}</span>
           <button className="hud-ready-btn" onClick={confirmBuild} type="button">
@@ -486,7 +560,9 @@ export function BattleHUD(): ReactElement | null {
         <span className={phaseClass(phase)}>{phaseLabel(phase)}</span>
         <span>
           Turn{' '}
-          <span className="turn-counter">{currentTurn}/{turnTotal}</span>
+          <span className="turn-counter">
+            {currentTurn}/{turnTotal}
+          </span>
         </span>
         <span className="current-player-label" data-color={playerColor(round.currentPlayer)}>
           <span className="player-indicator" style={{ color: playerColor(round.currentPlayer) }}>
@@ -499,10 +575,7 @@ export function BattleHUD(): ReactElement | null {
         <span className="cp-label">CP:</span>
         <div className="cp-dots">
           {Array.from({ length: CP_PER_ROUND }, (_, i) => (
-            <div
-              key={i}
-              className={`cp-dot ${i < cpRemaining ? 'filled' : 'empty'}`}
-            />
+            <div key={i} className={`cp-dot ${i < cpRemaining ? 'filled' : 'empty'}`} />
           ))}
         </div>
         <span className="objective-status">{objectiveText(round.objective, gameState)}</span>
@@ -514,11 +587,7 @@ export function BattleHUD(): ReactElement | null {
           Round {round.roundNumber}/{gameState.maxRounds}
         </span>
         {isReplayPlaying && (
-          <button
-            className="end-turn-btn"
-            onClick={skipReplay}
-            type="button"
-          >
+          <button className="end-turn-btn" onClick={skipReplay} type="button">
             Skip Replay
           </button>
         )}

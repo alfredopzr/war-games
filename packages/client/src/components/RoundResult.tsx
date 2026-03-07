@@ -8,10 +8,14 @@ function playerLabel(player: PlayerId): string {
 
 function reasonLabel(reason: string): string {
   switch (reason) {
-    case 'king-of-the-hill': return 'King of the Hill';
-    case 'elimination': return 'Elimination';
-    case 'turn-limit': return 'Tiebreaker (Turn Limit)';
-    default: return reason;
+    case 'king-of-the-hill':
+      return 'King of the Hill';
+    case 'elimination':
+      return 'Elimination';
+    case 'turn-limit':
+      return 'Tiebreaker (Turn Limit)';
+    default:
+      return reason;
   }
 }
 
@@ -43,7 +47,9 @@ export function RoundResult(): ReactElement | null {
         <div>Reason: {reasonLabel(roundResult.reason)}</div>
         <div>Player 1 surviving units: {p1Units}</div>
         <div>Player 2 surviving units: {p2Units}</div>
-        <div>Score: P1 {p1Wins} — P2 {p2Wins}</div>
+        <div>
+          Score: P1 {p1Wins} — P2 {p2Wins}
+        </div>
       </div>
       {!isGameOver && p1Income && p2Income && (
         <div className="result-details income-breakdown">
@@ -66,11 +72,7 @@ export function RoundResult(): ReactElement | null {
           </div>
         </div>
       )}
-      <button
-        className="continue-btn"
-        onClick={continueToNextRound}
-        type="button"
-      >
+      <button className="continue-btn" onClick={continueToNextRound} type="button">
         {isGameOver ? 'Game Over' : `Continue to Round ${roundNumber}`}
       </button>
     </div>

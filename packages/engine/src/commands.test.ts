@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { createCommandPool, spendCommand, canIssueCommand, validateDirectiveTarget } from './commands';
+import {
+  createCommandPool,
+  spendCommand,
+  canIssueCommand,
+  validateDirectiveTarget,
+} from './commands';
 import type { Command, DirectiveTarget } from './types';
 
 describe('createCommandPool', () => {
@@ -37,18 +42,18 @@ describe('spendCommand', () => {
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u3' });
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u4' });
 
-    expect(() =>
-      spendCommand(pool, { type: 'retreat', unitId: 'u5' }),
-    ).toThrow('No command points remaining');
+    expect(() => spendCommand(pool, { type: 'retreat', unitId: 'u5' })).toThrow(
+      'No command points remaining',
+    );
   });
 
   it('throws when unit already commanded this turn', () => {
     let pool = createCommandPool();
     pool = spendCommand(pool, { type: 'retreat', unitId: 'u1' });
 
-    expect(() =>
-      spendCommand(pool, { type: 'retreat', unitId: 'u1' }),
-    ).toThrow('Unit u1 already commanded this turn');
+    expect(() => spendCommand(pool, { type: 'retreat', unitId: 'u1' })).toThrow(
+      'Unit u1 already commanded this turn',
+    );
   });
 
   it('returns new object (does not mutate input)', () => {

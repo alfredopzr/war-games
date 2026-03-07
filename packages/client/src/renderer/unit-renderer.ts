@@ -72,7 +72,8 @@ export function renderUnits(
     const label = UNIT_LABELS[ghost.type] ?? '?';
     const labelEl = document.createElement('div');
     labelEl.textContent = label;
-    labelEl.style.cssText = 'font-family:monospace; font-size:12px; font-weight:bold; color:#aaa; opacity:0.5; pointer-events:none;';
+    labelEl.style.cssText =
+      'font-family:monospace; font-size:12px; font-weight:bold; color:#aaa; opacity:0.5; pointer-events:none;';
     const cssLabel = new CSS2DObject(labelEl);
     cssLabel.position.set(world.x, world.y + 0.05, world.z);
     ghostGroup.add(cssLabel);

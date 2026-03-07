@@ -1,14 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type { Unit, CubeCoord } from './types';
+import type { Unit, CubeCoord, Building } from './types';
 import { calculateDamage, canAttack } from './combat';
+import { createHex } from './hex';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeUnit(
-  overrides: Partial<Unit> & Pick<Unit, 'type' | 'owner' | 'position'>,
-): Unit {
+function makeUnit(overrides: Partial<Unit> & Pick<Unit, 'type' | 'owner' | 'position'>): Unit {
   return {
     id: overrides.id ?? 'test-unit',
     type: overrides.type,
@@ -69,8 +68,18 @@ describe('calculateDamage', () => {
     // Use mountain (defMod=0.4): without hold = max(1,floor(6-2*0.4))=max(1,5)=5
     //                             with hold = max(1,floor(6-3*0.4))=max(1,4)=4
     const attacker = makeUnit({ type: 'tank', owner: 'player1', position: origin });
-    const defenderNoHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, directive: 'advance' });
-    const defenderHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, directive: 'hold' });
+    const defenderNoHold = makeUnit({
+      type: 'infantry',
+      owner: 'player2',
+      position: adjacent,
+      directive: 'advance',
+    });
+    const defenderHold = makeUnit({
+      type: 'infantry',
+      owner: 'player2',
+      position: adjacent,
+      directive: 'hold',
+    });
 
     const damageNoHold = calculateDamage(attacker, defenderNoHold, 'mountain', () => 1.0);
     const damageHold = calculateDamage(attacker, defenderHold, 'mountain', () => 1.0);
@@ -126,5 +135,53 @@ describe('canAttack', () => {
     const attacker = makeUnit({ type: 'infantry', owner: 'player1', position: origin });
     const defender = makeUnit({ type: 'infantry', owner: 'player1', position: adjacent });
     expect(canAttack(attacker, defender)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Defensive Position Bonus
+// ---------------------------------------------------------------------------
+
+describe('defensive position bonus', () => {
+  it('reduces damage when defender is on defensive-position hex', () => {
+    const attacker: Unit = {
+      id: 'a1',
+      type: 'infantry',
+      owner: 'player1',
+      hp: 3,
+      position: createHex(0, 0),
+      directive: 'advance',
+      directiveTarget: { type: 'central-objective' },
+      hasActed: false,
+    };
+    const defender: Unit = {
+      id: 'd1',
+      type: 'infantry',
+      owner: 'player2',
+      hp: 3,
+      position: createHex(1, 0),
+      directive: 'advance',
+      directiveTarget: { type: 'central-objective' },
+      hasActed: false,
+    };
+
+    const buildings: Building[] = [
+      {
+        id: 'b1',
+        type: 'defensive-position',
+        owner: 'player2',
+        position: createHex(1, 0),
+        isRevealed: true,
+      },
+    ];
+
+    // Plains defense = 0, with DP = 0.5
+    // Without DP: max(1, floor(2 * 1.0 * 1.0 - 2 * 0)) = 2
+    // With DP:    max(1, floor(2 * 1.0 * 1.0 - 2 * 0.5)) = 1
+    const damageWithDP = calculateDamage(attacker, defender, 'plains', () => 1.0, buildings);
+    expect(damageWithDP).toBe(1);
+
+    const damageWithoutDP = calculateDamage(attacker, defender, 'plains', () => 1.0, []);
+    expect(damageWithoutDP).toBe(2);
   });
 });

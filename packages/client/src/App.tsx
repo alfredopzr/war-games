@@ -1,8 +1,12 @@
 import { useRef, useEffect, useCallback, type ReactElement } from 'react';
 import {
   placeUnit,
-  getAllHexes, hexToKey, calculateVisibility,
-  canAttack, cubeDistance, UNIT_STATS,
+  getAllHexes,
+  hexToKey,
+  calculateVisibility,
+  canAttack,
+  cubeDistance,
+  UNIT_STATS,
 } from '@hexwar/engine';
 import type { GameState, CubeCoord, Unit, PlayerId, Command } from '@hexwar/engine';
 import { screenToHex } from './renderer/click-handler';
@@ -14,8 +18,12 @@ import { renderUnits } from './renderer/unit-renderer';
 import { updateEffects } from './renderer/effects-renderer';
 import { setupStaticCamera, setMapParams, wasDrag } from './renderer/camera-controller';
 import {
-  createThreeContext, setMapFlip, startRenderLoop, stopRenderLoop,
-  disposeThreeContext, fitCameraToMap,
+  createThreeContext,
+  setMapFlip,
+  startRenderLoop,
+  stopRenderLoop,
+  disposeThreeContext,
+  fitCameraToMap,
 } from './renderer/three-scene';
 import { preloadFactionModels } from './renderer/model-loader';
 import { syncUnitModels, advanceAnimations, clearAllUnitModels } from './renderer/unit-model';
@@ -103,7 +111,7 @@ export function App(): ReactElement {
   // Recalculate visibility when player view changes
   useEffect(() => {
     if (!gameState) return;
-    const viewPlayer = (gameMode === 'online' && myPlayerId) ? myPlayerId : currentPlayerView;
+    const viewPlayer = gameMode === 'online' && myPlayerId ? myPlayerId : currentPlayerView;
     const friendly = getPlayerUnits(gameState, viewPlayer);
     const vis = calculateVisibility(friendly, gameState.map.terrain);
     setVisibleHexes(vis);
@@ -165,12 +173,11 @@ export function App(): ReactElement {
     // Preload 3D models on first state arrival
     if (!modelsLoadedRef.current) {
       modelsLoadedRef.current = true;
-      Promise.all([
-        preloadFactionModels('engineer'),
-        preloadFactionModels('caravaner'),
-      ]).then(() => {
-        syncUnitModels(gameState, currentPlayerView, useGameStore.getState().visibleHexes);
-      });
+      Promise.all([preloadFactionModels('engineer'), preloadFactionModels('caravaner')]).then(
+        () => {
+          syncUnitModels(gameState, currentPlayerView, useGameStore.getState().visibleHexes);
+        },
+      );
     }
 
     syncUnitModels(gameState, currentPlayerView, useGameStore.getState().visibleHexes);
@@ -225,9 +232,10 @@ export function App(): ReactElement {
       // Build phase: placement mode
       if (gameState.phase === 'build' && store.placementMode) {
         const hexKey = hexToKey(hex);
-        const zone = currentPlayerView === 'player1'
-          ? gameState.map.player1Deployment
-          : gameState.map.player2Deployment;
+        const zone =
+          currentPlayerView === 'player1'
+            ? gameState.map.player1Deployment
+            : gameState.map.player2Deployment;
         const inZone = zone.some((h) => hexToKey(h) === hexKey);
         if (!inZone) return;
 
