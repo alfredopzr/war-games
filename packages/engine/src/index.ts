@@ -94,8 +94,8 @@ export { aiBuildPhase, aiBattlePhase } from './ai';
 export type { AiBuildAction } from './ai';
 
 // AI Harness
-export { runMatch, runBatch, classifyKillTiming } from './ai-harness';
-export type { MatchResult, KillRecord, RoundResult, BatchOptions, BatchSummary, MatchupVerdictCounts, KillVerdict } from './ai-harness';
+export { runMatch, runBatch, classifyKillTiming, computeKillThresholds } from './ai-harness';
+export type { MatchResult, KillRecord, RoundResult, BatchOptions, BatchSummary, MatchupVerdictCounts, KillVerdict, KillThresholds, MapFairness } from './ai-harness';
 
 // World coordinates
 export {
