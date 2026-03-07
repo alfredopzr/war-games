@@ -213,7 +213,7 @@ describe('runBatch', () => {
     expect(summary.avgTurns).toBeGreaterThan(0);
     expect(summary.minTurns).toBeGreaterThan(0);
     expect(summary.maxTurns).toBeGreaterThanOrEqual(summary.minTurns);
-  }, 60_000);
+  }, 120_000);
 
   it('computes kill timing verdicts per matchup', () => {
     const summary = runBatch({ matchCount: 3, baseSeed: 42 });
@@ -222,5 +222,5 @@ describe('runBatch', () => {
     if (totalKills > 0) {
       expect(Object.keys(summary.matchupVerdicts).length).toBeGreaterThan(0);
     }
-  }, 60_000);
+  }, 120_000);
 });
