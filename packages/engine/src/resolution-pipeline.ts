@@ -833,8 +833,22 @@ function resolveCollisions(
           fallBackAlongPath(uid, intents, proposedPositions, snapshot);
         }
       } else {
-        // Cross-faction: ALL claimants fall back
+        // Cross-faction collision: fastest unit claims the hex, others stop adjacent.
+        // This ensures opposing units end up at attack range instead of both bouncing away.
+        let bestId = unitIds[0]!;
+        let bestRange = state.unitStats[unitTypes.get(bestId) ?? 'infantry'].moveRange;
+
         for (const uid of unitIds) {
+          const range = state.unitStats[unitTypes.get(uid) ?? 'infantry'].moveRange;
+          if (range > bestRange) {
+            bestRange = range;
+            bestId = uid;
+          }
+        }
+
+        // Losers fall back along their path to the nearest unclaimed hex
+        for (const uid of unitIds) {
+          if (uid === bestId) continue;
           fallBackAlongPath(uid, intents, proposedPositions, snapshot);
         }
       }
