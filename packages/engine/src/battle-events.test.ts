@@ -133,6 +133,7 @@ describe('formatBattleEvent', () => {
       type: 'intercept', actingPlayer: 'player1', phase: 'combat', pipelinePhase: 0,
       attackerId: 'u1', attackerType: 'recon',
       defenderId: 'u2', defenderType: 'infantry',
+      attackerPosition: { q: 2, r: 0, s: -2 },
       hex: { q: 3, r: -1, s: -2 }, damage: 2, defenderResponse: 'engage',
     };
     expect(formatBattleEvent(event)).toBe('Recon intercepted Infantry for 2 damage (stopped)');
@@ -143,6 +144,7 @@ describe('formatBattleEvent', () => {
       type: 'intercept', actingPlayer: 'player1', phase: 'combat', pipelinePhase: 0,
       attackerId: 'u1', attackerType: 'recon',
       defenderId: 'u2', defenderType: 'infantry',
+      attackerPosition: { q: 2, r: 0, s: -2 },
       hex: { q: 3, r: -1, s: -2 }, damage: 5, defenderResponse: 'flee',
     };
     expect(formatBattleEvent(event)).toBe('Recon intercepted Infantry for 5 damage (fled)');
@@ -153,6 +155,7 @@ describe('formatBattleEvent', () => {
       type: 'intercept', actingPlayer: 'player1', phase: 'combat', pipelinePhase: 0,
       attackerId: 'u1', attackerType: 'recon',
       defenderId: 'u2', defenderType: 'infantry',
+      attackerPosition: { q: 2, r: 0, s: -2 },
       hex: { q: 3, r: -1, s: -2 }, damage: 3, defenderResponse: 'none',
     };
     expect(formatBattleEvent(event)).toBe('Recon intercepted Infantry for 3 damage');

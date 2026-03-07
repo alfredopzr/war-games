@@ -93,6 +93,10 @@ export { resolveTurn, computeApproachAngle, computeFacing } from './resolution-p
 export { aiBuildPhase, aiBattlePhase } from './ai';
 export type { AiBuildAction } from './ai';
 
+// AI Harness
+export { runMatch, runBatch, classifyKillTiming } from './ai-harness';
+export type { MatchResult, KillRecord, RoundResult, BatchOptions, BatchSummary, MatchupVerdictCounts, KillVerdict } from './ai-harness';
+
 // World coordinates
 export {
   hexToWorld, worldToHex, hexWorldVertices,
