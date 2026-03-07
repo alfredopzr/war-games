@@ -55,7 +55,7 @@ export interface RoundResult {
 
 export interface MatchResult {
   readonly seed: number;
-  readonly winner: PlayerId;
+  readonly winner: PlayerId | null; // null = draw
   readonly rounds: number;
   readonly totalTurns: number;
   readonly kills: KillRecord[];
@@ -80,8 +80,10 @@ export interface BatchSummary {
   readonly matchCount: number;
   readonly p1Wins: number;
   readonly p2Wins: number;
+  readonly draws: number;
   readonly p1WinRate: number;
   readonly p2WinRate: number;
+  readonly drawRate: number;
   readonly avgTurns: number;
   readonly minTurns: number;
   readonly maxTurns: number;
@@ -270,8 +272,7 @@ export function runMatch(seed: number, log = false): MatchResult {
     }
   }
 
-  const winner = state.winner;
-  if (!winner) throw new Error('Game ended without a winner');
+  const winner = state.winner; // null = draw (all rounds exhausted with no decisive winner)
 
   const p1Final = state.players.player1.units.length;
   const p2Final = state.players.player2.units.length;
@@ -332,12 +333,14 @@ export function runBatch(options: BatchOptions, log = false): BatchSummary {
   const results: MatchResult[] = [];
   let p1Wins = 0;
   let p2Wins = 0;
+  let draws = 0;
 
   for (let i = 0; i < matchCount; i++) {
     const result = runMatch(baseSeed + i, log);
     results.push(result);
     if (result.winner === 'player1') p1Wins++;
-    else p2Wins++;
+    else if (result.winner === 'player2') p2Wins++;
+    else draws++;
   }
 
   const allTurns = results.map((r) => r.totalTurns);
@@ -363,6 +366,7 @@ export function runBatch(options: BatchOptions, log = false): BatchSummary {
     console.log(`Matches: ${matchCount}`);
     console.log(`P1 wins: ${p1Wins} (${(p1Wins / matchCount * 100).toFixed(1)}%)`);
     console.log(`P2 wins: ${p2Wins} (${(p2Wins / matchCount * 100).toFixed(1)}%)`);
+    console.log(`Draws:   ${draws} (${(draws / matchCount * 100).toFixed(1)}%)`);
     console.log(`Turns: avg=${avgTurns.toFixed(1)} min=${minTurns} max=${maxTurns}`);
     console.log(`\nKill Timing Verdicts:`);
     for (const [matchup, counts] of Object.entries(matchupVerdicts)) {
@@ -376,5 +380,5 @@ export function runBatch(options: BatchOptions, log = false): BatchSummary {
     console.log(`===================================\n`);
   }
 
-  return { matchCount, p1Wins, p2Wins, p1WinRate: p1Wins / matchCount, p2WinRate: p2Wins / matchCount, avgTurns, minTurns, maxTurns, results, matchupVerdicts };
+  return { matchCount, p1Wins, p2Wins, draws, p1WinRate: p1Wins / matchCount, p2WinRate: p2Wins / matchCount, drawRate: draws / matchCount, avgTurns, minTurns, maxTurns, results, matchupVerdicts };
 }
