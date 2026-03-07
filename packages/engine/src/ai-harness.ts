@@ -178,7 +178,7 @@ export function runMatch(seed: number, log = false): MatchResult {
       // ---- Read from the event log ----
       for (const event of state.pendingEvents) {
         // Track hits for kill timing (any hit event increments the counter)
-        if (event.type === 'damage' || event.type === 'counter') {
+        if (event.type === 'damage' || event.type === 'counter' || event.type === 'intercept') {
           const existing = hitsPerUnit.get(event.defenderId);
           if (existing) {
             existing.count++;

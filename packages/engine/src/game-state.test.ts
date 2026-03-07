@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { GameState, PlayerId, CubeCoord, Command } from './types';
 import { resetUnitIdCounter, UNIT_STATS } from './units';
-import { hexToKey, createHex } from './hex';
+import { hexToKey } from './hex';
 import {
   createGame,
   placeUnit,

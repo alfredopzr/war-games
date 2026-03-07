@@ -73,9 +73,9 @@ describe('classifyKillTiming', () => {
 const MATCH_TIMEOUT = 30_000;
 
 describe('runMatch', () => {
-  it('returns a MatchResult with a winner', () => {
+  it('returns a valid MatchResult', () => {
     const result = runMatch(42);
-    expect(result.winner).toMatch(/^player[12]$/);
+    expect(result.winner === null || result.winner === 'player1' || result.winner === 'player2').toBe(true);
     expect(result.seed).toBe(42);
     expect(result.rounds).toBeGreaterThanOrEqual(1);
     expect(result.totalTurns).toBeGreaterThanOrEqual(1);
@@ -132,8 +132,8 @@ describe('runBatch', () => {
   it('runs N matches and returns a summary', () => {
     const summary = runBatch({ matchCount: 3, baseSeed: 42 });
     expect(summary.matchCount).toBe(3);
-    expect(summary.p1Wins + summary.p2Wins).toBe(3);
-    expect(summary.p1WinRate + summary.p2WinRate).toBeCloseTo(1.0);
+    expect(summary.p1Wins + summary.p2Wins + summary.draws).toBe(3);
+    expect(summary.p1WinRate + summary.p2WinRate + summary.drawRate).toBeCloseTo(1.0);
     expect(summary.results.length).toBe(3);
   }, 60_000);
 
