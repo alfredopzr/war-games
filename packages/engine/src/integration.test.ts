@@ -7,7 +7,7 @@
 // =============================================================================
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { CubeCoord, PlayerId, GameState } from './index';
+import type { CubeCoord, PlayerId, GameState, DirectiveTarget } from './index';
 import {
   createGame, placeUnit, startBattlePhase,
   checkRoundEnd, scoreRound, getWinner, resetUnitIdCounter,
@@ -67,18 +67,21 @@ describe('Full game simulation', () => {
       const p1Open = findOpenDeploymentHexes(game, 'player1', 3);
       const p2Open = findOpenDeploymentHexes(game, 'player2', 3);
 
-      // Player 1: 2 infantry + 1 tank if affordable
-      if (p1Open.length >= 1) placeUnit(game, 'player1', 'infantry', p1Open[0]!);
-      if (p1Open.length >= 2) placeUnit(game, 'player1', 'infantry', p1Open[1]!);
+      const obj = game.map.centralObjective;
+      const target: DirectiveTarget = { type: 'hex', hex: obj };
+
+      // Player 1: 2 infantry + 1 tank if affordable — advance + shoot-on-sight
+      if (p1Open.length >= 1) placeUnit(game, 'player1', 'infantry', p1Open[0]!, 'advance', 'shoot-on-sight', null, target);
+      if (p1Open.length >= 2) placeUnit(game, 'player1', 'infantry', p1Open[1]!, 'advance', 'shoot-on-sight', null, target);
       if (p1Open.length >= 3 && canAfford(game.players.player1.resources, UNIT_STATS.tank.cost)) {
-        placeUnit(game, 'player1', 'tank', p1Open[2]!);
+        placeUnit(game, 'player1', 'tank', p1Open[2]!, 'advance', 'shoot-on-sight', null, target);
       }
 
-      // Player 2: 2 infantry + 1 tank if affordable
-      if (p2Open.length >= 1) placeUnit(game, 'player2', 'infantry', p2Open[0]!);
-      if (p2Open.length >= 2) placeUnit(game, 'player2', 'infantry', p2Open[1]!);
+      // Player 2: 2 infantry + 1 tank if affordable — advance + shoot-on-sight
+      if (p2Open.length >= 1) placeUnit(game, 'player2', 'infantry', p2Open[0]!, 'advance', 'shoot-on-sight', null, target);
+      if (p2Open.length >= 2) placeUnit(game, 'player2', 'infantry', p2Open[1]!, 'advance', 'shoot-on-sight', null, target);
       if (p2Open.length >= 3 && canAfford(game.players.player2.resources, UNIT_STATS.tank.cost)) {
-        placeUnit(game, 'player2', 'tank', p2Open[2]!);
+        placeUnit(game, 'player2', 'tank', p2Open[2]!, 'advance', 'shoot-on-sight', null, target);
       }
 
       expect(game.players.player1.units.length).toBeGreaterThanOrEqual(2);
@@ -137,12 +140,15 @@ describe('Full game simulation', () => {
       const p1Open = findOpenDeploymentHexes(game, 'player1', 2);
       const p2Open = findOpenDeploymentHexes(game, 'player2', 1);
 
+      const obj = game.map.centralObjective;
+      const target: DirectiveTarget = { type: 'hex', hex: obj };
+
       // Player 1: 1 tank + 1 infantry (aggressive)
-      placeUnit(game, 'player1', 'tank', p1Open[0]!);
-      placeUnit(game, 'player1', 'infantry', p1Open[1]!);
+      placeUnit(game, 'player1', 'tank', p1Open[0]!, 'advance', 'shoot-on-sight', null, target);
+      placeUnit(game, 'player1', 'infantry', p1Open[1]!, 'advance', 'shoot-on-sight', null, target);
 
       // Player 2: 1 infantry (weak)
-      placeUnit(game, 'player2', 'infantry', p2Open[0]!);
+      placeUnit(game, 'player2', 'infantry', p2Open[0]!, 'advance', 'shoot-on-sight', null, target);
 
       startBattlePhase(game);
 

@@ -833,23 +833,41 @@ function resolveCollisions(
           fallBackAlongPath(uid, intents, proposedPositions, snapshot);
         }
       } else {
-        // Cross-faction collision: fastest unit claims the hex, others stop adjacent.
-        // This ensures opposing units end up at attack range instead of both bouncing away.
-        let bestId = unitIds[0]!;
-        let bestRange = state.unitStats[unitTypes.get(bestId) ?? 'infantry'].moveRange;
+        // Cross-faction collision (D4): one unit keeps the hex, others
+        // step back one hex along their path (staying adjacent / in range).
+        //
+        // Priority: a unit already at this hex (no movement) always wins.
+        // If all units moved in, the fastest (highest moveRange) wins.
+        // Ties: first in array.
+        const contestedKey = hexToKey(proposedPositions.get(unitIds[0]!)!);
+        let bestId: string | null = null;
 
+        // Check for a unit that was already on this hex (snapshot position matches)
         for (const uid of unitIds) {
-          const range = state.unitStats[unitTypes.get(uid) ?? 'infantry'].moveRange;
-          if (range > bestRange) {
-            bestRange = range;
+          const snap = snapshot.get(uid);
+          if (snap && hexToKey(snap.position) === contestedKey) {
             bestId = uid;
+            break;
           }
         }
 
-        // Losers fall back along their path to the nearest unclaimed hex
+        // No unit was already here — fastest wins
+        if (!bestId) {
+          bestId = unitIds[0]!;
+          let bestRange = state.unitStats[unitTypes.get(bestId) ?? 'infantry'].moveRange;
+          for (const uid of unitIds) {
+            const range = state.unitStats[unitTypes.get(uid) ?? 'infantry'].moveRange;
+            if (range > bestRange) {
+              bestRange = range;
+              bestId = uid;
+            }
+          }
+        }
+
+        // Losers step back one hex along their path — stays adjacent
         for (const uid of unitIds) {
           if (uid === bestId) continue;
-          fallBackAlongPath(uid, intents, proposedPositions, snapshot);
+          stepBackOne(uid, intents, proposedPositions, snapshot);
         }
       }
     }
@@ -893,6 +911,45 @@ function fallBackAlongPath(
   }
 
   // All path hexes claimed — fall back to snapshot position
+  const snap = snapshot.get(unitId);
+  if (snap) proposedPositions.set(unitId, snap.position);
+}
+
+/**
+ * Step a unit back exactly ONE hex along its path from the contested destination.
+ * Used for cross-faction collisions: keeps the loser adjacent to the winner
+ * (distance 1-2) so Phase 4 can detect engagements.
+ *
+ * If the one-step-back hex is also claimed, falls back further along the path.
+ * If no path exists, stays at snapshot position.
+ */
+function stepBackOne(
+  unitId: string,
+  intents: Map<string, TurnIntent>,
+  proposedPositions: Map<string, CubeCoord>,
+  snapshot: Map<string, UnitSnapshot>,
+): void {
+  const intent = intents.get(unitId);
+  if (!intent || intent.path.length < 2) {
+    const snap = snapshot.get(unitId);
+    if (snap) proposedPositions.set(unitId, snap.position);
+    return;
+  }
+
+  const claimed = new Set<string>();
+  for (const [uid, pos] of proposedPositions) {
+    if (uid !== unitId) claimed.add(hexToKey(pos));
+  }
+
+  // Try one step back first; if claimed, walk further back (but prefer close)
+  for (let i = intent.path.length - 2; i >= 0; i--) {
+    const hex = intent.path[i]!;
+    if (!claimed.has(hexToKey(hex))) {
+      proposedPositions.set(unitId, hex);
+      return;
+    }
+  }
+
   const snap = snapshot.get(unitId);
   if (snap) proposedPositions.set(unitId, snap.position);
 }
