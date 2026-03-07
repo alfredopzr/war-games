@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { TerrainType } from './types';
+import type { TerrainType, Building } from './types';
 import { createHex, cubeDistance, hexToKey } from './hex';
 import { createUnit, resetUnitIdCounter } from './units';
 import { calculateVisibility, isUnitVisible } from './vision';
@@ -146,5 +146,32 @@ describe('isUnitVisible', () => {
     const observer = createUnit('recon', 'player1', createHex(2, 0)); // dist 2, recon vision 5
 
     expect(isUnitVisible(target, [observer], terrain)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Recon Tower Vision
+// ---------------------------------------------------------------------------
+
+describe('recon tower vision', () => {
+  it('adds recon tower as vision source with range 4', () => {
+    const terrain = new Map<string, TerrainType>();
+    for (let q = -5; q <= 5; q++) {
+      for (let r = -5; r <= 5; r++) {
+        terrain.set(`${q},${r}`, 'plains');
+      }
+    }
+
+    const buildings: Building[] = [
+      { id: 'b1', type: 'recon-tower', owner: 'player1', position: createHex(0, 0), isRevealed: true },
+    ];
+
+    const visible = calculateVisibility([], terrain, buildings);
+
+    // Hex at distance 4 should be visible
+    expect(visible.has(hexToKey(createHex(4, 0)))).toBe(true);
+    expect(visible.has(hexToKey(createHex(0, 4)))).toBe(true);
+    // Hex at distance 5 should NOT be visible
+    expect(visible.has(hexToKey(createHex(5, 0)))).toBe(false);
   });
 });

@@ -27,6 +27,7 @@ import { canAttack, calculateDamage } from './combat';
 import { findPath } from './pathfinding';
 import { executeDirective } from './directives';
 import { validateBuild, createBuilding, BUILDING_STATS } from './buildings';
+import { getDefenseModifier } from './terrain';
 
 // -----------------------------------------------------------------------------
 // createGame
@@ -199,6 +200,9 @@ export function executeTurn(
     executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
   }
 
+  // Mortar buildings fire (after all units have moved)
+  fireMortars(state, currentPlayer);
+
   // Update city ownership BEFORE objective tracking (so KotH gate has current data)
   updateCityOwnership(state);
 
@@ -339,7 +343,7 @@ function applyCommand(
       }
 
       const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
-      const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn);
+      const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn, state.buildings);
       defender.hp -= damage;
 
       if (defender.hp <= 0) {
@@ -495,7 +499,7 @@ function applyDirectiveAction(
       if (!canAttack(unit, defender)) break;
 
       const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
-      const damage = calculateDamage(unit, defender, defenderTerrain, randomFn);
+      const damage = calculateDamage(unit, defender, defenderTerrain, randomFn, state.buildings);
       defender.hp -= damage;
 
       if (defender.hp <= 0) {
@@ -820,6 +824,61 @@ function checkMines(state: GameState, unit: Unit, owner: PlayerId): void {
     removeUnit(state.players[owner].units, unit.id);
     const enemy: PlayerId = owner === 'player1' ? 'player2' : 'player1';
     state.round.unitsKilledThisRound[enemy] += 1;
+  }
+}
+
+function fireMortars(state: GameState, firingPlayer: PlayerId): void {
+  const enemyPlayer: PlayerId = firingPlayer === 'player1' ? 'player2' : 'player1';
+  const mortars = state.buildings.filter(
+    (b) => b.type === 'mortar' && b.owner === firingPlayer,
+  );
+
+  for (const mortar of mortars) {
+    const atk = BUILDING_STATS.mortar.atk ?? 2;
+    const range = BUILDING_STATS.mortar.attackRange ?? 3;
+    const minRange = BUILDING_STATS.mortar.minAttackRange ?? 2;
+
+    let nearestEnemy: Unit | null = null;
+    let nearestDist = Infinity;
+
+    for (const enemy of state.players[enemyPlayer].units) {
+      const dist = cubeDistance(mortar.position, enemy.position);
+      if (dist >= minRange && dist <= range && dist < nearestDist) {
+        nearestDist = dist;
+        nearestEnemy = enemy;
+      }
+    }
+
+    if (!nearestEnemy) continue;
+
+    const defenderStats = UNIT_STATS[nearestEnemy.type];
+    const terrainKey = hexToKey(nearestEnemy.position);
+    const terrainType = state.map.terrain.get(terrainKey) ?? 'plains';
+    let terrainDef = getDefenseModifier(terrainType);
+
+    // Defensive position bonus for target
+    const hasDP = state.buildings.some(
+      (b) => b.type === 'defensive-position' && b.owner === nearestEnemy!.owner && hexToKey(b.position) === terrainKey,
+    );
+    if (hasDP) {
+      terrainDef += BUILDING_STATS['defensive-position'].defenseBonus ?? 0.5;
+    }
+
+    const effectiveDef = defenderStats.def + (nearestEnemy.directive === 'hold' ? 1 : 0);
+    const damage = Math.max(1, Math.floor(atk - effectiveDef * terrainDef));
+    nearestEnemy.hp -= damage;
+
+    const label = firingPlayer === 'player1' ? 'P1' : 'P2';
+    state.pendingEvents.push({
+      type: 'mortar-fire',
+      actingPlayer: firingPlayer,
+      message: `${label} mortar dealt ${damage} damage`,
+    });
+
+    if (nearestEnemy.hp <= 0) {
+      removeUnit(state.players[enemyPlayer].units, nearestEnemy.id);
+      state.round.unitsKilledThisRound[firingPlayer] += 1;
+    }
   }
 }
 

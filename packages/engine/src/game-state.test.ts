@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { GameState, PlayerId, CubeCoord, Command } from './types';
 import { resetUnitIdCounter, UNIT_STATS } from './units';
-import { hexToKey, createHex, hexNeighbors } from './hex';
+import { hexToKey, createHex, hexNeighbors, cubeDistance } from './hex';
 import { createBuilding, resetBuildingIdCounter, BUILDING_STATS } from './buildings';
 import {
   createGame,
@@ -1203,6 +1203,87 @@ describe('mine triggering', () => {
     expect(state.buildings.length).toBe(0);
     // Recon should be dead (2 HP - 2 damage = 0)
     expect(state.players.player1.units.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mortar firing
+// ---------------------------------------------------------------------------
+
+describe('mortar firing', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('mortar attacks nearest enemy in range after all units act', () => {
+    const state = createGame(42);
+    placeUnit(state, 'player1', 'infantry', state.map.player1Deployment[0]!);
+    placeUnit(state, 'player2', 'infantry', state.map.player2Deployment[0]!);
+    startBattlePhase(state);
+
+    const p2Inf = state.players.player2.units[0]!;
+
+    // Find a hex 2-3 from p2 infantry that's on the map
+    let mortarPos: CubeCoord | undefined;
+    for (const key of state.map.terrain.keys()) {
+      const [qStr, rStr] = key.split(',');
+      const hex = createHex(Number(qStr), Number(rStr));
+      const dist = cubeDistance(hex, p2Inf.position);
+      if (dist >= 2 && dist <= 3) {
+        mortarPos = hex;
+        break;
+      }
+    }
+    expect(mortarPos).toBeDefined();
+
+    state.buildings.push(createBuilding('mortar', 'player1', mortarPos!));
+
+    const hpBefore = p2Inf.hp;
+
+    // Execute turn with no commands — directives run, then mortar fires
+    executeTurn(state, []);
+
+    // Check mortar fired (may have killed or damaged)
+    const p2InfAfter = state.players.player2.units.find((u) => u.id === p2Inf.id);
+    if (p2InfAfter) {
+      expect(p2InfAfter.hp).toBeLessThan(hpBefore);
+    } else {
+      // Unit was killed
+      expect(state.players.player2.units.length).toBe(0);
+    }
+  });
+
+  it('mortar does not fire at enemies outside range', () => {
+    const state = createGame(42);
+    placeUnit(state, 'player1', 'infantry', state.map.player1Deployment[0]!);
+    placeUnit(state, 'player2', 'infantry', state.map.player2Deployment[0]!);
+    startBattlePhase(state);
+
+    const p2Inf = state.players.player2.units[0]!;
+
+    // Place mortar far away (distance > 3)
+    let farHex: CubeCoord | undefined;
+    for (const key of state.map.terrain.keys()) {
+      const [qStr, rStr] = key.split(',');
+      const hex = createHex(Number(qStr), Number(rStr));
+      const dist = cubeDistance(hex, p2Inf.position);
+      if (dist > 5) {
+        farHex = hex;
+        break;
+      }
+    }
+    if (!farHex) return; // skip if no hex far enough
+
+    state.buildings.push(createBuilding('mortar', 'player1', farHex));
+    const hpBefore = p2Inf.hp;
+
+    executeTurn(state, []);
+
+    // p2 infantry may have moved due to directives, but mortar should not have fired from far away
+    // Check no mortar-fire events
+    const mortarEvents = state.pendingEvents.filter((e) => e.type === 'mortar-fire');
+    expect(mortarEvents.length).toBe(0);
   });
 });
 

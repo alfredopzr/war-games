@@ -1,7 +1,8 @@
-import type { Unit, TerrainType } from './types';
-import { cubeDistance } from './hex';
+import type { Unit, TerrainType, Building } from './types';
+import { cubeDistance, hexToKey } from './hex';
 import { getDefenseModifier } from './terrain';
 import { UNIT_STATS, getTypeAdvantage } from './units';
+import { BUILDING_STATS } from './buildings';
 
 // =============================================================================
 // HexWar — Combat Resolution
@@ -22,11 +23,23 @@ export function calculateDamage(
   defender: Unit,
   defenderTerrain: TerrainType,
   randomFn: () => number = (): number => 0.85 + Math.random() * 0.3,
+  buildings?: Building[],
 ): number {
   const attackerStats = UNIT_STATS[attacker.type];
   const defenderStats = UNIT_STATS[defender.type];
   const typeMultiplier = getTypeAdvantage(attacker.type, defender.type);
-  const terrainDef = getDefenseModifier(defenderTerrain);
+  let terrainDef = getDefenseModifier(defenderTerrain);
+
+  // Defensive position bonus
+  if (buildings) {
+    const defenderKey = hexToKey(defender.position);
+    const hasDP = buildings.some(
+      (b) => b.type === 'defensive-position' && b.owner === defender.owner && hexToKey(b.position) === defenderKey,
+    );
+    if (hasDP) {
+      terrainDef += BUILDING_STATS['defensive-position'].defenseBonus ?? 0.5;
+    }
+  }
 
   // Hold directive grants +1 DEF
   const effectiveDef = defenderStats.def + (defender.directive === 'hold' ? 1 : 0);
