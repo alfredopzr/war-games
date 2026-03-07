@@ -1,6 +1,6 @@
 import type { TerrainType, TerrainDefinition, UnitType, MovementDirective, HexModifier } from './types';
 import { UNIT_STATS } from './units';
-import { CLIMB_COST_PER_ELEV, CLIMB_THRESHOLD, DOWNHILL_COST_MULT, VISION_ELEV_DIVISOR } from './map-gen-params';
+import { CLIMB_COST_PER_ELEV, CLIMB_THRESHOLD, DOWNHILL_COST_MULT, MTN_PEAK_MAX } from './map-gen-params';
 import balanceData from './balance.json';
 
 export const TERRAIN: Record<TerrainType, TerrainDefinition> = Object.fromEntries(
@@ -59,6 +59,6 @@ export function getDefenseModifier(terrain: TerrainType, modifier?: HexModifier)
   return TERRAIN[terrain].defenseModifier;
 }
 
-export function getVisionBonus(elevation: number): number {
-  return Math.floor(elevation / VISION_ELEV_DIVISOR);
+export function getVisionBonus(elevation: number, baseVisionRange: number): number {
+  return Math.floor(baseVisionRange * elevation / MTN_PEAK_MAX);
 }

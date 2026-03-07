@@ -111,13 +111,13 @@ describe('createUnit', () => {
     expect(unit.movementDirective).toBe('hold');
   });
 
-  it('creates unit with default directiveTarget of central-objective', () => {
+  it('creates unit with default directiveTarget of own position', () => {
     const unit = createUnit('infantry', 'player1', pos);
-    expect(unit.directiveTarget).toEqual({ type: 'central-objective' });
+    expect(unit.directiveTarget).toEqual({ type: 'hex', hex: pos });
   });
 
   it('creates unit with custom directiveTarget', () => {
-    const target: DirectiveTarget = { type: 'city', cityId: 'city-1' };
+    const target: DirectiveTarget = { type: 'hex', hex: { q: 5, r: 3, s: -8 } };
     const unit = createUnit('infantry', 'player1', pos, 'advance', 'ignore', null, target);
     expect(unit.directiveTarget).toEqual(target);
   });

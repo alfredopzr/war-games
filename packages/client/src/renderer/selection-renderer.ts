@@ -6,6 +6,7 @@ import {
 } from '@hexwar/engine';
 import { cachedHexToWorld } from './render-cache';
 import { getThreeContext } from './three-scene';
+import { getPalette } from './palette';
 
 // ---------------------------------------------------------------------------
 // Selection highlights — Three.js outlines + fills
@@ -22,7 +23,7 @@ let lastGameStateRef: GameState | null = null;
 
 function vizCacheKey(unit: Unit): string {
   const tgt = unit.directiveTarget;
-  const tgtKey = tgt.hex ? hexToKey(tgt.hex) : (tgt.unitId ?? tgt.cityId ?? tgt.type);
+  const tgtKey = tgt.hex ? hexToKey(tgt.hex) : (tgt.unitId ?? tgt.type);
   return `${unit.id}|${hexToKey(unit.position)}|${unit.movementDirective}|${unit.attackDirective}|${tgtKey}`;
 }
 
@@ -283,6 +284,7 @@ function createROEIcon(
   hex: CubeCoord,
   elevation: number,
   alpha: number,
+  color: number,
 ): THREE.LineSegments | null {
   if (attackDirective === 'ignore') return null;
 
@@ -291,7 +293,6 @@ function createROEIcon(
   const cy = world.y + 0.25;
   const cz = world.z;
   const r = 1.25;
-  const color = 0x5599bb;
 
   switch (attackDirective) {
     case 'shoot-on-sight': return createCrosshairIcon(cx, cy, cz, r, color, alpha);
@@ -317,6 +318,7 @@ export function renderSelectionHighlights(
   targetSelectionMode?: boolean,
   gameState?: GameState | null,
   currentPlayerView?: string,
+  preRevealUnitPositions?: Map<string, CubeCoord> | null,
 ): void {
   const ctx = getThreeContext();
   if (!ctx) return;
@@ -337,6 +339,11 @@ export function renderSelectionHighlights(
   selectionGroup.name = 'selectionGroup';
   selectionGroup.renderOrder = 2;
 
+  const pal = getPalette();
+  const factionColor = currentPlayerView
+    ? pal.player[currentPlayerView === 'player1' ? 'p1' : 'p2'].primary
+    : pal.player.p1.primary;
+
   // Invalidate trajectory cache when gameState changes
   if (gameState && gameState !== lastGameStateRef) {
     vizCache.clear();
@@ -356,7 +363,7 @@ export function renderSelectionHighlights(
 
   // Move/attack range
   if (highlightedHexes.size > 0 && highlightMode !== 'none') {
-    const color = highlightMode === 'move' ? 0x00ccff : 0x9a4a3a;
+    const color = highlightMode === 'move' ? pal.overlay.moveRange : pal.overlay.attackRange;
     const fillAlpha = highlightMode === 'move' ? 0.08 : 0.1;
 
     for (const hex of allHexes) {
@@ -378,18 +385,18 @@ export function renderSelectionHighlights(
     if (hoveredHex) {
       const key = hexToKey(hoveredHex);
       const elev = elevationMap.get(key) ?? 0;
-      selectionGroup.add(createHexOutline(hoveredHex, elev, 0x5599bb, 0.9, 0.007));
-      selectionGroup.add(createHexFill(hoveredHex, elev, 0x5599bb, 0.12, 0.005));
+      selectionGroup.add(createHexOutline(hoveredHex, elev, factionColor, 0.9, 0.007));
+      selectionGroup.add(createHexFill(hoveredHex, elev, factionColor, 0.12, 0.005));
     }
   } else if (hoveredHex) {
     // Normal hover: electric blue in move/attack mode, white otherwise
     const key = hexToKey(hoveredHex);
     const elev = elevationMap.get(key) ?? 0;
-    const hoverColor = commandMode === 'move' ? 0x00ccff : commandMode === 'attack' ? 0x9a4a3a : 0xffffff;
+    const hoverColor = commandMode === 'move' ? pal.overlay.hoverMove : commandMode === 'attack' ? pal.overlay.hoverAttack : pal.overlay.hoverNeutral;
     const hoverAlpha = commandMode !== 'none' ? 0.8 : 0.6;
     selectionGroup.add(createHexOutline(hoveredHex, elev, hoverColor, hoverAlpha, 0.007));
     if (commandMode === 'move') {
-      selectionGroup.add(createHexFill(hoveredHex, elev, 0x00ccff, 0.1, 0.005));
+      selectionGroup.add(createHexFill(hoveredHex, elev, pal.overlay.hoverMove, 0.1, 0.005));
     }
   }
 
@@ -397,13 +404,18 @@ export function renderSelectionHighlights(
   if (gameState && currentPlayerView && !targetSelectionMode) {
     const friendlyUnits = gameState.players[currentPlayerView as 'player1' | 'player2'].units;
     const allUnits = [...gameState.players.player1.units, ...gameState.players.player2.units];
-    const occupiedKeys = new Set(allUnits.map((u) => hexToKey(u.position)));
+    // During reveal, use pre-resolution positions for path computation
+    const usePreReveal = preRevealUnitPositions && preRevealUnitPositions.size > 0;
+    const occupiedKeys = new Set(allUnits.map((u) => {
+      const prePos = usePreReveal ? preRevealUnitPositions!.get(u.id) : null;
+      return hexToKey(prePos ?? u.position);
+    }));
 
     for (const unit of friendlyUnits) {
       const target = unit.directiveTarget;
       let targetHex: CubeCoord | null = null;
 
-      if (target.type === 'hex' || target.type === 'city') {
+      if (target.type === 'hex') {
         targetHex = target.hex ?? null;
       } else if (target.type === 'enemy-unit' && 'unitId' in target) {
         const enemyPlayer = unit.owner === 'player1' ? 'player2' : 'player1';
@@ -419,8 +431,11 @@ export function renderSelectionHighlights(
       const lineAlpha = isSelected ? 0.9 : 0.4;
 
       // Blue target highlight — brighter for selected unit
-      selectionGroup.add(createHexFill(targetHex, tElev, 0x00ccff, isSelected ? 0.2 : 0.1, 0.005));
-      selectionGroup.add(createHexOutline(targetHex, tElev, 0x00ccff, isSelected ? 1.0 : 0.5, 0.008));
+      selectionGroup.add(createHexFill(targetHex, tElev, pal.overlay.directiveTarget, isSelected ? 0.2 : 0.1, 0.005));
+      selectionGroup.add(createHexOutline(targetHex, tElev, pal.overlay.directiveTarget, isSelected ? 1.0 : 0.5, 0.008));
+
+      // During reveal, use pre-resolution position as path start
+      const pathStart = (usePreReveal ? preRevealUnitPositions!.get(unit.id) : null) ?? unit.position;
 
       // Directive-specific path visualization
       switch (unit.movementDirective) {
@@ -430,12 +445,12 @@ export function renderSelectionHighlights(
 
         case 'advance': {
           const path = findPath(
-            unit.position, targetHex,
+            pathStart, targetHex,
             gameState.map.terrain, unit.type, occupiedKeys,
             unit.movementDirective, gameState.map.modifiers, gameState.map.elevation,
           );
           if (path && path.length > 1) {
-            selectionGroup.add(createPathLine(path, elevationMap, 0x5599bb, lineAlpha));
+            selectionGroup.add(createPathLine(path, elevationMap, factionColor, lineAlpha));
           }
           break;
         }
@@ -446,38 +461,41 @@ export function renderSelectionHighlights(
           const cacheKey = vizCacheKey(unit);
           let trajectory = vizCache.get(cacheKey);
           if (!trajectory) {
-            trajectory = simulateFlankTrajectory(unit, targetHex, side, gameState, occupiedKeys);
+            // Use a synthetic unit at pre-reveal position for trajectory simulation
+            const simUnit = usePreReveal ? { ...unit, position: pathStart } : unit;
+            trajectory = simulateFlankTrajectory(simUnit, targetHex, side, gameState, occupiedKeys);
             vizCache.set(cacheKey, trajectory);
           }
           if (trajectory.length > 1) {
             selectionGroup.add(createDashedPathLine(
-              trajectory, elevationMap, 0x5599bb, lineAlpha, 0.4, 0.2,
+              trajectory, elevationMap, factionColor, lineAlpha, 0.4, 0.2,
             ));
           }
           break;
         }
 
-        case 'scout': {
+        case 'patrol': {
           // Path line to target
-          const scoutPath = findPath(
-            unit.position, targetHex,
+          const patrolPath = findPath(
+            pathStart, targetHex,
             gameState.map.terrain, unit.type, occupiedKeys,
             unit.movementDirective, gameState.map.modifiers, gameState.map.elevation,
           );
-          if (scoutPath && scoutPath.length > 1) {
+          if (patrolPath && patrolPath.length > 1) {
             selectionGroup.add(createDashedPathLine(
-              scoutPath, elevationMap, 0x5599bb, lineAlpha, 0.2, 0.2,
+              patrolPath, elevationMap, factionColor, lineAlpha, 0.2, 0.2,
             ));
           }
           // Patrol circle
-          const patrolHexes = hexesInRadius(targetHex, 3);
+          const patrolR = unit.patrolRadius ?? 3;
+          const patrolHexes = hexesInRadius(targetHex, patrolR);
           for (const patrolHex of patrolHexes) {
             const pKey = hexToKey(patrolHex);
             if (!gameState.map.terrain.has(pKey)) continue;
-            if (cubeDistance(targetHex, patrolHex) === 3) {
+            if (cubeDistance(targetHex, patrolHex) === patrolR) {
               const pElev = elevationMap.get(pKey) ?? 0;
               selectionGroup.add(createHexOutline(
-                patrolHex, pElev, 0x5599bb, isSelected ? 0.6 : 0.3, 0.006,
+                patrolHex, pElev, factionColor, isSelected ? 0.6 : 0.3, 0.006,
               ));
             }
           }
@@ -486,7 +504,7 @@ export function renderSelectionHighlights(
       }
 
       // ROE icon at target hex
-      const roeIcon = createROEIcon(unit.attackDirective, targetHex, tElev, isSelected ? 0.9 : 0.4);
+      const roeIcon = createROEIcon(unit.attackDirective, targetHex, tElev, isSelected ? 0.9 : 0.4, factionColor);
       if (roeIcon) {
         selectionGroup.add(roeIcon);
       }
@@ -497,7 +515,7 @@ export function renderSelectionHighlights(
   if (selectedUnit) {
     const key = hexToKey(selectedUnit.position);
     const elev = elevationMap.get(key) ?? 0;
-    selectionGroup.add(createHexOutline(selectedUnit.position, elev, 0xe8e4d8, 0.9, 0.008));
+    selectionGroup.add(createHexOutline(selectedUnit.position, elev, pal.overlay.selectedUnit, 0.9, 0.008));
   }
 
   ctx.scene.add(selectionGroup);

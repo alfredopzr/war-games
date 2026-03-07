@@ -38,7 +38,7 @@ interface SerializableRoundState {
   currentPlayer: PlayerId;
   maxTurns: number;
   turnsPlayed: number;
-  commandPool: SerializableCommandPool;
+  commandPools: Record<PlayerId, SerializableCommandPool>;
   objective: ObjectiveState;
   unitsKilledThisRound: Record<PlayerId, number>;
 }
@@ -86,7 +86,10 @@ function serializeRoundState(round: RoundState): SerializableRoundState {
     currentPlayer: round.currentPlayer,
     maxTurns: round.maxTurns,
     turnsPlayed: round.turnsPlayed,
-    commandPool: serializeCommandPool(round.commandPool),
+    commandPools: {
+      player1: serializeCommandPool(round.commandPools.player1),
+      player2: serializeCommandPool(round.commandPools.player2),
+    },
     objective: { ...round.objective },
     unitsKilledThisRound: { ...round.unitsKilledThisRound },
   };
@@ -189,7 +192,10 @@ function deserializeRoundState(data: SerializableRoundState): RoundState {
     currentPlayer: data.currentPlayer,
     maxTurns: data.maxTurns,
     turnsPlayed: data.turnsPlayed,
-    commandPool: deserializeCommandPool(data.commandPool),
+    commandPools: {
+      player1: deserializeCommandPool(data.commandPools.player1),
+      player2: deserializeCommandPool(data.commandPools.player2),
+    },
     objective: { ...data.objective },
     unitsKilledThisRound: { ...data.unitsKilledThisRound },
   };

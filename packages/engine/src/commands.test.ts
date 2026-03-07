@@ -103,13 +103,13 @@ describe('validateDirectiveTarget', () => {
     expect(() => validateDirectiveTarget('advance', target)).not.toThrow();
   });
 
-  it('does not throw for hold with central-objective target', () => {
-    const target: DirectiveTarget = { type: 'central-objective' };
+  it('does not throw for hold with hex target', () => {
+    const target: DirectiveTarget = { type: 'hex', hex: { q: 0, r: 0, s: 0 } };
     expect(() => validateDirectiveTarget('hold', target)).not.toThrow();
   });
 
-  it('does not throw for scout with city target', () => {
-    const target: DirectiveTarget = { type: 'city', cityId: 'city-1' };
-    expect(() => validateDirectiveTarget('scout', target)).not.toThrow();
+  it('does not throw for patrol with hex target', () => {
+    const target: DirectiveTarget = { type: 'hex', hex: { q: 5, r: 3, s: -8 } };
+    expect(() => validateDirectiveTarget('patrol', target)).not.toThrow();
   });
 });

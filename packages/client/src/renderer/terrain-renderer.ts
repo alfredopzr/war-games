@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import type { GameState, CubeCoord } from '@hexwar/engine';
 import { hexToKey, hexWorldVertices, createHex } from '@hexwar/engine';
 import { getThreeContext } from './three-scene';
-import { ASH_EMBER_TERRAIN, MODIFIER_COLORS, OBJECTIVE_COLOR, PLAYER_COLORS } from './constants';
+import { setClickTerrainMesh } from './click-handler';
+import { getPalette } from './palette';
 
 // ---------------------------------------------------------------------------
 // Terrain renderer — batched Three.js hex geometry
@@ -19,15 +20,26 @@ let terrainGroup: THREE.Group | null = null;
 // Shared materials (module-level singletons)
 const batchedTopMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
 const batchedSideMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
-const outlineMat = new THREE.LineBasicMaterial({ color: 0x0a0a10 });
-const objectiveMat = new THREE.MeshBasicMaterial({
-  color: OBJECTIVE_COLOR,
-  transparent: true,
-  opacity: 0.6,
-  depthWrite: false,
-  side: THREE.DoubleSide,
-});
-const objectiveOutlineMat = new THREE.LineBasicMaterial({ color: OBJECTIVE_COLOR });
+let outlineMat: THREE.LineBasicMaterial;
+let objectiveMat: THREE.MeshBasicMaterial;
+let objectiveOutlineMat: THREE.LineBasicMaterial;
+
+function ensureMaterials(): void {
+  const p = getPalette();
+  if (!outlineMat) {
+    outlineMat = new THREE.LineBasicMaterial();
+    objectiveMat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    objectiveOutlineMat = new THREE.LineBasicMaterial();
+  }
+  outlineMat.color.setHex(p.map.grid);
+  objectiveMat.color.setHex(p.map.objective);
+  objectiveOutlineMat.color.setHex(p.map.objective);
+}
 
 const outlineMaterialCache = new Map<number, THREE.LineBasicMaterial>();
 function getOutlineMaterial(color: number): THREE.LineBasicMaterial {
@@ -41,21 +53,18 @@ function getOutlineMaterial(color: number): THREE.LineBasicMaterial {
 
 /** Darken a 0xRRGGBB color by a factor (0–1). */
 function darkenColor(color: number, factor: number): number {
-  const r = ((color >> 16) & 0xff) * factor;
-  const g = ((color >> 8) & 0xff) * factor;
-  const b = (color & 0xff) * factor;
-  return (Math.floor(r) << 16) | (Math.floor(g) << 8) | Math.floor(b);
-}
-
-/** Parse CSS hex color string to numeric value. */
-function parseColor(hex: string): number {
-  return parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, Math.max(0, ((color >> 16) & 0xff) * factor));
+  const g = Math.min(255, Math.max(0, ((color >> 8) & 0xff) * factor));
+  const b = Math.min(255, Math.max(0, (color & 0xff) * factor));
+  return (r << 16) | (g << 8) | b;
 }
 
 /** Render all terrain hexes, objective glow, and city ownership borders. */
 export function renderTerrain(state: GameState): void {
   const ctx = getThreeContext();
   if (!ctx) return;
+  ensureMaterials();
+  const pal = getPalette();
 
   // Remove previous terrain
   if (terrainGroup) {
@@ -93,7 +102,7 @@ export function renderTerrain(state: GameState): void {
     const terrain = state.map.terrain.get(key)!;
     const elev = state.map.elevation.get(key) ?? 0;
     const modifier = state.map.modifiers?.get(key);
-    const fill = (modifier && MODIFIER_COLORS[modifier]) ?? ASH_EMBER_TERRAIN[terrain] ?? 0x6A6A58;
+    const fill = (modifier && pal.modifier[modifier as keyof typeof pal.modifier]) ?? pal.terrain[terrain as keyof typeof pal.terrain];
     const verts = hexWorldVertices(hex, elev);
     if (elev !== 0) elevatedCount++;
     hexData.push({ verts, fill, elev });
@@ -128,7 +137,9 @@ export function renderTerrain(state: GameState): void {
   const topGeo = new THREE.BufferGeometry();
   topGeo.setAttribute('position', new THREE.BufferAttribute(topPositions, 3));
   topGeo.setAttribute('color', new THREE.BufferAttribute(topColors, 3));
-  terrainGroup.add(new THREE.Mesh(topGeo, batchedTopMat));
+  const topMesh = new THREE.Mesh(topGeo, batchedTopMat);
+  terrainGroup.add(topMesh);
+  setClickTerrainMesh(topMesh);
 
   // --- Grid outlines: 6 line segments per hex = 12 vertices ---
   const outlinePositions = new Float32Array(hexCount * 12 * 3);
@@ -245,7 +256,7 @@ export function renderTerrain(state: GameState): void {
         const elev = state.map.elevation.get(key) ?? 0;
         const cityVerts = hexWorldVertices(cityHex, elev);
         const cityY = cityVerts[0]!.y + 0.004;
-        const ownerColor = parseColor(PLAYER_COLORS[owner].light);
+        const ownerColor = pal.player[owner === 'player1' ? 'p1' : 'p2'].light;
 
         const cityOutlinePos = new Float32Array(12 * 3);
         for (let i = 0; i < 6; i++) {

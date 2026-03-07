@@ -3,10 +3,18 @@ import type { GameState, PlayerId, CubeCoord } from '@hexwar/engine';
 import { hexToKey, hexWorldVertices } from '@hexwar/engine';
 import { cachedHexToWorld } from './render-cache';
 import { getThreeContext } from './three-scene';
+import { getPalette } from './palette';
 
 // ---------------------------------------------------------------------------
 // Deploy zone renderer — batched into 4 draw calls
 // ---------------------------------------------------------------------------
+
+function darkenColor(color: number, factor: number): number {
+  const r = Math.min(255, Math.max(0, ((color >> 16) & 0xff) * factor));
+  const g = Math.min(255, Math.max(0, ((color >> 8) & 0xff) * factor));
+  const b = Math.min(255, Math.max(0, (color & 0xff) * factor));
+  return (r << 16) | (g << 8) | b;
+}
 
 let deployGroup: THREE.Group | null = null;
 
@@ -100,12 +108,14 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
     ? state.map.player2Deployment
     : state.map.player1Deployment;
 
-  const isP1 = currentPlayerView === 'player1';
+  const pal = getPalette();
+  const friendly = pal.player[currentPlayerView === 'player1' ? 'p1' : 'p2'];
+  const enemy = pal.player[currentPlayerView === 'player1' ? 'p2' : 'p1'];
 
   // Friendly fill (1 draw call)
   const friendlyFillGeo = buildZoneFillGeometry(friendlyZone, state.map.elevation);
   const friendlyFill = new THREE.Mesh(friendlyFillGeo, new THREE.MeshBasicMaterial({
-    color: isP1 ? 0x4a5a3a : 0x6a3a2a,
+    color: darkenColor(friendly.primary, 0.7),
     transparent: true,
     opacity: 0.45,
     depthWrite: false,
@@ -117,7 +127,7 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
   // Enemy fill (1 draw call)
   const enemyFillGeo = buildZoneFillGeometry(enemyZone, state.map.elevation);
   const enemyFill = new THREE.Mesh(enemyFillGeo, new THREE.MeshBasicMaterial({
-    color: isP1 ? 0x5a2a1a : 0x2a3a1a,
+    color: darkenColor(enemy.primary, 0.7),
     transparent: true,
     opacity: 0.35,
     depthWrite: false,
@@ -129,7 +139,7 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
   // Friendly stroke (1 draw call)
   const friendlyStrokeGeo = buildZoneStrokeGeometry(friendlyZone, state.map.elevation);
   const friendlyStroke = new THREE.LineSegments(friendlyStrokeGeo, new THREE.LineBasicMaterial({
-    color: isP1 ? 0x8a9a7a : 0xaa7a6a,
+    color: friendly.light,
   }));
   friendlyStroke.renderOrder = 1;
   deployGroup.add(friendlyStroke);
@@ -137,7 +147,7 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
   // Enemy stroke (1 draw call)
   const enemyStrokeGeo = buildZoneStrokeGeometry(enemyZone, state.map.elevation);
   const enemyStroke = new THREE.LineSegments(enemyStrokeGeo, new THREE.LineBasicMaterial({
-    color: isP1 ? 0x8a5a4a : 0x6a7a5a,
+    color: darkenColor(enemy.primary, 0.8),
   }));
   enemyStroke.renderOrder = 1;
   deployGroup.add(enemyStroke);

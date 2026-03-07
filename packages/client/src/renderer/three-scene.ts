@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { hexToWorld, createHex } from '@hexwar/engine';
 import { perf } from '../perf-monitor';
+import { getPalette } from './palette';
 
 // ---------------------------------------------------------------------------
 // Three.js context — scene, camera, renderers
@@ -49,7 +50,7 @@ export function createThreeContext(parentDiv: HTMLDivElement): ThreeContext {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(w, h);
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setClearColor(0x0a0a10, 1);
+  renderer.setClearColor(getPalette().scene.clear, 1);
   const canvas = renderer.domElement;
   canvas.style.position = 'absolute';
   canvas.style.top = '0';
@@ -77,21 +78,38 @@ export function createThreeContext(parentDiv: HTMLDivElement): ThreeContext {
   parentDiv.appendChild(labelRenderer.domElement);
 
   // Orthographic camera — tilted for isometric perspective
-  const camera = new THREE.OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, -2000, 2000);
+  const camera = new THREE.OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, -100, 200);
   // Position will be set by fitCameraToMap; start looking at origin
   camera.position.set(0, 10, 0);
   camera.lookAt(0, 0, 0);
 
   // Scene with lighting for 3D models
+  const pal = getPalette();
   const scene = new THREE.Scene();
-  const ambient = new THREE.AmbientLight(0xffffff, 1.8);
+  const ambient = new THREE.AmbientLight(pal.scene.ambient, pal.scene.ambientIntensity);
   scene.add(ambient);
-  const dir = new THREE.DirectionalLight(0xfff5e0, 0.6);
+  const dir = new THREE.DirectionalLight(pal.scene.directional, pal.scene.directionalIntensity);
   dir.position.set(1, 3, -2);
   scene.add(dir);
 
   ctx = { renderer, labelRenderer, scene, camera };
   return ctx;
+}
+
+/** Update clear color and lighting to match current palette. */
+export function syncScenePalette(): void {
+  if (!ctx) return;
+  const pal = getPalette();
+  ctx.renderer.setClearColor(pal.scene.clear, 1);
+  ctx.scene.traverse((obj) => {
+    if (obj instanceof THREE.AmbientLight) {
+      obj.color.setHex(pal.scene.ambient);
+      obj.intensity = pal.scene.ambientIntensity;
+    } else if (obj instanceof THREE.DirectionalLight) {
+      obj.color.setHex(pal.scene.directional);
+      obj.intensity = pal.scene.directionalIntensity;
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

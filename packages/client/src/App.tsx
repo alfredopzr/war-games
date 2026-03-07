@@ -16,13 +16,21 @@ import { updateEffects } from './renderer/effects-renderer';
 import { setupStaticCamera, setMapParams, setDeployFacing, refitCamera, startIntro, tickIntro, tickCamera, wasDrag } from './renderer/camera-controller';
 import {
   createThreeContext, setMapFlip, startRenderLoop, stopRenderLoop,
-  disposeThreeContext, markLabelsDirty,
+  disposeThreeContext, markLabelsDirty, syncScenePalette,
 } from './renderer/three-scene';
 import { preloadFactionModels } from './renderer/model-loader';
 import { syncUnitModels, advanceAnimations, clearAllUnitModels } from './renderer/unit-model';
 import { preloadAllProps, renderProps, clearProps } from './renderer/prop-renderer';
 import { clearWorldCache } from './renderer/render-cache';
+import { injectCssPalette } from './renderer/css-palette';
 import { renderTopoLines, clearTopoLines } from './renderer/topo-renderer';
+import { ASH_EMBER, setPalette, getPalette } from './renderer/palette';
+import { WINTER } from './renderer/palette-winter';
+import { DESERT } from './renderer/palette-desert';
+import { NATO } from './renderer/palette-nato';
+import { SATELLITE } from './renderer/palette-satellite';
+import { NEON } from './renderer/palette-neon';
+import { DEBUG } from './renderer/palette-debug';
 import { useGameStore } from './store/game-store';
 import { perf } from './perf-monitor';
 import { UnitInfoPanel } from './components/UnitInfoPanel';
@@ -59,6 +67,11 @@ function getEnemyPlayer(player: PlayerId): PlayerId {
 let lastTerrainSeed = -1;
 let lastCityOwnershipHash = '';
 
+function invalidateTerrainCache(): void {
+  lastTerrainSeed = -1;
+  lastCityOwnershipHash = '';
+}
+
 function cityOwnershipHash(state: GameState): string {
   const parts: string[] = [];
   for (const [key, owner] of state.cityOwnership) {
@@ -88,6 +101,7 @@ function updateSelectionHighlights(state: GameState): void {
     store.targetSelectionMode,
     state,
     store.currentPlayerView,
+    store.preRevealUnitPositions,
   );
   endSelection();
 }
@@ -186,12 +200,13 @@ export function App(): ReactElement {
   const highlightedHexes = useGameStore((s) => s.highlightedHexes);
   const highlightMode = useGameStore((s) => s.highlightMode);
   const commandMode = useGameStore((s) => s.commandMode);
+  const preRevealUnitPositions = useGameStore((s) => s.preRevealUnitPositions);
 
   // Update selection highlights on hover/selection/target changes
   useEffect(() => {
     if (!gameState) return;
     updateSelectionHighlights(gameState);
-  }, [gameState, selectedUnit, hoveredHex, targetSelectionMode, highlightedHexes, highlightMode, commandMode, pendingCommands]);
+  }, [gameState, selectedUnit, hoveredHex, targetSelectionMode, highlightedHexes, highlightMode, commandMode, pendingCommands, preRevealUnitPositions]);
 
   // Recalculate visibility when player view changes
   useEffect(() => {
@@ -239,12 +254,29 @@ export function App(): ReactElement {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Dev: number keys 1-7 switch palette
+  useEffect(() => {
+    const palettes = [ASH_EMBER, WINTER, DESERT, NATO, SATELLITE, NEON, DEBUG] as const;
+    const onPaletteKey = (e: KeyboardEvent): void => {
+      const idx = parseInt(e.key, 10);
+      if (!(idx >= 1 && idx <= 7)) return;
+      setPalette(palettes[idx - 1]!);
+      syncScenePalette();
+      invalidateTerrainCache();
+      const gs = useGameStore.getState().gameState;
+      if (gs) renderScene(gs);
+    };
+    window.addEventListener('keydown', onPaletteKey);
+    return () => window.removeEventListener('keydown', onPaletteKey);
+  }, []);
+
   // Initialize Three.js
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     createThreeContext(container);
+    injectCssPalette(getPalette());
 
     const cleanupCamera = setupStaticCamera(container);
     cleanupCameraRef.current = cleanupCamera;
@@ -346,7 +378,6 @@ export function App(): ReactElement {
       // Target selection mode: click map to set directive target
       if (store.targetSelectionMode && store.selectedUnit) {
         const hexKey = hexToKey(hex);
-        const terrain = gameState.map.terrain.get(hexKey);
 
         // Try enemy unit first
         const enemyPlayer = currentPlayerView === 'player1' ? 'player2' : 'player1';
@@ -359,14 +390,7 @@ export function App(): ReactElement {
           return;
         }
 
-        // Try city
-        if (terrain === 'city') {
-          store.setUnitDirectiveTarget(store.selectedUnit.id, { type: 'city', hex });
-          perf.logAction('target:city', performance.now() - clickT0);
-          return;
-        }
-
-        // Fall back to hex target
+        // Hex target (including cities — no special city target type)
         store.setUnitDirectiveTarget(store.selectedUnit.id, { type: 'hex', hex });
         perf.logAction('target:hex', performance.now() - clickT0);
         return;

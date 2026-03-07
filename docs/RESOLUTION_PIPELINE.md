@@ -17,7 +17,7 @@ Cross-references: Response time and damage formula math in `GAME_MATH_ENGINE.md`
 | 5 | Initiative Fire | Offensive units fire in response-time order; dead defenders cancel their pending attacks. |
 | 6 | Counter Fire | Surviving defenders with offensive ROE fire back at their attacker. |
 | 7 | Melee | *Deferred (OD-1).* Adjacent contact after movement — uses meleeRating, not ATK/DEF. |
-| 8 | Effects | Support heals, scout reveals, hold DEF modifier *(value deferred, OD-9)*. |
+| 8 | Effects | Support heals, patrol reveals, hold DEF modifier *(value deferred, OD-9)*. |
 | 9 | Territory | Cities flip ownership; capturing unit pays HP cost. |
 | 10 | Round End | Check KotH / elimination / turn limit; increment turn counters. |
 
@@ -65,7 +65,7 @@ Every unit carries an **order** — the product of `movementDirective × attackD
 | `advance` | Move toward target hex via shortest path |
 | `flank-left` | Move toward target via flanking arc, offset left of approach vector |
 | `flank-right` | Move toward target via flanking arc, offset right of approach vector |
-| `scout` | Orbit `targetHex` at radius 2-3 hexes. If no target, `targetHex` defaults to current position (orbit in place). Movement pattern: advance toward targetHex until within radius, then circle it clockwise. Reverses direction if blocked. |
+| `patrol` | Orbit `targetHex` at configurable radius (default 3). Movement pattern: advance toward targetHex until within radius, then circle clockwise on a fixed-radius ring. If blocked, try counter-clockwise offsets. |
 | `hold` | Do not move. Unit receives passive DEF modifier while stationary. Modifier value deferred to S4 balance pass (OD-9). |
 
 Flank direction is an explicit player choice — terrain on one side of the approach may be favorable while the other is exposed. The flanking waypoint is computed perpendicular to the unit→target vector, offset by `floor(mapDiameter × 0.25)` hexes (§A6).
@@ -91,7 +91,7 @@ The order name is the unit's behavioral identity for the tick. Pipeline phases r
 | **advance** | Assault | Advance in Contact | Probe | Search & Destroy | March |
 | **flank-left** | Envelop Left | Harass Left | Feint Left | Pursue Left | Bypass Left |
 | **flank-right** | Envelop Right | Harass Right | Feint Right | Pursue Right | Bypass Right |
-| **scout** | Recon in Force | Armed Recon | Recon | Track | Silent Recon |
+| **patrol** | Recon in Force | Armed Recon | Recon | Track | Silent Recon |
 | **hold** | Defend | Harassing Defense | Tripwire | Ambush | Dig In |
 
 Source of truth: `BEHAVIOR_NAMES` in `directives.ts`.
@@ -105,7 +105,7 @@ All movement directives accept a `targetHex` parameter. This is already true for
 | `advance` | targetHex | — | — |
 | `flank-left` | targetHex | — | — |
 | `flank-right` | targetHex | — | — |
-| `scout` | targetHex | — | Current position (orbits in place) |
+| `patrol` | targetHex | patrolRadius | Current position (orbits in place), radius default 3 |
 | `hold` | — | — | — |
 
 Attack directives accept an optional `priorityType` parameter:
@@ -140,7 +140,7 @@ Default: `huntTargetId = undefined`, `huntLockTurns = 0`. These are only meaning
 
 **UI implication:** Directive picker renders a secondary unit-type dropdown when `hunt` is selected. All directives that take `targetHex` use the existing hex-click to confirm target. No other directives require UI changes.
 
-**Scout movement pattern in Phase 3:** The scout advances toward `targetHex` until within orbit radius (2-3 hexes), then circles clockwise at that radius. If the orbit path is blocked (terrain, occupied hex), the scout reverses direction. If `targetHex` is not set, it defaults to the unit's current position — the scout orbits in place. The client visualization (dotted circle at radius 3) matches this: the circle IS the orbit path.
+**Patrol movement pattern in Phase 3:** The unit advances toward `targetHex` until within `patrolRadius` (default 3), then circles clockwise on a fixed-radius ring. If the orbit path is blocked (terrain, occupied hex), the unit tries counter-clockwise offsets. If `targetHex` is not set, it defaults to the unit's current position — the unit orbits in place. The client visualization (dotted circle at radius 3) matches this: the circle IS the orbit path.
 
 **Hold + DEF bonus:** `hold` is the only directive where a unit is fully committed to position. A DEF increase is the right reward — it makes hold a genuine strategic choice, not just "I have nowhere to go." The modifier value is deferred to S4 balance pass (OD-9) because it must be sized against the ATK/HP/DEF ratios from the math model's kill timing targets. Guessing now risks breaking the 2-hit counter relationship.
 
@@ -260,7 +260,7 @@ interface TurnIntent {
 | `advance` | `directiveTarget` resolved to hex | Required — no default |
 | `flank-left` | `directiveTarget` resolved to hex | Required — no default |
 | `flank-right` | `directiveTarget` resolved to hex | Required — no default |
-| `scout` | `directiveTarget` if set, else unit's current position | Defaults to orbit-in-place |
+| `patrol` | `directiveTarget` if set, else unit's current position | Defaults to orbit-in-place |
 | `hold` | `directiveTarget` if set, else nearest enemy position | Used for facing only (no path) |
 
 CP `redirect` commands update the unit's directives before intent generation. The unit then acts under its new order for the rest of this tick.
@@ -503,7 +503,7 @@ Non-combat directive actions execute. These occur after combat so they cannot un
 | `engineer` (specialty) | *Deferred* |
 | `sniper` (specialty) | *Deferred* |
 
-Scout units with `scout` movement directive emit `reveal` events for enemy units within visionRange.
+Patrol units with `patrol` movement directive emit `reveal` events for enemy units within visionRange.
 
 ---
 

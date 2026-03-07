@@ -1,26 +1,21 @@
 import type { PlayerId, UnitType } from '@hexwar/engine';
+import { getPalette, type FactionId } from './palette';
 
-export const ASH_EMBER_TERRAIN: Record<string, number> = {
-  plains: 0x6A6A58,
-  forest: 0x3A4030,
-  mountain: 0x505058,
-  city: 0x7A6048,
+export type Faction = FactionId;
+
+export const PLAYER_FACTION: Record<PlayerId, Faction> = {
+  player1: 'engineer',
+  player2: 'caravaner',
 };
 
-export const MODIFIER_COLORS: Record<string, number> = {
-  river:   0x1A2A3A,
-  lake:    0x1A2A3A,
-  bridge:  0x5A4A3A,
-  highway: 0x252525,
-};
-
-export const OBJECTIVE_COLOR = 0xA08A40;
-export const FOG_NEVER_SEEN = 0x16160E;
-
-export const PLAYER_COLORS = {
-  player1: { fill: '#6a7a5a', stroke: '#4a5a3a', light: '#8a9a7a' },
-  player2: { fill: '#8a5a4a', stroke: '#6a3a2a', light: '#aa7a6a' },
-} as const;
+export function getPlayerColor(
+  unitOwner: PlayerId,
+  _observingPlayer: PlayerId,
+): { path: number; tracer: number } {
+  const p = getPalette();
+  const key = unitOwner === 'player1' ? 'p1' : 'p2';
+  return { path: p.player[key].path, tracer: p.player[key].path };
+}
 
 export const UNIT_LABELS: Record<string, string> = {
   infantry: 'I',
@@ -33,13 +28,6 @@ export const UNIT_LABELS: Record<string, string> = {
 // 3D Model System
 // ---------------------------------------------------------------------------
 
-export type Faction = 'engineer' | 'caravaner';
-
-export const PLAYER_FACTION: Record<PlayerId, Faction> = {
-  player1: 'engineer',
-  player2: 'caravaner',
-};
-
 export type AnimAction = 'idle' | 'move' | 'attack' | 'melee' | 'hit' | 'death' | 'climb';
 
 interface ModelEntry {
@@ -47,7 +35,7 @@ interface ModelEntry {
   readonly clipMap?: Partial<Record<AnimAction, string[]>>;
 }
 
-export const MODEL_MANIFEST: Record<Faction, Record<UnitType, ModelEntry>> = {
+export const MODEL_MANIFEST: Partial<Record<Faction, Record<UnitType, ModelEntry>>> = {
   engineer: {
     infantry: {
       glbPath: '/models/highdef/infantry_engineer.glb',

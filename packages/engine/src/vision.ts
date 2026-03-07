@@ -6,7 +6,7 @@ import type { Unit, TerrainType } from './types';
 import { cubeDistance, hexToKey, hexLineDraw } from './hex';
 import { getVisionBonus } from './terrain';
 import { UNIT_STATS } from './units';
-import { FOREST_VISION_PENALTY } from './map-gen-params';
+import { FOREST_VISION_PENALTY, LOS_EYE_HEIGHT } from './map-gen-params';
 
 // -----------------------------------------------------------------------------
 // calculateVisibility
@@ -16,10 +16,11 @@ import { FOREST_VISION_PENALTY } from './map-gen-params';
  * Compute the set of visible hex keys for a group of friendly units.
  *
  * For each unit:
- *  - Effective vision = base vision range + floor(elevation / VISION_ELEV_DIVISOR)
+ *  - Effective vision = base vision range + floor(base * elevation / MTN_PEAK_MAX)
  *  - Forest penalty: units on forest hexes lose FOREST_VISION_PENALTY range
  *  - For each hex within effective range, perform LoS check:
  *    - Draw hex line from unit to target
+ *    - Sight line is raised by LOS_EYE_HEIGHT at both endpoints
  *    - If any INTERMEDIATE hex has elevation strictly above the interpolated
  *      sight-line height, the target is NOT visible (elevation occlusion)
  *    - The blocking hex itself IS visible
@@ -43,9 +44,10 @@ export function calculateVisibility(
     const unitKey = hexToKey(unit.position);
     const unitElev = elevationMap.get(unitKey) ?? 0;
     const unitTerrain = terrainMap.get(unitKey);
-    const visionBonus = getVisionBonus(unitElev);
     const stats = unitStats ?? UNIT_STATS;
-    let effectiveVision = stats[unit.type].visionRange + visionBonus;
+    const baseVision = stats[unit.type].visionRange;
+    const visionBonus = getVisionBonus(unitElev, baseVision);
+    let effectiveVision = baseVision + visionBonus;
 
     // Forest vision penalty: units in forest see less in all directions
     if (unitTerrain === 'forest') {
@@ -76,8 +78,8 @@ export function calculateVisibility(
         const intermediateKey = hexToKey(line[i]!);
         const intermediateElev = elevationMap.get(intermediateKey) ?? 0;
 
-        // Interpolated sight-line height at this step
-        const sightHeight = elevA + (elevB - elevA) * (i / totalSteps);
+        // Interpolated sight-line height at this step (raised by eye height)
+        const sightHeight = elevA + LOS_EYE_HEIGHT + (elevB - elevA) * (i / totalSteps);
 
         // Pure elevation occlusion: any hex strictly above the sight line blocks
         if (intermediateElev > sightHeight) {

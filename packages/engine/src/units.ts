@@ -64,7 +64,7 @@ export function createUnit(
   movementDirective: MovementDirective = 'advance',
   attackDirective: AttackDirective = 'ignore',
   specialtyModifier: SpecialtyModifier | null = null,
-  directiveTarget: DirectiveTarget = { type: 'central-objective' },
+  directiveTarget: DirectiveTarget = { type: 'hex', hex: position },
 ): Unit {
   unitIdCounter += 1;
   return {

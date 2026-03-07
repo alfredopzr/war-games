@@ -272,8 +272,8 @@ export const HIGHWAY_SMOOTH_PASSES = 3;
 // §12 Vision Parameters
 // -----------------------------------------------------------------------------
 
-/** Elevation units per +1 vision range bonus. floor(elev / divisor). */
-export const VISION_ELEV_DIVISOR = 3;
-
 /** Vision range penalty for units on forest hexes. */
 export const FOREST_VISION_PENALTY = 2;
+
+/** Eye-height offset for LoS. Raises the sight line so minor terrain bumps don't block. */
+export const LOS_EYE_HEIGHT = 1.8;

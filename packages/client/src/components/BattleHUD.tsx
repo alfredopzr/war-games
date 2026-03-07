@@ -10,7 +10,8 @@ import type { PlayerId, ObjectiveState, GameState, CubeCoord, Unit } from '@hexw
 import { useGameStore } from '../store/game-store';
 import type { BattleLogEntry } from '../store/game-store';
 import { perf } from '../perf-monitor';
-import { skipReplay, diffTurnEvents, startReplay } from '../renderer/replay-sequencer';
+import { startReveal, skipReveal } from '../renderer/reveal-sequencer';
+import { getPalette } from '../renderer/palette';
 
 function phaseClass(phase: string): string {
   switch (phase) {
@@ -30,7 +31,7 @@ function playerLabel(player: PlayerId): string {
 }
 
 function playerColor(player: PlayerId): string {
-  return player === 'player1' ? '#6a7a5a' : '#8a5a4a';
+  return getPalette().player[player === 'player1' ? 'p1' : 'p2'].hud;
 }
 
 function objectiveText(objective: ObjectiveState, state: GameState): string {
@@ -126,7 +127,14 @@ function resolveSimultaneousLocal(
       unitsBefore.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: pid });
     }
   }
-  const citiesBefore = new Map(gameState.cityOwnership);
+  // Store pre-resolution positions so selection renderer can show planning paths during reveal
+  const preRevealPositions = new Map<string, import('@hexwar/engine').CubeCoord>();
+  for (const pid of ['player1', 'player2'] as PlayerId[]) {
+    for (const unit of gameState.players[pid].units) {
+      preRevealPositions.set(unit.id, { ...unit.position });
+    }
+  }
+  store.setPreRevealUnitPositions(preRevealPositions);
 
   // Single pipeline call — both players resolve simultaneously
   resolveTurn(gameState, p1Commands, aiCommands, () => 0.85 + Math.random() * 0.3);
@@ -138,23 +146,11 @@ function resolveSimultaneousLocal(
   }
   gameState.pendingEvents = [];
 
-  // Snapshot after resolution
-  const unitsAfter = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
-  for (const pid of ['player1', 'player2'] as PlayerId[]) {
-    for (const unit of gameState.players[pid].units) {
-      unitsAfter.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: pid });
-    }
-  }
-  const citiesAfter = new Map(gameState.cityOwnership);
-
-  // Generate replay events from state diff
-  const replayEvents = diffTurnEvents(unitsBefore, unitsAfter, citiesBefore, citiesAfter);
-
   // Flash damaged units (immediate — CSS effect on HP bars)
   const updated = new Map(store.damagedUnits);
   for (const [id, before] of unitsBefore) {
-    const after = unitsAfter.get(id);
-    if (after && after.hp < before.hp) {
+    const afterUnit = [...gameState.players.player1.units, ...gameState.players.player2.units].find(u => u.id === id);
+    if (afterUnit && afterUnit.hp < before.hp) {
       updated.set(id, Date.now());
     }
   }
@@ -167,7 +163,7 @@ function resolveSimultaneousLocal(
   // Check round end
   const roundEnd = checkRoundEnd(gameState);
 
-  // Deferred state application — called after replay finishes (or immediately if no events)
+  // Deferred state application — called after reveal finishes (or immediately if no events)
   const applyFinalState = (): void => {
     if (roundEnd.roundOver) {
       useGameStore.getState().addBattleLogEntries([{
@@ -176,6 +172,7 @@ function resolveSimultaneousLocal(
           type: 'round-end',
           actingPlayer: roundEnd.winner ?? 'player1',
           phase: 'round',
+          pipelinePhase: 10,
           winner: roundEnd.winner,
           reason: roundEnd.reason!,
         },
@@ -192,6 +189,7 @@ function resolveSimultaneousLocal(
             type: 'game-end',
             actingPlayer: gameState.winner,
             phase: 'round',
+            pipelinePhase: 10,
             winner: gameState.winner,
           },
         }]);
@@ -204,7 +202,7 @@ function resolveSimultaneousLocal(
 
     // Round not over — reset for player1's next planning phase
     gameState.round.currentPlayer = 'player1';
-    gameState.round.commandPool = createCommandPool();
+    gameState.round.commandPools = { player1: createCommandPool(), player2: createCommandPool() };
     for (const unit of gameState.players.player1.units) {
       unit.hasActed = false;
     }
@@ -212,7 +210,11 @@ function resolveSimultaneousLocal(
     useGameStore.getState().setGameState({ ...gameState });
   };
 
-  if (replayEvents.length > 0) {
+  // Structured event-driven reveal (replaces diffTurnEvents snapshot diff)
+  const battleEvents = logEntries.map(e => e.event);
+  console.log(`[REVEAL:SETUP] ${battleEvents.length} events for reveal, phases: ${[...new Set(battleEvents.map(e => e.pipelinePhase))].join(',')}`);
+
+  if (battleEvents.length > 0) {
     // Track intermediate positions for progressive fog clearing
     const replayPositions = new Map<string, CubeCoord>();
     for (const [id, snap] of unitsBefore) {
@@ -222,9 +224,10 @@ function resolveSimultaneousLocal(
     }
 
     store.setReplayPlaying(true);
-    startReplay(replayEvents, gameState.map.elevation, {
+    startReveal(battleEvents, gameState.map.elevation, 'player1', {
       onComplete: () => {
         store.setReplayPlaying(false);
+        store.setPreRevealUnitPositions(null);
         applyFinalState();
       },
       onUnitArrived: (unitId: string, to: CubeCoord) => {
@@ -238,7 +241,7 @@ function resolveSimultaneousLocal(
             syntheticUnits.push({ ...orig, position: pos });
           }
         }
-        const vis = calculateVisibility(syntheticUnits, gameState.map.terrain, gameState.map.elevation);
+        const vis = calculateVisibility(syntheticUnits, gameState.map.terrain, gameState.map.elevation, gameState.unitStats);
         useGameStore.getState().setVisibleHexes(vis);
         // Accumulate explored
         const prevExplored = useGameStore.getState().exploredHexes;
@@ -247,6 +250,9 @@ function resolveSimultaneousLocal(
         if (merged.size !== prevExplored.size) {
           useGameStore.setState({ exploredHexes: merged });
         }
+      },
+      onPhaseStart: (phase: number) => {
+        console.log(`[REVEAL] Phase ${phase}`);
       },
     });
   } else {
@@ -279,13 +285,13 @@ export function BattleHUD(): ReactElement | null {
     }
   }, [gameState?.phase, buildTimerInterval, startBuildTimer]);
 
-  // Space key to skip replay
+  // Space key to skip reveal
   useEffect(() => {
     if (!isReplayPlaying) return;
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.code === 'Space') {
         e.preventDefault();
-        skipReplay();
+        skipReveal();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -420,10 +426,10 @@ export function BattleHUD(): ReactElement | null {
         {isReplayPlaying && (
           <button
             className="end-turn-btn"
-            onClick={skipReplay}
+            onClick={skipReveal}
             type="button"
           >
-            Skip Replay
+            Skip
           </button>
         )}
         {showEndTurn && !isReplayPlaying && (

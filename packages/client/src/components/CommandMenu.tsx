@@ -1,6 +1,6 @@
-import { useCallback, useState, type ReactElement } from 'react';
+import { useCallback, useState, useEffect, useRef, type ReactElement } from 'react';
 import { canIssueCommand, CP_PER_ROUND } from '@hexwar/engine';
-import type { MovementDirective, AttackDirective, SpecialtyModifier, CommandPool } from '@hexwar/engine';
+import type { CommandPool } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 import { OrderMatrix } from './OrderMatrix';
 
@@ -14,30 +14,57 @@ export function CommandMenu(): ReactElement | null {
   const addPendingCommand = useGameStore((s) => s.addPendingCommand);
   const selectUnit = useGameStore((s) => s.selectUnit);
   const setTargetSelectionMode = useGameStore((s) => s.setTargetSelectionMode);
+  const targetSelectionMode = useGameStore((s) => s.targetSelectionMode);
 
   const [showMatrix, setShowMatrix] = useState(false);
+  const [redirectActive, setRedirectActive] = useState(false);
+  const redirectUnitId = useRef<string | null>(null);
 
-  const handleRedirect = useCallback(
-    (movement: MovementDirective, attack: AttackDirective, specialty: SpecialtyModifier | null): void => {
-      if (!selectedUnit) return;
-      addPendingCommand({
-        type: 'redirect',
-        unitId: selectedUnit.id,
-        newMovementDirective: movement,
-        newAttackDirective: attack,
-        newSpecialtyModifier: specialty,
-      });
-      setShowMatrix(false);
-      selectUnit(null);
-    },
-    [selectedUnit, addPendingCommand, selectUnit],
-  );
+  // Reset redirect state when unit changes
+  useEffect(() => {
+    setRedirectActive(false);
+    setShowMatrix(false);
+    redirectUnitId.current = null;
+  }, [selectedUnit?.id]);
 
-  // TODO: may merge redirect + target into single flow
-  const handleSetTarget = useCallback((): void => {
+  // When both orders are picked, enter target selection mode
+  const onBothConfirmed = useCallback((): void => {
+    if (!selectedUnit) return;
+    redirectUnitId.current = selectedUnit.id;
+    setRedirectActive(true);
     setTargetSelectionMode(true);
     setShowMatrix(false);
-  }, [setTargetSelectionMode]);
+  }, [selectedUnit, setTargetSelectionMode]);
+
+  // When target selection completes (targetSelectionMode goes false while redirect is active),
+  // create the pending command from the unit's current directives + target
+  useEffect(() => {
+    if (!redirectActive) return;
+    if (targetSelectionMode) return;
+    // targetSelectionMode just went false while we're mid-redirect — target was set
+    const unitId = redirectUnitId.current;
+    if (!unitId) return;
+
+    const store = useGameStore.getState();
+    const player = store.gameState?.players[store.currentPlayerView];
+    const unit = player?.units.find((u) => u.id === unitId);
+    if (!unit) return;
+
+    addPendingCommand({
+      type: 'redirect',
+      unitId: unit.id,
+      newMovementDirective: unit.movementDirective,
+      newAttackDirective: unit.attackDirective,
+      newSpecialtyModifier: unit.specialtyModifier,
+      target: unit.directiveTarget,
+      patrolRadius: unit.patrolRadius,
+      huntPriorityType: unit.huntPriorityType,
+    });
+
+    setRedirectActive(false);
+    redirectUnitId.current = null;
+    selectUnit(null);
+  }, [targetSelectionMode, redirectActive, addPendingCommand, selectUnit]);
 
   if (!gameState || !selectedUnit) return null;
   if (gameState.phase !== 'battle') return null;
@@ -52,6 +79,14 @@ export function CommandMenu(): ReactElement | null {
   };
   const canCommand = canIssueCommand(virtualPool, selectedUnit.id);
 
+  if (redirectActive) {
+    return (
+      <div className="command-menu">
+        <div className="command-btn active">Select Target</div>
+      </div>
+    );
+  }
+
   return (
     <div className="command-menu">
       <button
@@ -62,16 +97,9 @@ export function CommandMenu(): ReactElement | null {
       >
         Redirect
       </button>
-      <button
-        className="command-btn"
-        onClick={handleSetTarget}
-        type="button"
-      >
-        Set Target
-      </button>
       {showMatrix && canCommand && (
         <div className="directive-dropdown">
-          <OrderMatrix onSelect={handleRedirect} />
+          <OrderMatrix onBothConfirmed={onBothConfirmed} />
         </div>
       )}
     </div>

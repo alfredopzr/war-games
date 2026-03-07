@@ -39,8 +39,9 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('advance directive', () => {
-  it('moves toward central objective when no enemies near', () => {
-    const unit = createUnit('infantry', 'player1', createHex(0, 0), 'advance', 'ignore', null);
+  it('moves toward target hex when no enemies near', () => {
+    const target = createHex(8, 2);
+    const unit = createUnit('infantry', 'player1', createHex(0, 0), 'advance', 'ignore', null, { type: 'hex', hex: target });
     const ctx = makeContext({ friendlyUnits: [unit] });
 
     const action = executeDirective(unit, ctx);
@@ -108,7 +109,8 @@ describe('hold directive', () => {
 
 describe('flank-left directive', () => {
   it('moves but biased left (lower q direction)', () => {
-    const unit = createUnit('infantry', 'player1', createHex(2, 2), 'flank-left', 'ignore', null);
+    const target = createHex(8, 2);
+    const unit = createUnit('infantry', 'player1', createHex(2, 2), 'flank-left', 'ignore', null, { type: 'hex', hex: target });
     const ctx = makeContext({ friendlyUnits: [unit] });
 
     const action = executeDirective(unit, ctx);
@@ -117,7 +119,7 @@ describe('flank-left directive', () => {
     if (action.type === 'move') {
       // With advance from same position, the direct path heads toward (8,2).
       // Flank-left should bias toward lower q values compared to direct advance.
-      const advanceUnit = createUnit('infantry', 'player1', createHex(2, 2), 'advance', 'ignore', null);
+      const advanceUnit = createUnit('infantry', 'player1', createHex(2, 2), 'advance', 'ignore', null, { type: 'hex', hex: target });
       const advanceAction = executeDirective(advanceUnit, ctx);
       if (advanceAction.type === 'move') {
         // The flank-left target should have a q value <= the advance target's q,
@@ -137,7 +139,8 @@ describe('flank-left directive', () => {
 
 describe('flank-right directive', () => {
   it('moves but biased right (higher q direction)', () => {
-    const unit = createUnit('infantry', 'player1', createHex(2, 2), 'flank-right', 'ignore', null);
+    const target = createHex(8, 2);
+    const unit = createUnit('infantry', 'player1', createHex(2, 2), 'flank-right', 'ignore', null, { type: 'hex', hex: target });
     const ctx = makeContext({ friendlyUnits: [unit] });
 
     const action = executeDirective(unit, ctx);
@@ -154,9 +157,9 @@ describe('flank-right directive', () => {
 // Scout
 // ---------------------------------------------------------------------------
 
-describe('scout directive', () => {
+describe('patrol directive', () => {
   it('retreats when enemy is adjacent (moves away)', () => {
-    const unit = createUnit('recon', 'player1', createHex(3, 1), 'scout', 'ignore', null);
+    const unit = createUnit('recon', 'player1', createHex(3, 1), 'patrol', 'ignore', null);
     const enemy = createUnit('infantry', 'player2', createHex(4, 1), 'advance', 'ignore', null);
     const ctx = makeContext({
       friendlyUnits: [unit],
@@ -174,13 +177,14 @@ describe('scout directive', () => {
     }
   });
 
-  it('moves when no enemy near (does not hold)', () => {
-    const unit = createUnit('recon', 'player1', createHex(0, 0), 'scout', 'ignore', null);
+  it('moves toward distant target when no enemy near', () => {
+    const target = createHex(10, 0);
+    const unit = createUnit('recon', 'player1', createHex(0, 0), 'patrol', 'ignore', null, { type: 'hex', hex: target });
     const ctx = makeContext({ friendlyUnits: [unit] });
 
     const action = executeDirective(unit, ctx);
 
-    // Scout should explore, not hold
+    // Scout should move toward target (dist > 3)
     expect(action.type).toBe('move');
   });
 });
@@ -192,7 +196,7 @@ describe('scout directive', () => {
 describe('support directive', () => {
   it('follows nearest friendly unit', () => {
     const supported = createUnit('infantry', 'player1', createHex(8, 2), 'advance', 'ignore', null);
-    const unit = createUnit('infantry', 'player1', createHex(1, 1), 'advance', 'ignore', 'support');
+    const unit = createUnit('infantry', 'player1', createHex(1, 1), 'advance', 'ignore', 'support', { type: 'friendly-unit', unitId: supported.id });
     const ctx = makeContext({ friendlyUnits: [unit, supported] });
 
     const action = executeDirective(unit, ctx);
@@ -229,16 +233,6 @@ describe('support directive', () => {
 // ---------------------------------------------------------------------------
 
 describe('resolveTarget', () => {
-  it('returns central objective for central-objective target', () => {
-    const unit = createUnit('infantry', 'player1', createHex(0, 0), 'advance', 'ignore', null);
-    const ctx = makeContext({ friendlyUnits: [unit] });
-
-    const result = resolveTarget(unit, ctx);
-
-    expect(result.hex).toEqual(ctx.centralObjective);
-    expect(result.isValid).toBe(true);
-  });
-
   it('resolves hex target directly', () => {
     const targetHex = createHex(5, 3);
     const unit = createUnit('infantry', 'player1', createHex(0, 0), 'advance', 'ignore', null);
@@ -295,7 +289,7 @@ describe('resolveTarget', () => {
 
     expect(result.hex).toEqual(ctx.centralObjective);
     expect(result.isValid).toBe(false);
-    expect(unit.directiveTarget.type).toBe('central-objective');
+    expect(unit.directiveTarget.type).toBe('hex');
   });
 
   it('resolves friendly-unit target to friendly position', () => {
@@ -312,38 +306,6 @@ describe('resolveTarget', () => {
     expect(result.isValid).toBe(true);
   });
 
-  it('resolves city target to city hex', () => {
-    const unit = createUnit('infantry', 'player1', createHex(0, 0), 'advance', 'ignore', null);
-    const cities = new Map<string, PlayerId | null>();
-    cities.set('5,3', 'player2');
-    unit.directiveTarget = { type: 'city', cityId: '5,3' };
-    const ctx = makeContext({
-      friendlyUnits: [unit],
-      cities,
-    });
-
-    const result = resolveTarget(unit, ctx);
-
-    expect(result.hex).toEqual(createHex(5, 3));
-    expect(result.isValid).toBe(true);
-  });
-
-  it('falls back to nearest uncaptured enemy city when target city is invalid', () => {
-    const unit = createUnit('infantry', 'player1', createHex(0, 0), 'advance', 'ignore', null);
-    const cities = new Map<string, PlayerId | null>();
-    cities.set('6,2', 'player2');
-    unit.directiveTarget = { type: 'city', cityId: '99,99' };
-    const ctx = makeContext({
-      friendlyUnits: [unit],
-      cities,
-    });
-
-    const result = resolveTarget(unit, ctx);
-
-    expect(result.hex).toEqual(createHex(6, 2));
-    expect(result.isValid).toBe(false);
-    expect(unit.directiveTarget).toEqual({ type: 'city', cityId: '6,2' });
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -409,55 +371,33 @@ describe('hunt directive', () => {
 // ---------------------------------------------------------------------------
 
 describe('capture directive', () => {
-  it('moves toward target city', () => {
-    const cities = new Map<string, PlayerId | null>();
-    cities.set('8,2', 'player2');
+  it('moves toward target hex', () => {
+    const targetHex = createHex(8, 2);
     const unit = createUnit('infantry', 'player1', createHex(0, 0), 'advance', 'ignore', null);
-    unit.directiveTarget = { type: 'city', cityId: '8,2' };
+    unit.directiveTarget = { type: 'hex', hex: targetHex };
     const ctx = makeContext({
       friendlyUnits: [unit],
-      cities,
     });
 
     const action = executeDirective(unit, ctx);
 
     expect(action.type).toBe('move');
     if (action.type === 'move') {
-      const startDist = cubeDistance(unit.position, createHex(8, 2));
-      const newDist = cubeDistance(action.targetHex, createHex(8, 2));
+      const startDist = cubeDistance(unit.position, targetHex);
+      const newDist = cubeDistance(action.targetHex, targetHex);
       expect(newDist).toBeLessThan(startDist);
     }
   });
 
-  it('holds when on target city hex (city not yet owned)', () => {
-    const cities = new Map<string, PlayerId | null>();
-    cities.set('3,1', 'player2');
+  it('holds when on target hex', () => {
     const unit = createUnit('infantry', 'player1', createHex(3, 1), 'advance', 'ignore', null);
-    unit.directiveTarget = { type: 'city', cityId: '3,1' };
+    unit.directiveTarget = { type: 'hex', hex: createHex(3, 1) };
     const ctx = makeContext({
       friendlyUnits: [unit],
-      cities,
     });
 
     const action = executeDirective(unit, ctx);
 
-    expect(action.type).toBe('hold');
-  });
-
-  it('holds on already-captured city (no auto-retarget in advance)', () => {
-    const cities = new Map<string, PlayerId | null>();
-    cities.set('3,1', 'player1'); // already captured
-    cities.set('10,0', 'player2'); // another city
-    const unit = createUnit('infantry', 'player1', createHex(3, 1), 'advance', 'ignore', null);
-    unit.directiveTarget = { type: 'city', cityId: '3,1' };
-    const ctx = makeContext({
-      friendlyUnits: [unit],
-      cities,
-    });
-
-    const action = executeDirective(unit, ctx);
-
-    // Unit is already at its city target — advance resolves to hold
     expect(action.type).toBe('hold');
   });
 });

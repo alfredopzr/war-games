@@ -82,7 +82,7 @@ export { formatBattleEvent } from './battle-events';
 
 // Game state
 export {
-  createGame, placeUnit, startBattlePhase, filterValidCommands, executeTurn,
+  createGame, placeUnit, startBattlePhase, filterValidCommands,
   checkRoundEnd, scoreRound, getWinner,
 } from './game-state';
 

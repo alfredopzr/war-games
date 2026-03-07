@@ -14,6 +14,7 @@ import type {
   MovementDirective,
   AttackDirective,
   SpecialtyModifier,
+  DirectiveTarget,
   Command,
   Unit,
   CommandPool,
@@ -36,6 +37,7 @@ export interface AiBuildAction {
   movementDirective: MovementDirective;
   attackDirective: AttackDirective;
   specialtyModifier: SpecialtyModifier | null;
+  directiveTarget: DirectiveTarget;
   cost: number;
 }
 
@@ -75,7 +77,7 @@ const BUILD_PRESETS: BuildPreset[] = [
           return { movementDirective: md, attackDirective: 'shoot-on-sight', specialtyModifier: null };
         }
         case 'artillery': return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: 'support' };
-        case 'recon': return { movementDirective: 'scout', attackDirective: 'retreat-on-contact', specialtyModifier: null };
+        case 'recon': return { movementDirective: 'patrol', attackDirective: 'retreat-on-contact', specialtyModifier: null };
       }
     },
   },
@@ -87,7 +89,7 @@ const BUILD_PRESETS: BuildPreset[] = [
       { unitType: 'recon', fraction: 0.20 },
     ],
     directiveFn: (unitType, index) => {
-      if (unitType === 'recon') return { movementDirective: 'scout', attackDirective: 'retreat-on-contact', specialtyModifier: null };
+      if (unitType === 'recon') return { movementDirective: 'patrol', attackDirective: 'retreat-on-contact', specialtyModifier: null };
       return { movementDirective: 'advance', attackDirective: index % 2 === 0 ? 'shoot-on-sight' : 'ignore', specialtyModifier: null };
     },
   },
@@ -103,7 +105,7 @@ const BUILD_PRESETS: BuildPreset[] = [
       switch (unitType) {
         case 'tank': return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
         case 'artillery': return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: 'support' };
-        case 'recon': return { movementDirective: 'scout', attackDirective: 'retreat-on-contact', specialtyModifier: null };
+        case 'recon': return { movementDirective: 'patrol', attackDirective: 'retreat-on-contact', specialtyModifier: null };
         default: return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
       }
     },
@@ -116,9 +118,8 @@ const BUILD_PRESETS: BuildPreset[] = [
       { unitType: 'infantry', fraction: 0.30 },
       { unitType: 'tank', fraction: 0.20 },
     ],
-    directiveFn: (unitType, index) => {
+    directiveFn: (unitType) => {
       if (unitType === 'artillery') return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: 'support' };
-      if (unitType === 'infantry') return { movementDirective: index % 2 === 0 ? 'hold' : 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
       return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
     },
   },
@@ -220,6 +221,7 @@ export function aiBuildPhase(state: GameState, playerId: PlayerId): AiBuildActio
           movementDirective: combo.movementDirective,
           attackDirective: combo.attackDirective,
           specialtyModifier: combo.specialtyModifier,
+          directiveTarget: { type: 'hex', hex: state.map.centralObjective },
           cost,
         });
         occupied.add(key);
@@ -300,7 +302,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
   const enemyUnits = state.players[enemyId].units;
 
   const commands: Command[] = [];
-  let pool: CommandPool = state.round.commandPool;
+  let pool: CommandPool = state.round.commandPools[playerId];
   const usedUnitIds = new Set<string>();
 
   const getUnitTerrain = (unit: Unit): TerrainType =>

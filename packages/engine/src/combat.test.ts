@@ -18,7 +18,7 @@ function makeUnit(
     movementDirective: overrides.movementDirective ?? 'advance',
     attackDirective: overrides.attackDirective ?? 'ignore',
     specialtyModifier: overrides.specialtyModifier ?? null,
-    directiveTarget: overrides.directiveTarget ?? { type: 'central-objective' },
+    directiveTarget: overrides.directiveTarget ?? { type: 'hex', hex: overrides.position },
     hasActed: overrides.hasActed ?? false,
   };
 }

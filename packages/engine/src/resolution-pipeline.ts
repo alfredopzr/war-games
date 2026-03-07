@@ -18,11 +18,12 @@ import type {
   DirectiveContext,
   AttackDirective,
 } from './types';
-import { cubeDistance, hexToKey, hexNeighbors, CUBE_DIRECTIONS } from './hex';
+import { cubeDistance, hexToKey, hexNeighbors, hexLineDraw, hexesInRadius, CUBE_DIRECTIONS } from './hex';
 import { canAttack, calculateDamage } from './combat';
 import { calculateVisibility } from './vision';
 import { findPath } from './pathfinding';
-import { getMoveCost } from './terrain';
+import { getMoveCost, getVisionBonus } from './terrain';
+import { FOREST_VISION_PENALTY, LOS_EYE_HEIGHT } from './map-gen-params';
 import { UNIT_STATS } from './units';
 import { spendCommand } from './commands';
 import { resolveTarget, computeFlankWaypoint } from './directives';
@@ -231,10 +232,11 @@ function computeMovementIntent(
     return { targetHex, path: truncatePath(path, unit, context) };
   }
 
-  if (unit.movementDirective === 'scout') {
+  if (unit.movementDirective === 'patrol') {
+    const radius = unit.patrolRadius ?? PATROL_RADIUS;
     const dist = cubeDistance(unit.position, targetHex);
-    if (dist <= 3) {
-      const orbitPath = computeScoutOrbitStep(unit, targetHex, context);
+    if (dist <= radius) {
+      const orbitPath = computePatrolOrbitStep(unit, targetHex, context);
       return { targetHex, path: orbitPath };
     }
     const path = findPath(
@@ -270,6 +272,16 @@ function resolveHuntLockOn(
       return { targetHex: null, huntTargetId: undefined, huntLockTurns: 0 };
     }
 
+    // Priority override: if locked onto a non-priority type and a priority target enters vision, switch
+    if (unit.huntPriorityType && target.type !== unit.huntPriorityType) {
+      const priorityTarget = context.enemyUnits.find(
+        e => e.type === unit.huntPriorityType && visibility.has(hexToKey(e.position)),
+      );
+      if (priorityTarget) {
+        return { targetHex: priorityTarget.position, huntTargetId: priorityTarget.id, huntLockTurns: 0 };
+      }
+    }
+
     const targetVisible = visibility.has(hexToKey(target.position));
 
     if (targetVisible) {
@@ -293,8 +305,11 @@ function resolveHuntLockOn(
   }
 
   // No existing lock-on — acquire new target
+  // If priority type is set, prefer that type; fall back to nearest visible
   let bestTarget: Unit | null = null;
   let bestDist = Infinity;
+  let bestPriorityTarget: Unit | null = null;
+  let bestPriorityDist = Infinity;
 
   for (const enemy of context.enemyUnits) {
     if (!visibility.has(hexToKey(enemy.position))) continue;
@@ -303,57 +318,63 @@ function resolveHuntLockOn(
       bestDist = dist;
       bestTarget = enemy;
     }
+    if (unit.huntPriorityType && enemy.type === unit.huntPriorityType && dist < bestPriorityDist) {
+      bestPriorityDist = dist;
+      bestPriorityTarget = enemy;
+    }
   }
 
-  if (bestTarget) {
-    return { targetHex: bestTarget.position, huntTargetId: bestTarget.id, huntLockTurns: 0 };
+  const chosen = bestPriorityTarget ?? bestTarget;
+  if (chosen) {
+    return { targetHex: chosen.position, huntTargetId: chosen.id, huntLockTurns: 0 };
   }
 
   // No visible enemies — no lock-on, use directive target
   return { targetHex: null, huntTargetId: undefined, huntLockTurns: 0 };
 }
 
+const PATROL_RADIUS = 3;
+
 /**
- * Scout orbit step: pick the next walkable hex clockwise around targetHex
- * at radius 2-3. Reverse direction if blocked.
+ * Patrol orbit step: pick the next walkable hex clockwise around targetHex
+ * on a fixed radius-3 ring (matching the visual ring drawn by selection-renderer).
  */
-function computeScoutOrbitStep(
+function computePatrolOrbitStep(
   unit: Unit,
   targetHex: CubeCoord,
   context: DirectiveContext,
 ): CubeCoord[] {
   const occupied = buildOccupiedSet(unit, context);
-  const currentDist = cubeDistance(unit.position, targetHex);
 
-  // Generate ring of hexes at current distance from target (radius 2-3)
-  const ringRadius = Math.max(2, Math.min(3, currentDist));
-  const ringHexes: CubeCoord[] = [];
+  const radius = unit.patrolRadius ?? PATROL_RADIUS;
+  const ring = hexesInRadius(targetHex, radius)
+    .filter(h => cubeDistance(targetHex, h) === radius);
 
-  // Walk ring clockwise: start from a known direction, step around
-  let cursor: CubeCoord = { q: targetHex.q + ringRadius, r: targetHex.r - ringRadius, s: targetHex.s };
-  for (let side = 0; side < 6; side++) {
-    for (let step = 0; step < ringRadius; step++) {
-      ringHexes.push(cursor);
-      const dir = CUBE_DIRECTIONS[(side + 2) % 6]!;
-      cursor = { q: cursor.q + dir.q, r: cursor.r + dir.r, s: cursor.s + dir.s };
-    }
-  }
+  // Sort clockwise by angle from target center
+  ring.sort((a, b) => {
+    const angleA = Math.atan2(a.r - targetHex.r, a.q - targetHex.q);
+    const angleB = Math.atan2(b.r - targetHex.r, b.q - targetHex.q);
+    return angleA - angleB;
+  });
 
-  // Find the unit's current position in (or nearest to) the ring
+  // Find the unit's nearest ring hex
   let bestIdx = 0;
   let bestDist = Infinity;
-  for (let i = 0; i < ringHexes.length; i++) {
-    const d = cubeDistance(unit.position, ringHexes[i]!);
+  for (let i = 0; i < ring.length; i++) {
+    const d = cubeDistance(unit.position, ring[i]!);
     if (d < bestDist) {
       bestDist = d;
       bestIdx = i;
     }
   }
 
-  // Try clockwise first, then counter-clockwise
-  for (const offset of [1, -1, 2, -2, 3]) {
-    const idx = (bestIdx + offset + ringHexes.length) % ringHexes.length;
-    const candidate = ringHexes[idx]!;
+  const validCount = ring.filter(h => context.terrain.has(hexToKey(h))).length;
+  console.log(`[PATROL:ORBIT] ${unit.type} (${unit.position.q},${unit.position.r}) → ring r=${radius} around (${targetHex.q},${targetHex.r}) | dist=${cubeDistance(unit.position, targetHex)}, ring=${ring.length} hexes, ${validCount} on-map, bestIdx=${bestIdx}`);
+
+  // Try clockwise offsets, then counter-clockwise
+  for (const offset of [1, 2, 3, -1, -2, -3, 4, 5, 6]) {
+    const idx = (bestIdx + offset + ring.length) % ring.length;
+    const candidate = ring[idx]!;
     const key = hexToKey(candidate);
     if (!context.terrain.has(key)) continue;
     if (occupied.has(key)) continue;
@@ -362,10 +383,16 @@ function computeScoutOrbitStep(
       unit.position, candidate, context.terrain, unit.type,
       occupied, unit.movementDirective, context.modifiers, context.elevation,
     );
-    return truncatePath(path, unit, context);
+    const truncated = truncatePath(path, unit, context);
+    if (truncated.length === 0) continue;
+
+    const dest = truncated[truncated.length - 1]!;
+    console.log(`[PATROL:ORBIT]   +${offset} → (${candidate.q},${candidate.r}) path=${path?.length ?? 0} → (${dest.q},${dest.r})`);
+    return truncated;
   }
 
-  return []; // blocked — hold
+  console.log(`[PATROL:ORBIT]   ALL BLOCKED — hold`);
+  return [];
 }
 
 /**
@@ -450,6 +477,12 @@ function collectIntents(
       const moveResult = computeMovementIntent(unit, context);
       const facing = computeFacing(unit, moveResult.path, moveResult.targetHex, enemyUnits);
 
+      if (typeof console !== 'undefined') {
+        const p = unit.position;
+        const t = moveResult.targetHex;
+        console.log(`[PIPELINE] ${playerId} ${unit.type} (${p.q},${p.r}) → target (${t.q},${t.r}) | ${unit.movementDirective}/${unit.attackDirective} | path: ${moveResult.path.length} steps`);
+      }
+
       intents.set(unit.id, {
         unitId: unit.id,
         owner: playerId,
@@ -469,7 +502,7 @@ function collectIntents(
 }
 
 function applyRedirects(state: GameState, playerId: PlayerId, commands: Command[]): void {
-  let commandPool = state.round.commandPool;
+  let commandPool = state.round.commandPools[playerId];
   const friendlyUnits = state.players[playerId].units;
 
   for (const command of commands) {
@@ -477,15 +510,19 @@ function applyRedirects(state: GameState, playerId: PlayerId, commands: Command[
     if (!unit) continue;
     commandPool = spendCommand(commandPool, command);
 
+    console.log(`[P1:REDIRECT] ${playerId} ${unit.type} ${unit.id} → ${command.newMovementDirective}/${command.newAttackDirective} (CP ${commandPool.remaining} left)`);
+
     unit.movementDirective = command.newMovementDirective;
     unit.attackDirective = command.newAttackDirective;
     unit.specialtyModifier = command.newSpecialtyModifier;
     if (command.target) {
       unit.directiveTarget = command.target;
     }
+    unit.patrolRadius = command.patrolRadius;
+    unit.huntPriorityType = command.huntPriorityType;
   }
 
-  state.round.commandPool = commandPool;
+  state.round.commandPools[playerId] = commandPool;
 }
 
 // -----------------------------------------------------------------------------
@@ -583,6 +620,7 @@ function resolveMovement(
             type: 'damage',
             actingPlayer: enemy.owner,
             phase: 'combat',
+            pipelinePhase: 3,
             attackerId: enemy.id,
             attackerType: enemy.type,
             attackerPosition: { ...enemySnap.position },
@@ -600,6 +638,7 @@ function resolveMovement(
               type: 'kill',
               actingPlayer: enemy.owner,
               phase: 'combat',
+              pipelinePhase: 3,
               attackerId: enemy.id,
               attackerType: enemy.type,
               attackerPosition: { ...enemySnap.position },
@@ -622,8 +661,10 @@ function resolveMovement(
           type: 'intercept',
           actingPlayer: enemy.owner,
           phase: 'combat',
+          pipelinePhase: 3,
           attackerId: enemy.id,
           attackerType: enemy.type,
+          attackerPosition: { ...enemySnap.position },
           defenderId: unit.id,
           defenderType: unit.type,
           hex,
@@ -701,7 +742,7 @@ function resolveMovement(
   }
 
   // Step 2 + 3: Collision resolution
-  resolveCollisions(state, intents, proposedPositions);
+  resolveCollisions(state, intents, proposedPositions, snapshot);
 
   // Step 4: Apply positions and emit move events
   for (const [unitId, newPos] of proposedPositions) {
@@ -711,12 +752,16 @@ function resolveMovement(
     const oldPos = snapshot.get(unitId)?.position;
     if (!oldPos) continue;
 
+    if (typeof console !== 'undefined') {
+      console.log(`[PIPELINE:MOVE] ${unit.owner} ${unit.type} old=(${oldPos.q},${oldPos.r}) proposed=(${newPos.q},${newPos.r}) moved=${hexToKey(oldPos) !== hexToKey(newPos)}`);
+    }
     if (hexToKey(oldPos) !== hexToKey(newPos)) {
       unit.position = newPos;
       state.pendingEvents.push({
         type: 'move',
         actingPlayer: unit.owner,
         phase: 'movement',
+        pipelinePhase: 3,
         unitId: unit.id,
         unitType: unit.type,
         from: oldPos,
@@ -732,63 +777,105 @@ function resolveCollisions(
   state: GameState,
   intents: Map<string, TurnIntent>,
   proposedPositions: Map<string, CubeCoord>,
+  snapshot: Map<string, UnitSnapshot>,
 ): void {
-  // Build destination map: hex → [unitIds]
-  const destMap = new Map<string, string[]>();
-  for (const [unitId, pos] of proposedPositions) {
-    const key = hexToKey(pos);
-    const list = destMap.get(key) ?? [];
-    list.push(unitId);
-    destMap.set(key, list);
-  }
+  const unitTypes = new Map<string, import('./types').UnitType>();
+  for (const u of getAllUnits(state)) unitTypes.set(u.id, u.type);
 
-  // Resolve conflicts
-  for (const [, unitIds] of destMap) {
-    if (unitIds.length <= 1) continue;
-
-    // Determine faction groups
-    const byOwner = new Map<PlayerId, string[]>();
-    for (const uid of unitIds) {
-      const intent = intents.get(uid)!;
-      const list = byOwner.get(intent.owner) ?? [];
-      list.push(uid);
-      byOwner.set(intent.owner, list);
+  // Iterate until no conflicts remain (max 10 passes to prevent infinite loop)
+  for (let pass = 0; pass < 10; pass++) {
+    // Build destination map: hex → [unitIds]
+    const destMap = new Map<string, string[]>();
+    for (const [unitId, pos] of proposedPositions) {
+      const key = hexToKey(pos);
+      const list = destMap.get(key) ?? [];
+      list.push(unitId);
+      destMap.set(key, list);
     }
 
-    if (byOwner.size === 1) {
-      // Same faction: higher moveRange wins, others stop one hex short
-      const ids = unitIds;
-      let bestId = ids[0]!;
-      let bestRange = state.unitStats[intents.get(bestId)!.movementDirective === 'hold' ? 'infantry' : (getAllUnits(state).find(u => u.id === bestId)?.type ?? 'infantry')].moveRange;
+    let anyConflict = false;
 
-      for (const uid of ids) {
-        const unit = getAllUnits(state).find(u => u.id === uid);
-        if (!unit) continue;
-        const range = state.unitStats[unit.type].moveRange;
-        if (range > bestRange) {
-          bestRange = range;
-          bestId = uid;
-        }
-      }
+    for (const [, unitIds] of destMap) {
+      if (unitIds.length <= 1) continue;
+      anyConflict = true;
 
-      // Winner keeps hex, others fall back
-      for (const uid of ids) {
-        if (uid === bestId) continue;
-        const intent = intents.get(uid);
-        if (intent && intent.path.length >= 2) {
-          proposedPositions.set(uid, intent.path[intent.path.length - 2]!);
-        }
-      }
-    } else {
-      // Cross-faction: both stop one hex short
+      // Determine faction groups
+      const byOwner = new Map<PlayerId, string[]>();
       for (const uid of unitIds) {
-        const intent = intents.get(uid);
-        if (intent && intent.path.length >= 2) {
-          proposedPositions.set(uid, intent.path[intent.path.length - 2]!);
+        const intent = intents.get(uid)!;
+        const list = byOwner.get(intent.owner) ?? [];
+        list.push(uid);
+        byOwner.set(intent.owner, list);
+      }
+
+      if (byOwner.size === 1) {
+        // Same faction: higher moveRange wins, tie → first in array wins
+        const ids = unitIds;
+        let bestId = ids[0]!;
+        let bestRange = state.unitStats[unitTypes.get(bestId) ?? 'infantry'].moveRange;
+
+        for (const uid of ids) {
+          const range = state.unitStats[unitTypes.get(uid) ?? 'infantry'].moveRange;
+          if (range > bestRange) {
+            bestRange = range;
+            bestId = uid;
+          }
+        }
+
+        // Losers fall back along their path to the first unclaimed hex
+        for (const uid of ids) {
+          if (uid === bestId) continue;
+          fallBackAlongPath(uid, intents, proposedPositions, snapshot);
+        }
+      } else {
+        // Cross-faction: ALL claimants fall back
+        for (const uid of unitIds) {
+          fallBackAlongPath(uid, intents, proposedPositions, snapshot);
         }
       }
     }
+
+    if (!anyConflict) break;
   }
+}
+
+/**
+ * Move a unit back along its path to find an unclaimed hex.
+ * Walks backward from the proposed position toward the start.
+ * If no unclaimed hex exists on the path, falls back to snapshot position.
+ */
+function fallBackAlongPath(
+  unitId: string,
+  intents: Map<string, TurnIntent>,
+  proposedPositions: Map<string, CubeCoord>,
+  snapshot: Map<string, UnitSnapshot>,
+): void {
+  const intent = intents.get(unitId);
+  if (!intent || intent.path.length < 2) {
+    // No path to fall back on — stay at snapshot position
+    const snap = snapshot.get(unitId);
+    if (snap) proposedPositions.set(unitId, snap.position);
+    return;
+  }
+
+  // Build set of currently claimed hexes (excluding this unit)
+  const claimed = new Set<string>();
+  for (const [uid, pos] of proposedPositions) {
+    if (uid !== unitId) claimed.add(hexToKey(pos));
+  }
+
+  // Walk backward along path from second-to-last hex
+  for (let i = intent.path.length - 2; i >= 0; i--) {
+    const hex = intent.path[i]!;
+    if (!claimed.has(hexToKey(hex))) {
+      proposedPositions.set(unitId, hex);
+      return;
+    }
+  }
+
+  // All path hexes claimed — fall back to snapshot position
+  const snap = snapshot.get(unitId);
+  if (snap) proposedPositions.set(unitId, snap.position);
 }
 
 // -----------------------------------------------------------------------------
@@ -810,19 +897,66 @@ function detectEngagements(
   }
 
   for (const attacker of allUnits) {
-    if (!OFFENSIVE_ROE.has(attacker.attackDirective)) continue;
+    if (!OFFENSIVE_ROE.has(attacker.attackDirective)) {
+      console.log(`[P4:ENGAGE] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) skipped — ROE ${attacker.attackDirective} is not offensive`);
+      continue;
+    }
 
-    const attackerVis = calculateVisibility([attacker], state.map.terrain, state.map.elevation);
+    const attackerVis = calculateVisibility([attacker], state.map.terrain, state.map.elevation, state.unitStats);
+    const enemies = allUnits.filter(u => u.owner !== attacker.owner);
+    console.log(`[P4:ENGAGE] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) [${attacker.attackDirective}] — sees ${attackerVis.size} hexes, ${enemies.length} enemies exist`);
 
     for (const defender of allUnits) {
       if (defender.owner === attacker.owner) continue;
-      if (!canAttack(attacker, defender, attackerVis)) continue;
+
+      const dist = cubeDistance(attacker.position, defender.position);
+      const inVision = attackerVis.has(hexToKey(defender.position));
+      const attackStats = UNIT_STATS[attacker.type];
+      const inRange = dist >= attackStats.minAttackRange && dist <= attackStats.attackRange;
+
+      if (!canAttack(attacker, defender, attackerVis)) {
+        if (!inVision) {
+          // Diagnose WHY not visible: out of range vs LoS blocked
+          const attackerElev = state.map.elevation.get(hexToKey(attacker.position)) ?? 0;
+          const attackerTerrain = state.map.terrain.get(hexToKey(attacker.position));
+          const baseVision = state.unitStats[attacker.type].visionRange;
+          const visionBonus = getVisionBonus(attackerElev, baseVision);
+          let effectiveVision = baseVision + visionBonus;
+          if (attackerTerrain === 'forest') effectiveVision -= FOREST_VISION_PENALTY;
+
+          if (dist > effectiveVision) {
+            console.log(`[P4:ENGAGE]   ✗ ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) — too far (dist=${dist}, effectiveVision=${effectiveVision} = base ${baseVision} + elevBonus ${visionBonus}${attackerTerrain === 'forest' ? ` - forest ${FOREST_VISION_PENALTY}` : ''})`);
+          } else {
+            // Within vision range but LoS blocked — find the blocker
+            const line = hexLineDraw(attacker.position, defender.position);
+            const defenderElev = state.map.elevation.get(hexToKey(defender.position)) ?? 0;
+            const totalSteps = line.length - 1;
+            let blockerInfo = 'unknown';
+            for (let i = 1; i < line.length - 1; i++) {
+              const iKey = hexToKey(line[i]!);
+              const iElev = state.map.elevation.get(iKey) ?? 0;
+              const sightHeight = attackerElev + LOS_EYE_HEIGHT + (defenderElev - attackerElev) * (i / totalSteps);
+              if (iElev > sightHeight) {
+                const iTerrain = state.map.terrain.get(iKey) ?? '?';
+                blockerInfo = `blocked by (${line[i]!.q},${line[i]!.r}) ${iTerrain} elev=${iElev} (sightLine=${sightHeight.toFixed(1)}, step ${i}/${totalSteps})`;
+                break;
+              }
+            }
+            console.log(`[P4:ENGAGE]   ✗ ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) — LoS blocked (dist=${dist}, attElev=${attackerElev}, defElev=${defenderElev}) ${blockerInfo}`);
+          }
+        } else if (!inRange) {
+          console.log(`[P4:ENGAGE]   ✗ ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) — visible but out of range (dist=${dist}, range=${attackStats.minAttackRange}-${attackStats.attackRange})`);
+        }
+        continue;
+      }
 
       const pairKey = `${attacker.id}->${defender.id}`;
       if (existingPairs.has(pairKey)) continue;
 
       const defenderFacing = intents.get(defender.id)?.facing ?? CUBE_DIRECTIONS[0]!;
       const approach = computeApproachAngle(attacker.position, defender.position, defenderFacing);
+
+      console.log(`[P4:ENGAGE]   ✓ ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) — dist=${dist}, approach=${approach}`);
 
       engagements.push({
         attackerId: attacker.id,
@@ -835,6 +969,7 @@ function detectEngagements(
     }
   }
 
+  console.log(`[P4:ENGAGE] Total engagements: ${engagements.length} (${interceptEngagements.length} from intercepts)`);
   return engagements;
 }
 
@@ -881,13 +1016,21 @@ function resolveInitiativeFire(
     eng.responseTime = rt;
   }
 
-  // Sort by response time (lower fires first), tiebreak with RNG
+  // Pre-compute tiebreakers so sort is deterministic across JS engines.
+  // randomFn outputs [0.85, 1.15] (combat range), normalize to [-0.15, +0.15].
+  const initiativeTiebreak = new Map<string, number>();
+  for (const eng of engagements) {
+    initiativeTiebreak.set(`${eng.attackerId}->${eng.defenderId}`, randomFn() - 1.0);
+  }
+
+  // Sort by response time (lower fires first), tiebreak with pre-computed RNG
   engagements.sort((a, b) => {
     if (a.responseTime !== b.responseTime) return a.responseTime - b.responseTime;
-    return randomFn() - 0.5;
+    return initiativeTiebreak.get(`${a.attackerId}->${a.defenderId}`)! - initiativeTiebreak.get(`${b.attackerId}->${b.defenderId}`)!;
   });
 
   // Resolve
+  console.log(`[P5:INITIATIVE] ${engagements.length} engagements sorted by responseTime`);
   const deadUnits = new Set<string>();
 
   for (const eng of engagements) {
@@ -907,11 +1050,14 @@ function resolveInitiativeFire(
     const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn, defenderModifier);
     defender.hp -= damage;
 
+    console.log(`[P5:INITIATIVE] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) → ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) | dmg=${damage} hp=${defender.hp}/${state.unitStats[defender.type].maxHp} rt=${eng.responseTime} ${eng.approachCategory}${defender.hp <= 0 ? ' KILL' : ''}`);
+
     if (defender.hp <= 0) {
       state.pendingEvents.push({
         type: 'kill',
         actingPlayer: attacker.owner,
         phase: 'combat',
+        pipelinePhase: 5,
         attackerId: attacker.id,
         attackerType: attacker.type,
         attackerPosition: { ...attacker.position },
@@ -929,6 +1075,7 @@ function resolveInitiativeFire(
         type: 'damage',
         actingPlayer: attacker.owner,
         phase: 'combat',
+        pipelinePhase: 5,
         attackerId: attacker.id,
         attackerType: attacker.type,
         attackerPosition: { ...attacker.position },
@@ -989,11 +1136,19 @@ function resolveCounterFire(
     });
   }
 
+  // Pre-compute tiebreakers (same normalization as initiative fire)
+  const counterTiebreak = new Map<string, number>();
+  for (const eng of counterEngagements) {
+    counterTiebreak.set(`${eng.attackerId}->${eng.defenderId}`, randomFn() - 1.0);
+  }
+
   // Sort counter-fire by response time
   counterEngagements.sort((a, b) => {
     if (a.responseTime !== b.responseTime) return a.responseTime - b.responseTime;
-    return randomFn() - 0.5;
+    return counterTiebreak.get(`${a.attackerId}->${a.defenderId}`)! - counterTiebreak.get(`${b.attackerId}->${b.defenderId}`)!;
   });
+
+  console.log(`[P6:COUNTER] ${counterEngagements.length} counter-fire engagements`);
 
   for (const eng of counterEngagements) {
     const attacker = unitById.get(eng.attackerId);
@@ -1006,11 +1161,14 @@ function resolveCounterFire(
     const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn, defenderModifier);
     defender.hp -= damage;
 
+    console.log(`[P6:COUNTER] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) → ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) | dmg=${damage} hp=${defender.hp}/${state.unitStats[defender.type].maxHp}${defender.hp <= 0 ? ' KILL' : ''}`);
+
     if (defender.hp <= 0) {
       state.pendingEvents.push({
         type: 'kill',
         actingPlayer: attacker.owner,
         phase: 'combat',
+        pipelinePhase: 6,
         attackerId: attacker.id,
         attackerType: attacker.type,
         attackerPosition: { ...attacker.position },
@@ -1027,10 +1185,13 @@ function resolveCounterFire(
         type: 'counter',
         actingPlayer: attacker.owner,
         phase: 'combat',
+        pipelinePhase: 6,
         attackerId: attacker.id,
         attackerType: attacker.type,
+        attackerPosition: { ...attacker.position },
         defenderId: defender.id,
         defenderType: defender.type,
+        defenderPosition: { ...defender.position },
         damage,
         defenderHpAfter: defender.hp,
       });
@@ -1085,19 +1246,21 @@ function resolveDirectiveEffects(
             type: 'heal',
             actingPlayer: playerId,
             phase: 'combat',
+            pipelinePhase: 8,
             healerId: unit.id,
             healerType: unit.type,
             targetId: bestTarget.id,
             targetType: bestTarget.type,
+            targetPosition: { ...bestTarget.position },
             healAmount: 1,
             targetHpAfter: bestTarget.hp,
           });
         }
       }
 
-      // Scout reveal
+      // Patrol reveal
       const intent = intents.get(unit.id);
-      if (intent && intent.movementDirective === 'scout') {
+      if (intent && intent.movementDirective === 'patrol') {
         const visibility = calculateVisibility([unit], state.map.terrain, state.map.elevation, state.unitStats);
         const enemyUnits = state.players[enemyId].units;
         const revealedHexes: CubeCoord[] = [];
@@ -1113,8 +1276,10 @@ function resolveDirectiveEffects(
             type: 'reveal',
             actingPlayer: playerId,
             phase: 'combat',
+            pipelinePhase: 8,
             unitId: unit.id,
             unitType: unit.type,
+            unitPosition: { ...unit.position },
             hexes: revealedHexes,
           });
         }
@@ -1146,6 +1311,7 @@ function resolveTerritoryPhase(state: GameState): void {
             type: 'capture',
             actingPlayer: unit.owner,
             phase: 'capture',
+            pipelinePhase: 9,
             unitId: unit.id,
             unitType: unit.type,
             cityKey,
@@ -1156,6 +1322,7 @@ function resolveTerritoryPhase(state: GameState): void {
             type: 'recapture',
             actingPlayer: unit.owner,
             phase: 'capture',
+            pipelinePhase: 9,
             unitId: unit.id,
             unitType: unit.type,
             cityKey,
@@ -1170,6 +1337,7 @@ function resolveTerritoryPhase(state: GameState): void {
             type: 'capture-death',
             actingPlayer: unit.owner,
             phase: 'capture',
+            pipelinePhase: 9,
             unitId: unit.id,
             unitType: unit.type,
             cityKey,
@@ -1181,6 +1349,7 @@ function resolveTerritoryPhase(state: GameState): void {
             type: 'capture-damage',
             actingPlayer: unit.owner,
             phase: 'capture',
+            pipelinePhase: 9,
             unitId: unit.id,
             unitType: unit.type,
             cityKey,
@@ -1188,10 +1357,6 @@ function resolveTerritoryPhase(state: GameState): void {
             hpAfter: unit.hp,
           });
         }
-      }
-      // Auto-hold after capture
-      if (unit.directiveTarget.type === 'city' && unit.directiveTarget.cityId === cityKey) {
-        unit.movementDirective = 'hold';
       }
     }
   }
@@ -1215,6 +1380,7 @@ function resolveRoundEnd(state: GameState): void {
         type: 'objective-change',
         actingPlayer: previousOccupier,
         phase: 'objective',
+        pipelinePhase: 10,
         objectiveHex: state.map.centralObjective,
         previousOccupier,
         newOccupier: null,
@@ -1232,6 +1398,7 @@ function resolveRoundEnd(state: GameState): void {
           type: 'koth-progress',
           actingPlayer: occupier,
           phase: 'objective',
+          pipelinePhase: 10,
           occupier,
           turnsHeld: state.round.objective.turnsHeld,
           citiesHeld,
@@ -1244,6 +1411,7 @@ function resolveRoundEnd(state: GameState): void {
         type: 'objective-change',
         actingPlayer: occupier,
         phase: 'objective',
+        pipelinePhase: 10,
         objectiveHex: state.map.centralObjective,
         previousOccupier,
         newOccupier: occupier,
@@ -1256,6 +1424,7 @@ function resolveRoundEnd(state: GameState): void {
           type: 'koth-progress',
           actingPlayer: occupier,
           phase: 'objective',
+          pipelinePhase: 10,
           occupier,
           turnsHeld: 1,
           citiesHeld,
@@ -1362,4 +1531,13 @@ export function resolveTurn(
 
   // Phase 10: Round End
   resolveRoundEnd(state);
+
+  // Debug summary
+  if (typeof console !== 'undefined') {
+    const counts: Record<string, number> = {};
+    for (const e of state.pendingEvents) {
+      counts[e.type] = (counts[e.type] ?? 0) + 1;
+    }
+    console.log(`[PIPELINE:SUMMARY] ${state.pendingEvents.length} events:`, counts);
+  }
 }

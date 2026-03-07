@@ -26,6 +26,14 @@ HexWar is a hex-based tactical strategy game. See `docs/DESIGN.md` for the full 
 - Server Components by default in Next.js (client uses Vite, not Next — but keep this habit).
 - `"use client"` only when needed.
 
+## System Rules — No Exceptions
+
+- **No legacy code paths.** One path through the system. Always. If old code diverges from the current path, delete it.
+- **No backwards compatibility.** No shims, no adapters, no "keep the old way working." Change the code, update the callers.
+- **No fallbacks.** If the expected input is missing, throw. If the state is unexpected, throw. If a parameter is required, make it required.
+- **No defensive coding.** No try/catch unless the caller is an external boundary (network, user input). No null guards "just in case." No silent defaults for missing data. Let errors happen loudly and immediately.
+- **Fail fast.** The first line of defense is a crash with a clear message, not a graceful degradation that hides the bug.
+
 ## Testing
 
 - **Vitest** for all tests. TDD preferred — write tests before implementation.

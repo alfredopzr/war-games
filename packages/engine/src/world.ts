@@ -18,7 +18,7 @@ import { cubeRound } from './hex';
 export const WORLD_HEX_SIZE = 1.0;
 
 /** World units of Y elevation per elevation level. */
-export const WORLD_ELEV_STEP = 0.75;
+export const WORLD_ELEV_STEP = 1.25;
 
 const SQRT3 = Math.sqrt(3);
 

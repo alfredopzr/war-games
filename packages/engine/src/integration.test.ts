@@ -1,19 +1,20 @@
 // =============================================================================
 // HexWar — Full Engine Integration Test
 // =============================================================================
-// Validates the Phase 1 deliverable: createGame() -> placeUnits() ->
-// startBattlePhase() -> loop { executeTurn(), checkRoundEnd() } ->
+// Validates the full game loop: createGame() -> placeUnits() ->
+// startBattlePhase() -> loop { resolveTurn(), checkRoundEnd() } ->
 // scoreRound() -> getWinner(), all driven entirely in code.
 // =============================================================================
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { CubeCoord, PlayerId, GameState } from './index';
 import {
-  createGame, placeUnit, startBattlePhase, executeTurn,
+  createGame, placeUnit, startBattlePhase,
   checkRoundEnd, scoreRound, getWinner, resetUnitIdCounter,
   createHex, hexToKey, validateMap, UNIT_STATS,
   calculateIncome, canAfford, createCommandPool, canIssueCommand,
   calculateVisibility, cubeDistance, findPath,
+  resolveTurn,
 } from './index';
 
 /**
@@ -57,7 +58,6 @@ describe('Full game simulation', () => {
     // Validate generated map
     const mapValidation = validateMap(game.map);
     expect(mapValidation.valid).toBe(true);
-    // Symmetry is no longer enforced — hex boundary maps use fairness metrics instead
 
     let gameOver = false;
     let roundsPlayed = 0;
@@ -95,30 +95,12 @@ describe('Full game simulation', () => {
       let roundEnded = false;
 
       while (turnCount < 15) {
-        // Resolve player1
-        game.round.currentPlayer = 'player1';
-        game.round.commandPool = createCommandPool();
-        for (const u of game.players.player1.units) u.hasActed = false;
-        executeTurn(game, [], deterministicRng);
-
-        let result = checkRoundEnd(game);
-        if (result.roundOver) {
-          scoreRound(game, result.winner);
-          roundsPlayed++;
-          roundEnded = true;
-          break;
-        }
-
-        // Resolve player2
-        game.round.currentPlayer = 'player2';
-        game.round.commandPool = createCommandPool();
-        for (const u of game.players.player2.units) u.hasActed = false;
-        executeTurn(game, [], deterministicRng);
+        resolveTurn(game, [], [], deterministicRng);
 
         game.round.turnsPlayed += 1;
         game.round.turnNumber += 1;
 
-        result = checkRoundEnd(game);
+        const result = checkRoundEnd(game);
         if (result.roundOver) {
           scoreRound(game, result.winner);
           roundsPlayed++;
@@ -170,25 +152,12 @@ describe('Full game simulation', () => {
 
       // Simulate simultaneous turns until elimination
       while (turnCount < 15) {
-        // Resolve player1
-        game.round.currentPlayer = 'player1';
-        game.round.commandPool = createCommandPool();
-        for (const u of game.players.player1.units) u.hasActed = false;
-        executeTurn(game, [], highDamageRng);
-
-        let result = checkRoundEnd(game);
-        if (result.roundOver) { scoreRound(game, result.winner); break; }
-
-        // Resolve player2
-        game.round.currentPlayer = 'player2';
-        game.round.commandPool = createCommandPool();
-        for (const u of game.players.player2.units) u.hasActed = false;
-        executeTurn(game, [], highDamageRng);
+        resolveTurn(game, [], [], highDamageRng);
 
         game.round.turnsPlayed += 1;
         game.round.turnNumber += 1;
 
-        result = checkRoundEnd(game);
+        const result = checkRoundEnd(game);
         if (result.roundOver) { scoreRound(game, result.winner); break; }
         turnCount++;
       }
@@ -220,23 +189,12 @@ describe('Full game simulation', () => {
     let turnCount = 0;
     let roundEnded = false;
     while (turnCount < 15) {
-      game.round.currentPlayer = 'player1';
-      game.round.commandPool = createCommandPool();
-      for (const u of game.players.player1.units) u.hasActed = false;
-      executeTurn(game, [], deterministicRng);
-
-      let result = checkRoundEnd(game);
-      if (result.roundOver) { scoreRound(game, result.winner); roundEnded = true; break; }
-
-      game.round.currentPlayer = 'player2';
-      game.round.commandPool = createCommandPool();
-      for (const u of game.players.player2.units) u.hasActed = false;
-      executeTurn(game, [], deterministicRng);
+      resolveTurn(game, [], [], deterministicRng);
 
       game.round.turnsPlayed += 1;
       game.round.turnNumber += 1;
 
-      result = checkRoundEnd(game);
+      const result = checkRoundEnd(game);
       if (result.roundOver) { scoreRound(game, result.winner); roundEnded = true; break; }
       turnCount++;
     }
@@ -258,7 +216,7 @@ describe('Full game simulation', () => {
     expect(typeof createGame).toBe('function');
     expect(typeof placeUnit).toBe('function');
     expect(typeof startBattlePhase).toBe('function');
-    expect(typeof executeTurn).toBe('function');
+    expect(typeof resolveTurn).toBe('function');
     expect(typeof checkRoundEnd).toBe('function');
     expect(typeof scoreRound).toBe('function');
     expect(typeof getWinner).toBe('function');
@@ -292,7 +250,6 @@ describe('Full game simulation', () => {
     const game = createGame(123);
     expect(game.phase).toBe('build');
 
-    // Cannot start battle without units? Actually we can, let's place at least one
     placeUnit(game, 'player1', 'infantry', game.map.player1Deployment[0]!);
     placeUnit(game, 'player2', 'infantry', game.map.player2Deployment[0]!);
 

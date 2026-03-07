@@ -74,15 +74,14 @@ export interface UnitStats {
   readonly responseTime: number;
 }
 
-export type MovementDirective = 'advance' | 'flank-left' | 'flank-right' | 'scout' | 'hold';
+export type MovementDirective = 'advance' | 'flank-left' | 'flank-right' | 'patrol' | 'hold';
 export type AttackDirective = 'shoot-on-sight' | 'skirmish' | 'retreat-on-contact' | 'hunt' | 'ignore';
 export type SpecialtyModifier = 'support' | 'engineer' | 'sniper';
 
-export type DirectiveTargetType = 'central-objective' | 'city' | 'enemy-unit' | 'friendly-unit' | 'hex' | 'deployment-zone';
+export type DirectiveTargetType = 'enemy-unit' | 'friendly-unit' | 'hex' | 'deployment-zone';
 
 export interface DirectiveTarget {
   readonly type: DirectiveTargetType;
-  readonly cityId?: string;
   readonly unitId?: string;
   readonly hex?: CubeCoord;
 }
@@ -102,6 +101,8 @@ export interface Unit {
   hasActed: boolean;
   huntTargetId?: string;
   huntLockTurns?: number;
+  patrolRadius?: number;
+  huntPriorityType?: UnitType;
 }
 
 // -----------------------------------------------------------------------------
@@ -120,6 +121,8 @@ export interface Command {
   newAttackDirective: AttackDirective;
   newSpecialtyModifier: SpecialtyModifier | null;
   target?: DirectiveTarget;
+  patrolRadius?: number;
+  huntPriorityType?: UnitType;
 }
 
 export interface CommandPool {
@@ -151,7 +154,7 @@ export interface RoundState {
   currentPlayer: PlayerId;
   maxTurns: number;
   turnsPlayed: number;
-  commandPool: CommandPool;
+  commandPools: Record<PlayerId, CommandPool>;
   objective: ObjectiveState;
   unitsKilledThisRound: Record<PlayerId, number>;
 }
@@ -285,6 +288,7 @@ export type BattleEventPhase = 'movement' | 'combat' | 'capture' | 'objective' |
 interface BattleEventBase {
   readonly actingPlayer: PlayerId;
   readonly phase: BattleEventPhase;
+  readonly pipelinePhase: number;
 }
 
 // --- Emitted now ---
@@ -389,6 +393,7 @@ export interface BattleEventHeal extends BattleEventBase {
   readonly healerType: UnitType;
   readonly targetId: string;
   readonly targetType: UnitType;
+  readonly targetPosition: CubeCoord;
   readonly healAmount: number;
   readonly targetHpAfter: number;
 }
@@ -399,6 +404,7 @@ export interface BattleEventIntercept extends BattleEventBase {
   readonly type: 'intercept';
   readonly attackerId: string;
   readonly attackerType: UnitType;
+  readonly attackerPosition: CubeCoord;
   readonly defenderId: string;
   readonly defenderType: UnitType;
   readonly hex: CubeCoord;
@@ -410,8 +416,10 @@ export interface BattleEventCounter extends BattleEventBase {
   readonly type: 'counter';
   readonly attackerId: string;
   readonly attackerType: UnitType;
+  readonly attackerPosition: CubeCoord;
   readonly defenderId: string;
   readonly defenderType: UnitType;
+  readonly defenderPosition: CubeCoord;
   readonly damage: number;
   readonly defenderHpAfter: number;
 }
@@ -429,6 +437,7 @@ export interface BattleEventReveal extends BattleEventBase {
   readonly type: 'reveal';
   readonly unitId: string;
   readonly unitType: UnitType;
+  readonly unitPosition: CubeCoord;
   readonly hexes: CubeCoord[];
 }
 
@@ -582,6 +591,7 @@ export interface ServerRoundEnd {
   readonly winner: PlayerId | null;
   readonly reason: string;
   readonly state: Record<string, unknown>;
+  readonly events: BattleEvent[];
   readonly incomeBreakdown: Record<string, unknown>;
 }
 
@@ -589,6 +599,7 @@ export interface ServerGameOver {
   readonly type: 'game-over';
   readonly winner: PlayerId;
   readonly state: Record<string, unknown>;
+  readonly events: BattleEvent[];
 }
 
 export interface ServerTimerSync {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { CubeCoord } from '@hexwar/engine';
 import { hexToKey, hexWorldVertices, hexAdd, CUBE_DIRECTIONS } from '@hexwar/engine';
 import { getThreeContext } from './three-scene';
-import { FOG_NEVER_SEEN } from './constants';
+import { getPalette } from './palette';
 
 // ---------------------------------------------------------------------------
 // Fog of war renderer
@@ -17,33 +17,40 @@ import { FOG_NEVER_SEEN } from './constants';
 
 let fogGroup: THREE.Group | null = null;
 
-const fogTopMaterial = new THREE.MeshBasicMaterial({
-  color: FOG_NEVER_SEEN,
-  depthWrite: false,
-  side: THREE.DoubleSide,
-});
+let fogTopMaterial: THREE.MeshBasicMaterial;
+let fogSideMaterial: THREE.MeshBasicMaterial;
+let exploredWashMaterial: THREE.MeshBasicMaterial;
+let losBorderMaterial: THREE.LineBasicMaterial;
 
-const fogSideMaterial = new THREE.MeshBasicMaterial({
-  color: FOG_NEVER_SEEN,
-  side: THREE.DoubleSide,
-  polygonOffset: true,
-  polygonOffsetFactor: -1,
-  polygonOffsetUnits: -1,
-});
-
-const exploredWashMaterial = new THREE.MeshBasicMaterial({
-  color: FOG_NEVER_SEEN,
-  transparent: true,
-  opacity: 0.25,
-  depthWrite: false,
-  side: THREE.DoubleSide,
-});
-
-const losBorderMaterial = new THREE.LineBasicMaterial({
-  color: 0xe8e4d8,
-  depthTest: false,
-  depthWrite: false,
-});
+function ensureFogMaterials(): void {
+  const p = getPalette();
+  if (!fogTopMaterial) {
+    fogTopMaterial = new THREE.MeshBasicMaterial({
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    fogSideMaterial = new THREE.MeshBasicMaterial({
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    exploredWashMaterial = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    losBorderMaterial = new THREE.LineBasicMaterial({
+      depthTest: false,
+      depthWrite: false,
+    });
+  }
+  fogTopMaterial.color.setHex(p.fog.unseen);
+  fogSideMaterial.color.setHex(p.fog.unseen);
+  exploredWashMaterial.color.setHex(p.fog.unseen);
+  losBorderMaterial.color.setHex(p.fog.border);
+}
 
 /** Maps CUBE_DIRECTIONS index to hex vertex edge index. */
 const DIR_TO_EDGE = [0, 5, 4, 3, 2, 1] as const;
@@ -56,6 +63,7 @@ export function renderFog(
 ): void {
   const ctx = getThreeContext();
   if (!ctx) return;
+  ensureFogMaterials();
 
   if (fogGroup) {
     ctx.scene.remove(fogGroup);

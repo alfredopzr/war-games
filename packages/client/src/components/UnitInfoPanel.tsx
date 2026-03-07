@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { UNIT_STATS, BEHAVIOR_NAMES } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
+import { getHpColor } from '../renderer/palette';
 
 function ownerLabel(owner: string): string {
   return owner === 'player1' ? 'Player 1' : 'Player 2';
@@ -48,15 +49,9 @@ function StatRow({ label, value }: { label: string; value: string }): ReactEleme
   );
 }
 
-function hpColor(pct: number): string {
-  if (pct > 0.6) return '#6a8a48';
-  if (pct > 0.3) return '#a08a40';
-  return '#9a4a3a';
-}
-
 function HpBar({ current, max }: { current: number; max: number }): ReactElement {
   const pct = max > 0 ? current / max : 0;
-  const color = hpColor(pct);
+  const color = getHpColor(pct);
 
   return (
     <div className="hp-bar-container">

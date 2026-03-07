@@ -139,25 +139,25 @@ describe('calculateVisibility', () => {
     expect(visible.has(hexToKey(hexDist5))).toBe(false);
   });
 
-  it('elevation grants vision bonus: infantry at elev 6 sees range 5', () => {
+  it('elevation grants vision bonus scaled to base range', () => {
     const terrain = makePlainsTerrain(16, 12);
     const elevation = makeFlatElevation(terrain);
     const mountPos = createHex(3, 0);
-    // floor(6/3) = 2 bonus
-    elevation.set(hexToKey(mountPos), 6);
+    // At peak elevation (20), bonus = 100% of base vision
+    elevation.set(hexToKey(mountPos), 20);
 
     const unit = createUnit('infantry', 'player1', mountPos);
     const visible = calculateVisibility([unit], terrain, elevation);
 
-    // Infantry base vision = 3, elevation bonus +2 = 5
-    const hexDist5 = createHex(8, -3);
-    expect(cubeDistance(unit.position, hexDist5)).toBe(5);
-    expect(visible.has(hexToKey(hexDist5))).toBe(true);
-
-    // Hex at distance 6 should NOT be visible
+    // Infantry base vision = 3, elev 20 bonus = floor(3 * 20 / 20) = +3 → effective 6
     const hexDist6 = createHex(9, -4);
     expect(cubeDistance(unit.position, hexDist6)).toBe(6);
-    expect(visible.has(hexToKey(hexDist6))).toBe(false);
+    expect(visible.has(hexToKey(hexDist6))).toBe(true);
+
+    // Hex at distance 7 should NOT be visible
+    const hexDist7 = createHex(10, -5);
+    expect(cubeDistance(unit.position, hexDist7)).toBe(7);
+    expect(visible.has(hexToKey(hexDist7))).toBe(false);
   });
 
   it('same-elevation hexes do not block each other (strict > check)', () => {

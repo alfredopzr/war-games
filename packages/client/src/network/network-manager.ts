@@ -13,7 +13,7 @@ import type {
   BattleEvent,
 } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
-import { diffTurnEvents, startReplay } from '../renderer/replay-sequencer';
+import { startReveal } from '../renderer/reveal-sequencer';
 
 const DEFAULT_SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -222,30 +222,8 @@ class NetworkManager {
       }) => {
         const newState = deserializeGameState(data.state);
         const s = store();
-
-        // Snapshot current units for replay diff
         const currentState = s.gameState;
-        const unitsBefore = new Map<string, { position: CubeCoord; hp: number; owner: PlayerId }>();
-        const citiesBefore = new Map<string, PlayerId | null>();
-        if (currentState) {
-          for (const pid of ['player1', 'player2'] as PlayerId[]) {
-            for (const unit of currentState.players[pid].units) {
-              unitsBefore.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: pid });
-            }
-          }
-          for (const [k, v] of currentState.cityOwnership) citiesBefore.set(k, v);
-        }
-
-        // Snapshot incoming state
-        const unitsAfter = new Map<string, { position: CubeCoord; hp: number; owner: PlayerId }>();
-        for (const pid of ['player1', 'player2'] as PlayerId[]) {
-          for (const unit of newState.players[pid].units) {
-            unitsAfter.set(unit.id, { position: { ...unit.position }, hp: unit.hp, owner: pid });
-          }
-        }
-        const citiesAfter = new Map(newState.cityOwnership);
-
-        const replayEvents = diffTurnEvents(unitsBefore, unitsAfter, citiesBefore, citiesAfter);
+        const myPlayer = useGameStore.getState().myPlayerId ?? 'player1';
 
         // Battle log (immediate)
         if (data.events.length > 0) {
@@ -262,20 +240,31 @@ class NetworkManager {
           useGameStore.getState().setGameState(newState);
         };
 
-        if (replayEvents.length > 0 && currentState) {
+        if (data.events.length > 0 && currentState) {
           // Track intermediate positions for progressive fog clearing
-          const myPlayer = useGameStore.getState().myPlayerId ?? 'player1';
           const replayPositions = new Map<string, CubeCoord>();
-          for (const [id, snap] of unitsBefore) {
-            if (snap.owner === myPlayer) {
-              replayPositions.set(id, { ...snap.position });
+          for (const pid of ['player1', 'player2'] as PlayerId[]) {
+            for (const unit of currentState.players[pid].units) {
+              if (unit.owner === myPlayer) {
+                replayPositions.set(unit.id, { ...unit.position });
+              }
             }
           }
 
+          // Store pre-reveal positions for planning path persistence
+          const preRevealPositions = new Map<string, CubeCoord>();
+          for (const pid of ['player1', 'player2'] as PlayerId[]) {
+            for (const unit of currentState.players[pid].units) {
+              preRevealPositions.set(unit.id, { ...unit.position });
+            }
+          }
+          s.setPreRevealUnitPositions(preRevealPositions);
+
           s.setReplayPlaying(true);
-          startReplay(replayEvents, newState.map.elevation, {
+          startReveal(data.events, newState.map.elevation, myPlayer, {
             onComplete: () => {
               useGameStore.getState().setReplayPlaying(false);
+              useGameStore.getState().setPreRevealUnitPositions(null);
               applyState();
             },
             onUnitArrived: (unitId: string, to: CubeCoord) => {
@@ -283,7 +272,7 @@ class NetworkManager {
               replayPositions.set(unitId, to);
               const syntheticUnits: Unit[] = [];
               for (const [id, pos] of replayPositions) {
-                const orig = currentState.players[myPlayer].units.find((u) => u.id === id);
+                const orig = currentState.players[myPlayer].units.find((u: Unit) => u.id === id);
                 if (orig) {
                   syntheticUnits.push({ ...orig, position: pos });
                 }
@@ -296,6 +285,9 @@ class NetworkManager {
               if (merged.size !== prevExplored.size) {
                 useGameStore.setState({ exploredHexes: merged });
               }
+            },
+            onPhaseStart: (phase: number) => {
+              console.log(`[REVEAL:ONLINE] Phase ${phase}`);
             },
           });
         } else {
@@ -312,29 +304,136 @@ class NetworkManager {
         winner: PlayerId | null;
         reason: string;
         state: SerializableGameState;
+        events: BattleEvent[];
       }) => {
         const gameState = deserializeGameState(data.state);
         const s = store();
-        s.setGameState(gameState);
+        const currentState = s.gameState;
+        const myPlayer = useGameStore.getState().myPlayerId ?? 'player1';
+
         s.setWaitingForServer(false);
         s.setCommandsSubmitted(false);
         s.setOpponentCommandsSubmitted(false);
         s.setOpponentBuildConfirmed(false);
-        s.showToast(
-          data.winner
-            ? `Round won by ${data.winner === 'player1' ? 'P1' : 'P2'}`
-            : 'Round draw',
-        );
+
+        if (data.events.length > 0) {
+          const turn = gameState.round.turnNumber;
+          s.addBattleLogEntries(data.events.map((e) => ({ turn, event: e })));
+        }
+
+        const applyRoundEnd = (): void => {
+          useGameStore.getState().setGameState(gameState);
+          useGameStore.getState().showRoundResultScreen(data.winner, data.reason);
+        };
+
+        if (data.events.length > 0 && currentState) {
+          const replayPositions = new Map<string, CubeCoord>();
+          const preRevealPositions = new Map<string, CubeCoord>();
+          for (const pid of ['player1', 'player2'] as PlayerId[]) {
+            for (const unit of currentState.players[pid].units) {
+              preRevealPositions.set(unit.id, { ...unit.position });
+              if (unit.owner === myPlayer) {
+                replayPositions.set(unit.id, { ...unit.position });
+              }
+            }
+          }
+          s.setPreRevealUnitPositions(preRevealPositions);
+          s.setReplayPlaying(true);
+
+          startReveal(data.events, gameState.map.elevation, myPlayer, {
+            onComplete: () => {
+              useGameStore.getState().setReplayPlaying(false);
+              useGameStore.getState().setPreRevealUnitPositions(null);
+              applyRoundEnd();
+            },
+            onUnitArrived: (unitId: string, to: CubeCoord) => {
+              if (!replayPositions.has(unitId)) return;
+              replayPositions.set(unitId, to);
+              const syntheticUnits: Unit[] = [];
+              for (const [id, pos] of replayPositions) {
+                const orig = currentState.players[myPlayer].units.find((u: Unit) => u.id === id);
+                if (orig) syntheticUnits.push({ ...orig, position: pos });
+              }
+              const vis = calculateVisibility(syntheticUnits, gameState.map.terrain, gameState.map.elevation, gameState.unitStats);
+              useGameStore.getState().setVisibleHexes(vis);
+              const prevExplored = useGameStore.getState().exploredHexes;
+              const merged = new Set(prevExplored);
+              for (const k of vis) merged.add(k);
+              if (merged.size !== prevExplored.size) {
+                useGameStore.setState({ exploredHexes: merged });
+              }
+            },
+          });
+        } else {
+          applyRoundEnd();
+        }
       },
     );
 
     this.socket.on(
       'game-over',
-      (data: { winner: PlayerId; state: SerializableGameState }) => {
+      (data: {
+        winner: PlayerId;
+        state: SerializableGameState;
+        events: BattleEvent[];
+      }) => {
         const gameState = deserializeGameState(data.state);
         const s = store();
-        s.setGameState(gameState);
+        const currentState = s.gameState;
+        const myPlayer = useGameStore.getState().myPlayerId ?? 'player1';
+
         s.setWaitingForServer(false);
+
+        if (data.events.length > 0) {
+          const turn = gameState.round.turnNumber;
+          s.addBattleLogEntries(data.events.map((e) => ({ turn, event: e })));
+        }
+
+        const applyGameOver = (): void => {
+          useGameStore.getState().setGameState(gameState);
+        };
+
+        if (data.events.length > 0 && currentState) {
+          const replayPositions = new Map<string, CubeCoord>();
+          const preRevealPositions = new Map<string, CubeCoord>();
+          for (const pid of ['player1', 'player2'] as PlayerId[]) {
+            for (const unit of currentState.players[pid].units) {
+              preRevealPositions.set(unit.id, { ...unit.position });
+              if (unit.owner === myPlayer) {
+                replayPositions.set(unit.id, { ...unit.position });
+              }
+            }
+          }
+          s.setPreRevealUnitPositions(preRevealPositions);
+          s.setReplayPlaying(true);
+
+          startReveal(data.events, gameState.map.elevation, myPlayer, {
+            onComplete: () => {
+              useGameStore.getState().setReplayPlaying(false);
+              useGameStore.getState().setPreRevealUnitPositions(null);
+              applyGameOver();
+            },
+            onUnitArrived: (unitId: string, to: CubeCoord) => {
+              if (!replayPositions.has(unitId)) return;
+              replayPositions.set(unitId, to);
+              const syntheticUnits: Unit[] = [];
+              for (const [id, pos] of replayPositions) {
+                const orig = currentState.players[myPlayer].units.find((u: Unit) => u.id === id);
+                if (orig) syntheticUnits.push({ ...orig, position: pos });
+              }
+              const vis = calculateVisibility(syntheticUnits, gameState.map.terrain, gameState.map.elevation, gameState.unitStats);
+              useGameStore.getState().setVisibleHexes(vis);
+              const prevExplored = useGameStore.getState().exploredHexes;
+              const merged = new Set(prevExplored);
+              for (const k of vis) merged.add(k);
+              if (merged.size !== prevExplored.size) {
+                useGameStore.setState({ exploredHexes: merged });
+              }
+            },
+          });
+        } else {
+          applyGameOver();
+        }
       },
     );
 

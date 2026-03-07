@@ -31,7 +31,7 @@ function setupGameWithUnits(): GameState {
   const p2Zone = state.map.player2Deployment;
 
   placeUnit(state, 'player1', 'infantry', p1Zone[0]!, 'advance', 'shoot-on-sight');
-  placeUnit(state, 'player1', 'recon', p1Zone[1]!, 'scout', 'ignore');
+  placeUnit(state, 'player1', 'recon', p1Zone[1]!, 'patrol', 'ignore');
   placeUnit(state, 'player1', 'tank', p1Zone[2]!, 'hold', 'shoot-on-sight');
 
   placeUnit(state, 'player2', 'infantry', p2Zone[0]!, 'flank-left', 'shoot-on-sight');
@@ -72,7 +72,7 @@ describe('filterStateForPlayer — build phase', () => {
     // Verify directives are preserved for own units
     const directives = filtered.players.player1.units.map((u) => u.movementDirective);
     expect(directives).toContain('advance');
-    expect(directives).toContain('scout');
+    expect(directives).toContain('patrol');
     expect(directives).toContain('hold');
   });
 
@@ -164,7 +164,7 @@ describe('filterStateForPlayer — battle phase', () => {
       (u) => u.movementDirective,
     );
     expect(ownDirectives).toContain('advance');
-    expect(ownDirectives).toContain('scout');
+    expect(ownDirectives).toContain('patrol');
     expect(ownDirectives).toContain('hold');
   });
 

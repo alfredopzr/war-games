@@ -370,46 +370,11 @@ export function renderProps(state: GameState, visibleHexes?: Set<string>, explor
   }
 
   // Pass 2: create InstancedMesh per (glbPath, chunkId) with bounding sphere
-  let meshCount = 0;
-  let totalInstances = 0;
   for (const [ck, data] of chunks) {
     const glb = ck.substring(ck.indexOf('|') + 1);
     const sphere = computeChunkSphere(data.positions);
-    const before = propGroup.children.length;
     createInstancedMeshes(glb, data.transforms, propGroup, sphere);
-    const added = propGroup.children.length - before;
-    meshCount += added;
-    totalInstances += data.transforms.length * added;
   }
-
-  // Per-model triangle census
-  const modelTris = new Map<string, { tris: number; instances: number }>();
-  for (const [ck, data] of chunks) {
-    const glb = ck.substring(ck.indexOf('|') + 1);
-    const gltf = getModelFromCache(glb);
-    if (!gltf) continue;
-    let meshTris = 0;
-    gltf.scene.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.geometry.index) {
-        meshTris += child.geometry.index.count / 3;
-      } else if (child instanceof THREE.Mesh) {
-        const pos = child.geometry.getAttribute('position');
-        if (pos) meshTris += pos.count / 3;
-      }
-    });
-    const entry = modelTris.get(glb) ?? { tris: 0, instances: 0 };
-    entry.tris = meshTris;
-    entry.instances += data.transforms.length;
-    modelTris.set(glb, entry);
-  }
-  const sorted = [...modelTris.entries()].sort((a, b) => (b[1].tris * b[1].instances) - (a[1].tris * a[1].instances));
-  console.log(`[prop-renderer] ${chunks.size} chunks → ${meshCount} InstancedMeshes, ${totalInstances} total instances`);
-  console.table(sorted.map(([path, { tris, instances }]) => ({
-    model: path.replace('/models/props/', ''),
-    trisPerModel: tris,
-    instances,
-    totalTris: tris * instances,
-  })));
   ctx.scene.add(propGroup);
 }
 

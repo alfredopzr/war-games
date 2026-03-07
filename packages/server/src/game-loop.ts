@@ -29,9 +29,10 @@ import {
   mulberry32,
   formatBattleEvent,
   resolveTurn,
+  calculateVisibility,
 } from '@hexwar/engine';
 
-import { filterStateForPlayer } from './state-filter';
+import { filterStateForPlayer, filterEventsForPlayer } from './state-filter';
 import {
   startBuildTimer,
   startTurnTimer,
@@ -58,24 +59,6 @@ function emitFilteredState(
       type: eventName,
       state: filtered,
       ...extraFields,
-    });
-  }
-}
-
-function emitFilteredStatePerPlayer(
-  io: Server,
-  room: Room,
-  eventName: string,
-  extraFieldsFn: (playerId: PlayerId) => Record<string, unknown>,
-): void {
-  if (!room.gameState) return;
-
-  for (const [playerId, player] of room.players) {
-    const filtered = filterStateForPlayer(room.gameState, playerId);
-    io.to(player.socketId).emit(eventName, {
-      type: eventName,
-      state: filtered,
-      ...extraFieldsFn(playerId),
     });
   }
 }
@@ -297,6 +280,10 @@ export function handleSubmitCommands(
 
   // Validate commands against current state — both players validate against same pre-resolution state
   const validCommands = filterValidCommands(room.gameState, commands, playerId);
+  const rejected = commands.length - validCommands.length;
+  if (rejected > 0) {
+    log('warn', 'game', `Player ${playerId}: ${rejected}/${commands.length} commands rejected (CP ${room.gameState.round.commandPools[playerId].remaining} remaining)`);
+  }
   room.bufferedCommands.set(playerId, validCommands);
 
   // Acknowledge submission to the player
@@ -333,6 +320,11 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
   const p1Cmds = room.bufferedCommands.get('player1') ?? [];
   const p2Cmds = room.bufferedCommands.get('player2') ?? [];
 
+  // Snapshot unit positions BEFORE resolution for LOS-based event filtering.
+  // Spec (EVENT_LOG_SPEC.md §Fog Filtering): LOS computed from Phase 1 snapshot.
+  const p1UnitsSnapshot = state.players.player1.units.map(u => ({ ...u, position: { ...u.position } }));
+  const p2UnitsSnapshot = state.players.player2.units.map(u => ({ ...u, position: { ...u.position } }));
+
   // Single pipeline call replaces two sequential executeTurn() calls
   resolveTurn(state, p1Cmds, p2Cmds, combatRng);
 
@@ -344,7 +336,7 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
     log('info', 'game', formatBattleEvent(event));
   }
 
-  // Record turn log
+  // Record turn log (unfiltered — server-side record)
   room.turnLog.push({
     turnNumber: originalTurnNumber,
     resolutionOrder: ['player1', 'player2'],
@@ -357,6 +349,10 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
 
   room.bufferedCommands.clear();
 
+  // Compute per-player LOS from pre-resolution snapshots for event filtering
+  const p1Los = calculateVisibility(p1UnitsSnapshot, state.map.terrain, state.map.elevation, state.unitStats);
+  const p2Los = calculateVisibility(p2UnitsSnapshot, state.map.terrain, state.map.elevation, state.unitStats);
+
   // Check round end
   const roundEnd = checkRoundEnd(state);
 
@@ -365,18 +361,22 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
       type: 'round-end',
       actingPlayer: roundEnd.winner ?? 'player1',
       phase: 'round',
+      pipelinePhase: 10,
       winner: roundEnd.winner,
       reason: roundEnd.reason!,
     });
   }
 
   if (!roundEnd.roundOver) {
+    // Normal turn — emit turn-result with fog-filtered events per player
     for (const [pid, player] of room.players) {
       const filtered = filterStateForPlayer(state, pid);
+      const losSet = pid === 'player1' ? p1Los : p2Los;
+      const playerEvents = filterEventsForPlayer(allEvents, pid as PlayerId, losSet);
       io.to(player.socketId).emit('turn-result', {
         type: 'turn-result',
         state: filtered,
-        events: allEvents,
+        events: playerEvents,
       });
     }
     startTurnTimer(room, () => handleTurnTimeout(room, io));
@@ -388,21 +388,33 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
         type: 'game-end',
         actingPlayer: room.gameState.winner ?? 'player1',
         phase: 'round',
+        pipelinePhase: 10,
         winner: room.gameState.winner!,
       });
       log('info', 'game', `Game over in room ${room.id}, winner: ${room.gameState.winner}, turns: ${room.turnLog.length}`);
-      emitFilteredStatePerPlayer(io, room, 'game-over', () => ({
-        winner: room.gameState!.winner,
-      }));
+      for (const [pid, player] of room.players) {
+        const filtered = filterStateForPlayer(room.gameState, pid);
+        const losSet = pid === 'player1' ? p1Los : p2Los;
+        const playerEvents = filterEventsForPlayer(allEvents, pid as PlayerId, losSet);
+        io.to(player.socketId).emit('game-over', {
+          type: 'game-over',
+          state: filtered,
+          winner: room.gameState!.winner,
+          events: playerEvents,
+        });
+      }
     } else {
       log('info', 'game', `Round ended in room ${room.id}, winner: ${roundEnd.winner}`);
       for (const [pid, player] of room.players) {
         const filtered = filterStateForPlayer(room.gameState, pid);
+        const losSet = pid === 'player1' ? p1Los : p2Los;
+        const playerEvents = filterEventsForPlayer(allEvents, pid as PlayerId, losSet);
         io.to(player.socketId).emit('round-end', {
           type: 'round-end',
           winner: roundEnd.winner,
           reason: roundEnd.reason,
           state: filtered,
+          events: playerEvents,
           incomeBreakdown: {},
         });
       }

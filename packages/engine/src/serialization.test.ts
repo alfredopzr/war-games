@@ -43,17 +43,16 @@ describe('serialization', () => {
       }
     });
 
-    it('preserves commandPool.commandedUnitIds as a Set', () => {
-      // Add some ids to the Set before serializing
-      state.round.commandPool.commandedUnitIds.add('unit-1');
-      state.round.commandPool.commandedUnitIds.add('unit-2');
+    it('preserves commandPools.commandedUnitIds as a Set', () => {
+      state.round.commandPools.player1.commandedUnitIds.add('unit-1');
+      state.round.commandPools.player1.commandedUnitIds.add('unit-2');
 
       const result = deserializeGameState(serializeGameState(state));
 
-      expect(result.round.commandPool.commandedUnitIds).toBeInstanceOf(Set);
-      expect(result.round.commandPool.commandedUnitIds.size).toBe(2);
-      expect(result.round.commandPool.commandedUnitIds.has('unit-1')).toBe(true);
-      expect(result.round.commandPool.commandedUnitIds.has('unit-2')).toBe(true);
+      expect(result.round.commandPools.player1.commandedUnitIds).toBeInstanceOf(Set);
+      expect(result.round.commandPools.player1.commandedUnitIds.size).toBe(2);
+      expect(result.round.commandPools.player1.commandedUnitIds.has('unit-1')).toBe(true);
+      expect(result.round.commandPools.player1.commandedUnitIds.has('unit-2')).toBe(true);
     });
 
     it('preserves units and their positions after placement', () => {
@@ -92,7 +91,7 @@ describe('serialization', () => {
       state.round.turnNumber = 5;
       state.round.currentPlayer = 'player2';
       state.round.turnsPlayed = 3;
-      state.round.commandPool.remaining = 1;
+      state.round.commandPools.player1.remaining = 1;
       state.round.objective = { occupiedBy: 'player1', turnsHeld: 3 };
       state.round.unitsKilledThisRound = { player1: 2, player2: 1 };
 
@@ -102,7 +101,7 @@ describe('serialization', () => {
       expect(result.round.turnNumber).toBe(5);
       expect(result.round.currentPlayer).toBe('player2');
       expect(result.round.turnsPlayed).toBe(3);
-      expect(result.round.commandPool.remaining).toBe(1);
+      expect(result.round.commandPools.player1.remaining).toBe(1);
       expect(result.round.objective).toEqual({ occupiedBy: 'player1', turnsHeld: 3 });
       expect(result.round.unitsKilledThisRound).toEqual({ player1: 2, player2: 1 });
     });
@@ -138,7 +137,7 @@ describe('serialization', () => {
     it('survives JSON.stringify/parse round-trip (simulating Socket.io)', () => {
       const p1Zone = state.map.player1Deployment[0]!;
       state = placeUnit(state, 'player1', 'infantry', p1Zone);
-      state.round.commandPool.commandedUnitIds.add('test-unit');
+      state.round.commandPools.player1.commandedUnitIds.add('test-unit');
 
       const serialized = serializeGameState(state);
       const json = JSON.parse(JSON.stringify(serialized)) as typeof serialized;
@@ -147,12 +146,12 @@ describe('serialization', () => {
       // Maps and Sets should be restored
       expect(result.map.terrain).toBeInstanceOf(Map);
       expect(result.cityOwnership).toBeInstanceOf(Map);
-      expect(result.round.commandPool.commandedUnitIds).toBeInstanceOf(Set);
+      expect(result.round.commandPools.player1.commandedUnitIds).toBeInstanceOf(Set);
 
       // Data should match
       expect(result.map.terrain.size).toBe(state.map.terrain.size);
       expect(result.cityOwnership.size).toBe(state.cityOwnership.size);
-      expect(result.round.commandPool.commandedUnitIds.has('test-unit')).toBe(true);
+      expect(result.round.commandPools.player1.commandedUnitIds.has('test-unit')).toBe(true);
       expect(result.players.player1.units).toHaveLength(1);
     });
   });
@@ -181,14 +180,14 @@ describe('serialization', () => {
     });
 
     it('converts commandedUnitIds Set to an array', () => {
-      state.round.commandPool.commandedUnitIds.add('a');
-      state.round.commandPool.commandedUnitIds.add('b');
+      state.round.commandPools.player1.commandedUnitIds.add('a');
+      state.round.commandPools.player1.commandedUnitIds.add('b');
 
       const serialized = serializeGameState(state);
 
-      expect(Array.isArray(serialized.round.commandPool.commandedUnitIds)).toBe(true);
-      expect(serialized.round.commandPool.commandedUnitIds).toContain('a');
-      expect(serialized.round.commandPool.commandedUnitIds).toContain('b');
+      expect(Array.isArray(serialized.round.commandPools.player1.commandedUnitIds)).toBe(true);
+      expect(serialized.round.commandPools.player1.commandedUnitIds).toContain('a');
+      expect(serialized.round.commandPools.player1.commandedUnitIds).toContain('b');
     });
   });
 });

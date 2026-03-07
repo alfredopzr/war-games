@@ -44,7 +44,7 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 
 ---
 
-## Current State (as of March 6, 2026)
+## Current State (as of March 7, 2026)
 
 ### What works
 - Full game engine: simultaneous resolution only (alternating-turn code fully stripped), damage formula, A* pathfinding (min-heap), vision/LoS, economy, round scoring, KotH win condition
@@ -52,13 +52,18 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 - `RoundState.turnsPlayed` is a single number (was per-player Record). `maxTurns` replaces `maxTurnsPerSide`.
 - **Hex-of-hexes map generation**: Two-level grid (R_MACRO=3, R_MINI=5 → 37 macro-hexes × 91 minis each). Procedural terrain assignment, elevation-aware LoS, deployment at hex boundary corners. Fairness re-roll. All params in `map-gen-params.ts`.
 - **Cost-based movement** (0.2): `direct-move`, `moveToward()`, `retreat` all use A* pathfinding with cost budget, not step count. `getReachableHexes()` Dijkstra flood-fill for move range display.
-- **Map-scaled unit stats**: `scaledUnitStats(mapDiameter)` derives moveRange from map size per GAME_MATH_ENGINE.md §A5. Stored on `GameState.unitStats`, serialized over network, available in `DirectiveContext`.
+- **Map-scaled unit stats**: `scaledUnitStats(mapDiameter)` derives moveRange and visionRange from map size. Stored on `GameState.unitStats`, serialized over network, available in `DirectiveContext`. Vision divisors per unit (infantry/tank 11, artillery 15, recon 5) ensure vision stays slightly below move range so pushing forward means committing into partial darkness.
 - **Two-layer directive system** (0.1): `movementDirective` (advance/flank-left/flank-right/scout/hold) × `attackDirective` (shoot-on-sight/skirmish/retreat-on-contact/hunt/ignore) × optional `specialtyModifier`. 25 named behavior combinations via `BEHAVIOR_NAMES`. All consumers updated: directives.ts, game-state.ts, combat.ts, commands.ts, ai.ts, serialization. Server handles two-layer placement/redirect messages. `computeFlankWaypoint` extracted as pure function for client reuse.
 - **Terrain simplification**: Physics-based model — elevation is pure LoS occlusion (strict `>`), forest provides concealment (invisible from outside, -2 vision penalty inside via `FOREST_VISION_PENALTY`). Mountain/city defense modifiers zeroed. `canAttack()` gates on LoS visibility. `getVisionBonus` uses `floor(elev / VISION_ELEV_DIVISOR)`.
 - **Directive-aware path visualization**: Per-directive rendering — advance shows solid A* path, flank shows dashed simulated multi-turn arc (via `simulateFlankTrajectory` with cached trajectories), scout shows patrol circle (radius 8 hex ring around target). ROE icons at target hex: crosshair (shoot-on-sight), chevrons (skirmish/retreat), arrow (hunt). Targets persist for all friendly units after deselection. Reactive selection rendering decoupled from heavy renderScene.
 - Three.js renderer: hex-of-hexes terrain meshes, elevation-corrected click detection, unit GLB models (skeletal Meshy animations), fog of war with explored state + LoS border ring, deploy zones, selection highlights (electric blue move mode), HP bars, pending command visuals (Line2 move paths with elevation awareness, attack crosshairs), move range highlight on selection
 - **Animation system**: Multi-clip mapping per game action (`AnimAction` type: idle/move/attack/melee/hit/death/climb). Per-model `clipMap` tables map raw Meshy clip names to game actions with random selection from candidates. Infantry models (Engineer + Caravaner) have 13-14 skeletal animation clips each.
-- **Structured event log** (0.5): 16-variant `BattleEvent` discriminated union emitted inline at point of origin during `executeTurn()`. Replaces server snapshot-diffing (~80 lines deleted from game-loop.ts). Events carry full causal data: attacker/defender IDs, types, positions, damage, terrain. `formatBattleEvent()` pure formatter in `battle-events.ts`. `GameState.pendingEvents` accumulates events, server drains after each `executeTurn()`. Client `BattleLogEntry` wraps `BattleEvent` directly. 4 future event types defined (intercept, counter, melee, reveal) for Sprint 3/4. Schema locked in `EVENT_LOG_SPEC.md`. 28 new tests (17 formatter + 11 emission).
+- **Combat balance** (1.1-1.3): `balance.json` single source of truth. ×10 HP (Infantry 30, Tank 40, Artillery 20, Recon 20). Clean RPS cycle: Tank→Infantry→Recon→Artillery→Tank (2.0× counter, 0.6× disadvantage, 1.0× neutral). Fixed damage formula: `max(1, floor((ATK × typeMul × rng) × (1 - terrainDef) - DEF))` — terrain reduces as percentage first, DEF subtracts flat after. DEF works on plains. `responseTime` stat: Recon=1, Infantry=2, Tank=3, Artillery=4.
+- **10-phase resolution pipeline** (0.4 + 1.4 + 1.5): `resolveTurn(state, p1Cmds, p2Cmds, rng)` replaces dual `executeTurn()` calls. Both players' commands processed in a single deterministic pass — no first-mover advantage. Phases: (1) snapshot, (2) intents, (3) step-by-step movement + intercepts + collision resolution, (4) engagement detection with approach angle, (5) initiative fire sorted by responseTime + modifiers, (6) counter-fire, (7) melee stub, (8) support heal + scout reveal, (9) city capture, (10) round end. Hunt lock-on, scout orbit, collision resolution (same-faction/cross-faction/head-on) all implemented. 39 tests. Server and vsAI client both call `resolveTurn()` directly — ~110 lines of bookkeeping removed.
+- **Structured event log** (0.5): 18 emission sites producing 12 event types across all pipeline phases. Events carry full causal data: attacker/defender IDs, approach angle, responseTime breakdown, terrain context, defender response field. Schema locked in `EVENT_LOG_SPEC.md`. 463 tests pass (389 engine + 74 server).
+- **Fog-gated event filtering** (D-VIS-5): Server filters `BattleEvent[]` per player before sending. `filterEventsForPlayer()` in `state-filter.ts` implements 3 rules: own-unit events always included, structural events always included, enemy-only events included only if a position field falls within the player's LOS set (computed from Phase 1 snapshot positions). No enemy data leaks via network.
+- **Reveal sequencer** (4.3 partial): `reveal-sequencer.ts` consumes `BattleEvent[]` from pipeline, groups by `pipelinePhase`, plays phase-by-phase with stagger. Phase 5/6 show initiative ordering (responseTime-sorted). Heal events render green "+N HP" at target position. Scout reveal renders expanding ring + "REVEALED" text. Tracer colors: blue P1, red P2, orange counter-fire. Skip via spacebar or button. Legacy `replay-sequencer.ts` (diff-based) deleted.
+- **Round-end reveal**: Final turn of every round now plays reveal animation before showing round result. Server includes `events: BattleEvent[]` in `round-end` and `game-over` socket messages. Client handlers run `startReveal()` before state application.
 - Server: Socket.io game loop, room management, build/battle phases, reconnection, simultaneous resolution with deterministic RNG, fog-of-war state filtering with `unitStats`
 - Client: React + Zustand, BattleHUD, UnitInfoPanel, compose-based OrderMatrix (movement + ROE columns with live order name), CommandMenu with target selection mode (crosshair cursor, blue target highlights), DeployManifest, move/attack range highlights
 - **Simultaneous resolution** (0.3): server buffers both players' commands, resolves when both received or timeout. Client vsAI mode uses `resolveSimultaneousLocal` with same pattern. Randomized resolution order per turn. turnsHeld double-increment fix. Hotseat mode removed entirely.
@@ -66,13 +71,13 @@ Locked choices that govern everything below. Full reasoning in `DESIGN_DECISIONS
 - **Assets**: 8 unit GLBs (2 factions × 4 unit types) in highdef, 28 prop GLBs, infantry models with full skeletal animation sets from Meshy
 
 ### What doesn't exist yet
-- Combat timeline (10-phase pipeline)
-- Response time / initiative system
-- Counter-attacks
-- Melee system
-- Intercept mechanics during movement
-- ~~Structured event log~~ DONE (Mar 6) — 16-variant discriminated union emitted inline during executeTurn(), replaces snapshot-diffing. `formatBattleEvent()` formatter, EVENT_LOG_SPEC.md contract. Server drains pendingEvents directly. 28 new tests.
-- Reveal animation (event log playback)
+- ~~Combat timeline (10-phase pipeline)~~ DONE (Mar 6) — `resolveTurn()` in `resolution-pipeline.ts`. 1365 lines, 39 tests.
+- ~~Response time / initiative system~~ DONE (Mar 6) — `responseTime` stat in `balance.json`, Phase 5 sorts by responseTime + modifiers.
+- ~~Counter-attacks~~ DONE (Mar 6) — Phase 6 counter-fire for surviving defenders with offensive ROE.
+- Melee system — stub in Phase 7, blocked on OD-1 (numeric meleeRating values).
+- ~~Intercept mechanics during movement~~ DONE (Mar 6) — Phase 3 intercept checks per step, cap=1, passive damage for non-offensive ROE.
+- ~~Structured event log~~ DONE (Mar 6) — 18 emission sites, 12 event types, full causal data. EVENT_LOG_SPEC.md contract. 463 tests.
+- ~~Reveal animation (event log playback)~~ Partially done (Mar 7) — reveal-sequencer plays BattleEvent[] phase-by-phase, heal/reveal effects implemented, fog-gated event filtering, round-end reveal. Remaining: playback controls (pause/step/rewind — needs setTimeout→timeline rewrite), dynamic order transitions (hunt tracking, retreat redraw, ambush spawn), Phase 4 engagement flash, camera nudges, "from fog" tracer rendering (blocked on combat VFX), per-unit-type combat VFX
 - Multi-city win condition (currently KotH)
 - ~~Parametric map constants (currently hardcoded to 20×14)~~ Partially done — hex-of-hexes map + movement scaling done. maxTurns, CP_PER_ROUND not yet derived from map size
 - ~~HP/stat scaling (currently 2-4 HP, needs ×10)~~ DONE (Mar 6) — Infantry 30/10/2, Tank 40/14/2, Artillery 20/10/1, Recon 20/7/1. Invariant: ATK=HP×0.35, DEF=max(1,round(HP×0.05)).
@@ -126,39 +131,37 @@ The architectural pivot. Both players submit simultaneously. Layer 0 item 0.3 + 
 
 ---
 
-### Sprint 3 — Combat Timeline (Mar 18–24)
+### Sprint 3 — Combat Timeline (Mar 18–24) — **COMPLETE**
 
-The big one. Replace `executeTurn()` with the 10-phase pipeline. Event log built into each phase, not added after. Layer 0 items 0.4 + 0.5.
+The big one. Replace `executeTurn()` with the 10-phase pipeline. Event log built into each phase, not added after. Layer 0 items 0.4 + 0.5. Completed Mar 6 (12 days ahead of schedule).
 
-- [E] **Phase 1-2** (0.4): Snapshot + intent collection. Clone state, generate composite intents from directives + CP overrides
-- [E] **Phase 3**: Step-by-step movement along A* path. Intercept check per step (ROE-gated). Destination reservation. Collision resolution (D4). Movement locks.
-- [E] **Phase 4**: Engagement detection. Scan for in-range pairs. LoS check. ROE filter.
-- [E] **Phase 5-6**: Initiative fire + counter fire. Response time ordering with modifiers (flanking, terrain, ROE). Cancel-on-death.
-- [E] **Phase 8-10**: Support heal, city capture (HP cost), round end check
-- [E] ~~**Event log** (0.5)~~ DONE (Mar 6) — 16-variant BattleEvent discriminated union emitted inline during executeTurn(). Schema locked in EVENT_LOG_SPEC.md. 28 new tests. Server snapshot-diffing deleted. 4 future types (intercept, counter, melee, reveal) defined for phases 3-6.
+- [E] ~~**Phase 1-2** (0.4)~~ DONE — snapshot clones state at tick start, intent collection generates movement paths + facings from all 25 directive combinations + CP overrides.
+- [E] ~~**Phase 3**~~ DONE — step-by-step simultaneous movement, intercept checks per step (ROE-gated, cap=1), collision resolution (same-faction/cross-faction/head-on per D4), movement locks.
+- [E] ~~**Phase 4**~~ DONE — engagement detection with approach angle computation from unit facing (rear/flank/front).
+- [E] ~~**Phase 5-6**~~ DONE — initiative fire sorted by responseTime + modifiers (approach angle, ROE); cancel-on-death; counter-fire for surviving defenders with offensive ROE.
+- [E] ~~**Phase 8-10**~~ DONE — support heal, scout reveal, city capture (HP cost), objective tracking, round end check, elimination detection.
+- [E] ~~**Event log** (0.5)~~ DONE (Mar 6) — 18 emission sites across all phases, 12 event types. Schema locked in EVENT_LOG_SPEC.md. 463 tests (389 engine + 74 server).
 
 **Phase 7 (melee) deferred** — needs numeric meleeRating values. See open decision D6.
 
-**Exit criteria:** Full tick resolves both players' intents simultaneously through phases 1-6, 8-10. Event log emitted. Tests cover: movement collision, intercept checks, initiative ordering, counter-fire cancel-on-death, city capture.
+**Exit criteria:** ~~Full tick resolves both players' intents simultaneously through phases 1-6, 8-10.~~ DONE. ~~Event log emitted.~~ DONE. ~~Tests cover: movement collision, intercept checks, initiative ordering, counter-fire cancel-on-death, city capture.~~ DONE (39 pipeline tests).
 
 ---
 
-### Sprint 4 — Combat & Balance (Mar 25–31)
+### Sprint 4 — Combat & Balance (Mar 25–31) — **COMPLETE**
 
-Layer 1. Implement the math model. Layer 0 is complete — these can be built in any order within the sprint.
+Layer 1. All items delivered early alongside Sprints 1-3.
 
 - [E] ~~**Clean RPS matrix** (1.1)~~ DONE (Mar 6) — 4-unit clean cycle in `balance.json`. Tank→Infantry→Recon→Artillery→Tank.
 - [E] ~~**HP/stat scaling** (1.2)~~ DONE (Mar 6) — ×10 HP, invariant ratios applied, all four units updated.
 - [E] ~~**Damage formula update** (1.3)~~ DONE (Mar 6) — percentage terrain reduction first, flat DEF after. DEF-on-plains bug fixed.
-- [E] **Response time system** (1.4): Add `responseTime` stat to unit definitions. Wire Phase 5/6 ordering with modifiers (flanking, terrain, ROE). **NOTE: this is now part of Sprint 3 pipeline (Phase 5/6) — will be delivered with S3, not separately.**
-- [E] **Intercept mechanics** (1.5): Wire Phase 3 Step 2 intercept checks. `INTERCEPT_CAP = 1`. Skirmish attack cap. **NOTE: this is now part of Sprint 3 pipeline (Phase 3) — will be delivered with S3, not separately.**
-- [E] **Update all tests** for response time and intercept behavior
-
-**1.4 + 1.5 merged into Sprint 3** — response time (Phase 5/6) and intercepts (Phase 3) are delivered as part of the combat timeline pipeline. Sprint 4 scope reduced accordingly.
+- [E] ~~**Response time system** (1.4)~~ DONE (Mar 6) — `responseTime` stat in `balance.json` (Recon=1, Infantry=2, Tank=3, Artillery=4). Wired into Phase 5/6 ordering with approach angle + ROE modifiers. Delivered as part of Sprint 3 pipeline.
+- [E] ~~**Intercept mechanics** (1.5)~~ DONE (Mar 6) — Phase 3 intercept checks per movement step. `INTERCEPT_CAP = 1`. Passive damage for retreat-on-contact and ignore ROE. Delivered as part of Sprint 3 pipeline.
+- [E] ~~**Update all tests**~~ DONE — 463 tests pass.
 
 **1.6 (melee) deferred** — OD-1 still open.
 
-**Exit criteria:** ~~Kill timing matches math model targets: counter ~2 hits, neutral 3-4 hits, disadvantaged 6-7 hits on plains.~~ DONE (Mar 6, verified in commit 9078c93). Response time ordering works. Intercepts fire during movement.
+**Exit criteria:** ~~Kill timing matches math model targets: counter ~2 hits, neutral 3-4 hits, disadvantaged 6-7 hits on plains.~~ DONE (Mar 6, commit 9078c93). ~~Response time ordering works.~~ DONE. ~~Intercepts fire during movement.~~ DONE.
 
 ---
 
@@ -241,10 +244,10 @@ These need resolution before the sprint that depends on them. Tracked here, deci
 | OD-1 | Melee numeric values (D6 says letter grades, needs numbers) | Sprint 3 Phase 7 | Deferred — sprint 3 ships without melee |
 | OD-2 | Elevation gameplay rules — does elevation affect combat/vision/movement? | Post-sprint 6 | Stay cosmetic for MVP |
 | OD-3 | Water terrain — terrain type or map layer? | Post-MVP (D11) | Terrain type (simpler) |
-| OD-4 | Fog during reveal — full "show your hands" or fog-gated? | Sprint 5 | Full reveal (poker model) |
+| ~~OD-4~~ | ~~Fog during reveal~~ | ~~Sprint 5~~ | **RESOLVED (D-VIS-5):** Fog-gated reveal, LOS only, no explored exception. Enemy visuals render only on active LOS hexes. Scout placement is the intelligence mechanic. See REVEAL_ANIMATION_SPEC.md §Visibility Rule. |
 | OD-5 | Noise frequency scaling with map size | Sprint 6 | Fixed frequencies (more features at larger scale) |
 | OD-6 | Archetype commitment structure (Fork 1: hard lock vs soft lock vs free pivot) | Sprint 7 | Soft lock, but needs playtest data |
-| OD-9 | Hold DEF modifier value — must be sized against ATK/HP/DEF ratios from kill timing targets | Sprint 4 balance pass | Deferred — number depends on S4 stats being locked first |
+| OD-9 | Hold DEF modifier value — must be sized against ATK/HP/DEF ratios from kill timing targets | Sprint 5 balance pass | S4 stats now locked — prerequisite met. Decision needed before S5. |
 
 ---
 
@@ -278,7 +281,22 @@ DATE       | SPRINT | CHANGE                                          | REASON
 2026-03-06 | —      | Directive-aware path visualization (unplanned).    | Per-directive rendering: advance=solid A* path, flank=dashed simulated multi-turn arc (computeFlankWaypoint extracted to engine), scout=patrol circle (radius 8). ROE icons at target (crosshair/chevrons/arrow). Cached trajectories. Targets persist for all friendly units.
 2026-03-06 | S1+S2  | Sprints 1 and 2 marked COMPLETE.                   | All exit criteria met. S1 delivered Mar 6 (4 days early vs Mar 10 end). S2 was already mostly done, 4.1 was the last blocker. Next up: S3 combat timeline.
 2026-03-06 | S3     | Event log (0.5) completed early.                   | 16-variant BattleEvent union emitted inline during executeTurn(). Replaces ~80 lines of server snapshot-diffing. Full causal data (attacker/defender IDs, types, positions, damage, terrain). formatBattleEvent() formatter, EVENT_LOG_SPEC.md schema contract. 28 new tests. 4 future types (intercept, counter, melee, reveal) defined for S3/S4 phases. S3 remaining: phases 1-6, 8-10 pipeline replacement.
-2026-03-06 | S4     | Items 1.1, 1.2, 1.3 completed early (commit 9078c93). | balance.json as single source of truth. ×10 HP scaling, clean RPS cycle, fixed damage formula. Kill timing verified for counter/neutral/disadvantaged matchups. strategy_game_balance_master.xlsx deleted. S4 scope now: response time system (1.4) and intercept mechanics (1.5), both of which are delivered as part of S3 pipeline phases 3 + 5/6.
+2026-03-06 | S4     | Items 1.1, 1.2, 1.3 completed early (commit 9078c93). | balance.json as single source of truth. ×10 HP scaling, clean RPS cycle, fixed damage formula. Kill timing verified for counter/neutral/disadvantaged matchups. strategy_game_balance_master.xlsx deleted.
+2026-03-06 | S3+S4  | Vision range now scales with map diameter (commit 00ac500). | Vision was hardcoded (3/3/3/6) — on 76-dia map, infantry saw 4% while moving 12%. Added per-unit vision divisors to map-gen-params.ts, same pattern as movement. Fixed bug: vision.ts read unscaled UNIT_STATS directly, now accepts scaled stats from GameState.unitStats. All 6 call sites updated.
+2026-03-06 | S4     | responseTime stat added (commit e275875). | Recon=1, Infantry=2, Tank=3, Artillery=4. Added to balance.json + types.ts. Pipeline scaffolding types (TurnIntent, Engagement, ApproachCategory) added to types.ts. RPS table in GAME_MATH_ENGINE.md corrected (Artillery→Recon and Recon→Infantry symmetric 0.6×).
+2026-03-06 | S3     | 10-phase pipeline complete (commit 531f68f). | resolveTurn() in resolution-pipeline.ts (1365 lines, 39 tests). Replaces dual executeTurn() calls on server and vsAI client (~110 lines of bookkeeping removed). All 10 phases implemented: snapshot, intents, movement+intercepts+collision, engagement+approach angle, initiative fire, counter-fire, melee stub, effects, territory, round end. Hunt lock-on, scout orbit, passive intercept damage all implemented. 463 tests pass.
+2026-03-06 | S3+S4  | Sprints 3 and 4 marked COMPLETE. | S3 delivered Mar 6 (12 days ahead of Mar 18 start). S4 delivered fully within S3 — 1.4 and 1.5 landed as pipeline phases 5/6 and 3 respectively. Next up: S5 reveal animation.
+2026-03-06 | S5     | OD-4 resolved: fog-gated reveal (D-VIS-5). | Enemy order visuals gated by active LOS only — explored hexes provide no intelligence during reveal. Scout placement is the primary intelligence mechanic. Server filters BattleEvent[] per player before sending. Specs updated: REVEAL_ANIMATION_SPEC.md §Visibility Rule, VISUAL_LANGUAGE.md §Fog, EVENT_LOG_SPEC.md §Fog Filtering.
+2026-03-07 | S5     | Contract gap audit: reveal animation + visual language. | 26 unique gaps found across 4 domains. Full ledger: audit/ledgers/2026-03-06_2100_reveal_visual_gaps.md.
+2026-03-07 | S5     | GAP-F1/F2 fixed: server-side event filtering. | filterEventsForPlayer() in state-filter.ts. 3 rules: own-unit always, structural always, enemy-only only if position in LOS. Server snapshots unit positions before resolveTurn() for LOS computation. All 3 emit sites (turn-result, round-end, game-over) now send per-player filtered events.
+2026-03-07 | S5     | GAP-T1 fixed: round-end/game-over events. | Server now includes events: BattleEvent[] in round-end and game-over socket messages. Client handlers run startReveal() with full event stream before applying post-round state. Decisive turns now play reveal animation.
+2026-03-07 | S5     | GAP-T5/R10 fixed: legacy replay-sequencer killed. | replay-sequencer.ts deleted. All imports updated to reveal-sequencer.ts. skipReplay→skipReveal in spacebar handler and button. Dead store state (turnReplayEvents, TurnEvent type) removed.
+2026-03-07 | S5     | Tracer colors resolved: blue P1, red P2. | REVEAL_COLORS.tracer updated from 0xffff88 yellow to match path colors (0x5599bb / 0x9a4a3a). Faction colors are future feature.
+2026-03-07 | S5     | Progressive fog during reveal confirmed correct. | Specs said "frozen at tick-start LOS" but code progressively clears. Progressive is correct — specs need updating.
+2026-03-07 | S5     | GAP-V6 fixed: heal effect. | Added targetPosition to BattleEventHeal. New spawnHealNumber() renders green "+N HP" at target unit position. Pipeline emits position.
+2026-03-07 | S5     | GAP-V7 fixed: reveal effect. | Added unitPosition to BattleEventReveal. New spawnRevealRing() (expanding white circle) + spawnRevealedText() ("REVEALED" in white). Pipeline emits position.
+2026-03-07 | S5     | GAP-R4 assessed: not a real engine gap. | Phase 4 engagement detection is correctly internal — no BattleEvent needed. Visual beat (white flash + "ENGAGED" label) is derivable from Phase 5 events client-side. TODO added for Diego.
+2026-03-07 | S5     | GAP-F3/R12 assessed: real but blocked on combat VFX. | "From fog" tracer rendering needs LOS set in reveal-sequencer + fog-edge intersection. Blocked on per-unit-type VFX rework. TODO added.
 ```
 
 ---

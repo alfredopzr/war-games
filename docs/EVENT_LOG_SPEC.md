@@ -8,7 +8,7 @@ RESOLUTION_PIPELINE.md defines the 10-phase combat timeline. This document defin
 
 ## Schema Version
 
-**v1** -- Sprint 2 (structured event log). Sprint 3 will add intercept/counter/melee emission sites. The types are defined now but not emitted.
+**v2** -- Sprint 3 (resolution pipeline). Intercept and counter events now emitted from `resolution-pipeline.ts`. Melee and reveal types defined but not yet emitted (melee blocked on OD-1). Damage events gain `response?` field. Intercept events gain `defenderResponse` field.
 
 ---
 
@@ -23,31 +23,31 @@ interface BattleEventBase {
 }
 ```
 
-### Emitted Now
+### Emitted (all from `resolution-pipeline.ts`)
 
-| Type | Phase | Fields | Source |
+| Type | Phase | Fields | Pipeline Source |
 |---|---|---|---|
-| `move` | movement | `unitId, unitType, from, to` | `applyDirectiveAction` case 'move' |
-| `damage` | combat | `attackerId, attackerType, attackerPosition, defenderId, defenderType, defenderPosition, damage, defenderHpAfter, defenderTerrain, response?` | `applyDirectiveAction` case 'attack' (defender survives). `response: 'none'` on Phase 3 passive intercept hits (ignore/retreat-on-contact units that take damage without firing back). |
-| `kill` | combat | `attackerId, attackerType, attackerPosition, defenderId, defenderType, defenderPosition, damage, defenderTerrain` | `applyDirectiveAction` case 'attack' (defender dies) |
-| `capture` | capture | `unitId, unitType, cityKey, previousOwner: null` | `updateCityOwnership` (neutral city) |
-| `recapture` | capture | `unitId, unitType, cityKey, previousOwner: PlayerId` | `updateCityOwnership` (enemy city) |
-| `capture-damage` | capture | `unitId, unitType, cityKey, captureCost, hpAfter` | `updateCityOwnership` (unit survives capture cost) |
-| `capture-death` | capture | `unitId, unitType, cityKey, captureCost` | `updateCityOwnership` (unit dies from capture cost) |
-| `objective-change` | objective | `objectiveHex, previousOccupier, newOccupier, unitId?, unitType?` | `updateObjective` |
-| `koth-progress` | objective | `occupier, turnsHeld, citiesHeld` | `updateObjective` |
-| `round-end` | round | `winner: PlayerId \| null, reason` | Server `resolveSimultaneousTurn` / client `resolveSimultaneousLocal` |
-| `game-end` | round | `winner: PlayerId` | Server / client after `scoreRound` |
-| `heal` | combat | `healerId, healerType, targetId, targetType, healAmount, targetHpAfter` | `executeUnitDirective` (support specialty) |
+| `move` | movement | `unitId, unitType, from, to` | Phase 3 `resolveMovement` |
+| `damage` | combat | `attackerId, attackerType, attackerPosition, defenderId, defenderType, defenderPosition, damage, defenderHpAfter, defenderTerrain, response?` | Phase 3 (passive intercept, `response: 'none'`), Phase 5 `resolveInitiativeFire`, Phase 6 `resolveCounterFire` |
+| `kill` | combat | `attackerId, attackerType, attackerPosition, defenderId, defenderType, defenderPosition, damage, defenderTerrain` | Phase 3/5/6 (any lethal hit) |
+| `intercept` | combat | `attackerId, attackerType, defenderId, defenderType, hex, damage, defenderResponse: 'engage' \| 'skirmish' \| 'flee' \| 'none'` | Phase 3 `resolveMovement` |
+| `counter` | combat | `attackerId, attackerType, defenderId, defenderType, damage, defenderHpAfter` | Phase 6 `resolveCounterFire` |
+| `heal` | combat | `healerId, healerType, targetId, targetType, healAmount, targetHpAfter` | Phase 8 `resolveDirectiveEffects` |
+| `reveal` | combat | `unitId, unitType, hexes: CubeCoord[]` | Phase 8 `resolveDirectiveEffects` |
+| `capture` | capture | `unitId, unitType, cityKey, previousOwner: null` | Phase 9 `resolveTerritoryPhase` |
+| `recapture` | capture | `unitId, unitType, cityKey, previousOwner: PlayerId` | Phase 9 `resolveTerritoryPhase` |
+| `capture-damage` | capture | `unitId, unitType, cityKey, captureCost, hpAfter` | Phase 9 `resolveTerritoryPhase` |
+| `capture-death` | capture | `unitId, unitType, cityKey, captureCost` | Phase 9 `resolveTerritoryPhase` |
+| `objective-change` | objective | `objectiveHex, previousOccupier, newOccupier, unitId?, unitType?` | Phase 10 `resolveRoundEnd` |
+| `koth-progress` | objective | `occupier, turnsHeld, citiesHeld` | Phase 10 `resolveRoundEnd` |
+| `round-end` | round | `winner: PlayerId \| null, reason` | Server/client after `checkRoundEnd` |
+| `game-end` | round | `winner: PlayerId` | Server/client after `scoreRound` |
 
-### Defined Now, Emitted Sprint 3/4
+### Defined, Not Yet Emitted
 
-| Type | Phase | Fields |
-|---|---|---|
-| `intercept` | combat | `attackerId, attackerType, defenderId, defenderType, hex, damage, defenderResponse: 'engage' \| 'skirmish' \| 'flee' \| 'none'` |
-| `counter` | combat | `attackerId, attackerType, defenderId, defenderType, damage, defenderHpAfter` |
-| `melee` | combat | `unitAId, unitAType, unitBId, unitBType, hex` |
-| `reveal` | combat | `unitId, unitType, hexes: CubeCoord[]` |
+| Type | Phase | Fields | Blocked By |
+|---|---|---|---|
+| `melee` | combat | `unitAId, unitAType, unitBId, unitBType, hex` | OD-1 (meleeRating values) |
 
 ---
 
@@ -76,14 +76,33 @@ Each entry contains `events: BattleEvent[]` for the full turn.
 
 ---
 
+## Event Ordering
+
+Events in `pendingEvents` are ordered by pipeline phase (3→5→6→8→9→10) because phases execute sequentially and each phase appends events as it runs. This emission order IS the playback order for the reveal animation — no re-sorting needed.
+
 ## Transport
 
-Events are emitted inline during `executeTurn()` into `state.pendingEvents`. After each player's turn resolves, the server drains `pendingEvents` into a local array. The combined array is sent in the `turn-result` payload.
+Events are emitted inline during `resolveTurn()` into `state.pendingEvents`. The server drains `pendingEvents` after the call. The array is sent in the `turn-result` payload.
 
 `pendingEvents` is transient -- initialized to `[]` on deserialize. Events do not persist in serialized game state.
 
 ---
 
-## Fog Filtering
+## Fog Filtering (D-VIS-5, resolves OD-4)
 
-OD-4 (fog during reveal) is unresolved. Events are currently sent unfiltered to both players. If fog-gated reveal is chosen later, filtering happens at the transport layer (server filters `BattleEvent[]` before sending), not in the schema. The event structure supports both models without changes.
+**Fog-gated reveal. LOS only. No explored exception.**
+
+The server filters `BattleEvent[]` per player before sending in the `turn-result` payload. The filtering rule:
+
+1. Compute the observing player's **LOS set** — the set of hex keys visible to their units at the Phase 1 snapshot (tick start positions). This is the same `calculateVisibility()` call used for fog of war during gameplay.
+
+2. For each `BattleEvent` in the array:
+   - **Own-unit events** (event involves the observing player's unit as actor or target): **always include.** The player always sees what happens to their own units, even if the attacker is in fog.
+   - **Enemy-only events** (event involves only enemy units): include **only if** at least one position in the event (attacker position, defender position, hex, city key) is in the LOS set.
+   - **Structural events** (round-end, game-end, koth-progress, objective-change): **always include.**
+
+3. For included events where the enemy attacker is outside LOS: the client renders the attacker as "from fog" — tracer originates from the LOS boundary, attacker identity unknown. The event data is preserved (server doesn't redact fields), but the client renderer decides how to visualize based on the player's visibility.
+
+The schema does not change. Filtering happens at the transport layer (`state-filter.ts` or `game-loop.ts`). The client receives a subset of the full event stream and renders only what it receives.
+
+**Explored hexes provide no intelligence during reveal.** Only active LOS counts. This makes scout placement the primary intelligence mechanic.

@@ -13,11 +13,14 @@ import type {
   TerrainType,
   HexModifier,
   MegaHexInfo,
+  BattleEvent,
+  CubeCoord,
 } from '@hexwar/engine';
 
 import {
   calculateVisibility,
   hexToKey,
+  CP_PER_ROUND,
 } from '@hexwar/engine';
 
 import type { SerializableGameState } from '@hexwar/engine';
@@ -146,9 +149,15 @@ export function filterStateForPlayer(
       currentPlayer: state.round.currentPlayer,
       maxTurns: state.round.maxTurns,
       turnsPlayed: state.round.turnsPlayed,
-      commandPool: {
-        remaining: state.round.commandPool.remaining,
-        commandedUnitIds: [...state.round.commandPool.commandedUnitIds],
+      commandPools: {
+        [playerId]: {
+          remaining: state.round.commandPools[playerId].remaining,
+          commandedUnitIds: [...state.round.commandPools[playerId].commandedUnitIds],
+        },
+        [enemyId]: {
+          remaining: CP_PER_ROUND,
+          commandedUnitIds: [],
+        },
       },
       objective: { ...state.round.objective },
       unitsKilledThisRound: { ...state.round.unitsKilledThisRound },
@@ -222,7 +231,92 @@ function stripDirective(unit: Unit): Unit {
     movementDirective: 'advance',
     attackDirective: 'ignore',
     specialtyModifier: null,
-    directiveTarget: { type: 'central-objective' },
+    directiveTarget: { type: 'hex', hex: { q: unit.position.q, r: unit.position.r, s: unit.position.s } },
     hasActed: unit.hasActed,
   };
+}
+
+// -----------------------------------------------------------------------------
+// Event Filtering (Fog-gated reveal — D-VIS-5)
+// -----------------------------------------------------------------------------
+
+const STRUCTURAL_EVENT_TYPES = new Set([
+  'round-end', 'game-end', 'koth-progress', 'objective-change',
+]);
+
+function hexKeyFromCoord(c: CubeCoord): string {
+  return hexToKey(c);
+}
+
+/**
+ * Filter BattleEvent[] so a player only receives events they should see.
+ *
+ * Rules (EVENT_LOG_SPEC.md §Fog Filtering):
+ *   1. Own-unit events (actingPlayer === playerId): always include.
+ *   2. Structural events (round-end, game-end, etc.): always include.
+ *   3. Enemy-only events: include only if at least one position in the
+ *      event falls within the player's LOS set.
+ */
+export function filterEventsForPlayer(
+  events: BattleEvent[],
+  playerId: PlayerId,
+  losSet: Set<string>,
+): BattleEvent[] {
+  const result: BattleEvent[] = [];
+
+  for (const event of events) {
+    if (event.actingPlayer === playerId) {
+      result.push(event);
+      continue;
+    }
+
+    if (STRUCTURAL_EVENT_TYPES.has(event.type)) {
+      result.push(event);
+      continue;
+    }
+
+    if (eventHasVisiblePosition(event, losSet)) {
+      result.push(event);
+    }
+  }
+
+  return result;
+}
+
+function eventHasVisiblePosition(event: BattleEvent, losSet: Set<string>): boolean {
+  switch (event.type) {
+    case 'move':
+      return losSet.has(hexKeyFromCoord(event.from)) || losSet.has(hexKeyFromCoord(event.to));
+
+    case 'damage':
+    case 'kill':
+      return losSet.has(hexKeyFromCoord(event.attackerPosition)) || losSet.has(hexKeyFromCoord(event.defenderPosition));
+
+    case 'counter':
+      return losSet.has(hexKeyFromCoord(event.attackerPosition)) || losSet.has(hexKeyFromCoord(event.defenderPosition));
+
+    case 'intercept':
+      return losSet.has(hexKeyFromCoord(event.attackerPosition)) || losSet.has(hexKeyFromCoord(event.hex));
+
+    case 'melee':
+      return losSet.has(hexKeyFromCoord(event.hex));
+
+    case 'heal':
+      return losSet.has(hexKeyFromCoord(event.targetPosition));
+
+    case 'reveal':
+      return event.hexes.some((h) => losSet.has(hexKeyFromCoord(h)));
+
+    case 'capture':
+    case 'recapture':
+    case 'capture-damage':
+    case 'capture-death':
+      return losSet.has(event.cityKey);
+
+    case 'round-end':
+    case 'game-end':
+    case 'koth-progress':
+    case 'objective-change':
+      return true; // structural — already handled above, but exhaust the switch
+  }
 }

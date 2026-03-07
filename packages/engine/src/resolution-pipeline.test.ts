@@ -27,7 +27,7 @@ function getDeploymentHex(state: GameState, player: PlayerId, index: number = 0)
 
 function placeInfantry(state: GameState, player: PlayerId, index: number = 0): GameState {
   const hex = getDeploymentHex(state, player, index);
-  return placeUnit(state, player, 'infantry', hex);
+  return placeUnit(state, player, 'infantry', hex, 'advance', 'ignore', null, { type: 'hex', hex: state.map.centralObjective });
 }
 
 function setupBattleGame(seed: number = 42): GameState {
@@ -52,7 +52,7 @@ function makeUnit(
     movementDirective: overrides.movementDirective ?? 'advance',
     attackDirective: overrides.attackDirective ?? 'shoot-on-sight',
     specialtyModifier: overrides.specialtyModifier ?? null,
-    directiveTarget: overrides.directiveTarget ?? { type: 'central-objective' },
+    directiveTarget: overrides.directiveTarget ?? { type: 'hex', hex: overrides.position },
     hasActed: overrides.hasActed ?? false,
   };
 }
@@ -271,7 +271,7 @@ describe('Phase 3 — Intercepts', () => {
     // Place P1 infantry and P2 infantry adjacent
     const p1Hex = getDeploymentHex(state, 'player1', 0);
     const p2Hex = getDeploymentHex(state, 'player2', 0);
-    state = placeUnit(state, 'player1', 'infantry', p1Hex, 'advance', 'shoot-on-sight');
+    state = placeUnit(state, 'player1', 'infantry', p1Hex, 'advance', 'shoot-on-sight', null, { type: 'hex', hex: state.map.centralObjective });
     state = placeUnit(state, 'player2', 'infantry', p2Hex, 'hold', 'shoot-on-sight');
     state = startBattlePhase(state);
 
@@ -463,18 +463,20 @@ describe('Phase 8 — Directive Effects', () => {
     }
   });
 
-  it('scout emits reveal events for visible enemies', () => {
+  it('patrol emits reveal events for visible enemies', () => {
     let state = makeGame(42);
     const p1Hex = getDeploymentHex(state, 'player1', 0);
     const p2Hex = getDeploymentHex(state, 'player2', 0);
 
-    state = placeUnit(state, 'player1', 'recon', p1Hex, 'scout', 'ignore');
+    // Patrol unit orbits around its target; place enemy at the target so it stays in vision
+    const patrolTarget = getDeploymentHex(state, 'player1', 1);
+    state = placeUnit(state, 'player1', 'recon', p1Hex, 'patrol', 'ignore', null, { type: 'hex', hex: patrolTarget });
     state = placeUnit(state, 'player2', 'infantry', p2Hex, 'hold', 'ignore');
     state = startBattlePhase(state);
 
-    // Position within recon's vision range
-    state.players.player1.units[0]!.position = createHex(0, 0);
-    state.players.player2.units[0]!.position = createHex(3, 0);
+    // Place enemy at the patrol target (dist 3 from orbit ring — well within recon vision)
+    state.players.player1.units[0]!.position = p1Hex;
+    state.players.player2.units[0]!.position = patrolTarget;
 
     resolveTurn(state, [], [], midRng);
 
@@ -625,16 +627,11 @@ describe('Phase 3 — Skirmish', () => {
     const p1Hex = getDeploymentHex(state, 'player1', 0);
     const p2Hex = getDeploymentHex(state, 'player2', 0);
 
-    state = placeUnit(state, 'player1', 'infantry', p1Hex, 'advance', 'skirmish');
+    state = placeUnit(state, 'player1', 'infantry', p1Hex, 'advance', 'skirmish', null, { type: 'hex', hex: state.map.centralObjective });
     state = placeUnit(state, 'player2', 'infantry', p2Hex, 'hold', 'shoot-on-sight');
     state = startBattlePhase(state);
 
-    const startPos = hexToKey(state.players.player1.units[0]!.position);
-
     resolveTurn(state, [], [], midRng);
-
-    // Skirmish unit should have moved (not stopped on contact like shoot-on-sight would)
-    const endPos = hexToKey(state.players.player1.units[0]!.position);
     // The unit should have attempted to move regardless of contact
     const moveEvents = state.pendingEvents.filter(
       e => e.type === 'move' && e.actingPlayer === 'player1',
@@ -663,8 +660,6 @@ describe('Phase 3 — Passive Intercept Damage', () => {
     state.players.player1.units[0]!.position = createHex(3, 0);
     // Set target so P1 advances through P2's range
     state.players.player1.units[0]!.directiveTarget = { type: 'hex', hex: createHex(-3, 0) };
-
-    const hpBefore = state.players.player1.units[0]!.hp;
 
     resolveTurn(state, [], [], midRng);
 
@@ -860,5 +855,61 @@ describe('Hunt Lock-on', () => {
     if (hunter) {
       expect(hunter.huntTargetId).toBeUndefined();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-Player Command Pools (GAP-01 / GAP-02)
+// ---------------------------------------------------------------------------
+
+describe('Per-Player Command Pools', () => {
+  function setupFullBattle(seed: number = 42): GameState {
+    let state = createGame(seed);
+    // Place 4 units per player so each can max out CP
+    for (let i = 0; i < 4; i++) {
+      const p1Hex = state.map.player1Deployment[i]!;
+      const p2Hex = state.map.player2Deployment[i]!;
+      state = placeUnit(state, 'player1', 'infantry', p1Hex, 'advance', 'ignore', null, { type: 'hex', hex: state.map.centralObjective });
+      state = placeUnit(state, 'player2', 'infantry', p2Hex, 'advance', 'ignore', null, { type: 'hex', hex: state.map.centralObjective });
+    }
+    state = startBattlePhase(state);
+    return state;
+  }
+
+  function makeRedirect(unitId: string): Command {
+    return {
+      type: 'redirect',
+      unitId,
+      newMovementDirective: 'hold',
+      newAttackDirective: 'ignore',
+      newSpecialtyModifier: null,
+    };
+  }
+
+  it('both players can spend full CP independently without crash', () => {
+    const state = setupFullBattle();
+    const p1Commands = state.players.player1.units.map(u => makeRedirect(u.id));
+    const p2Commands = state.players.player2.units.map(u => makeRedirect(u.id));
+
+    expect(p1Commands.length).toBe(4);
+    expect(p2Commands.length).toBe(4);
+
+    // This must not throw
+    resolveTurn(state, p1Commands, p2Commands, midRng);
+
+    expect(state.round.commandPools.player1.remaining).toBe(0);
+    expect(state.round.commandPools.player2.remaining).toBe(0);
+  });
+
+  it('P1 spending CP does not affect P2 pool', () => {
+    const state = setupFullBattle();
+    const p1Commands = state.players.player1.units.slice(0, 3).map(u => makeRedirect(u.id));
+
+    resolveTurn(state, p1Commands, [], midRng);
+
+    expect(state.round.commandPools.player1.remaining).toBe(1);
+    expect(state.round.commandPools.player1.commandedUnitIds.size).toBe(3);
+    expect(state.round.commandPools.player2.remaining).toBe(4);
+    expect(state.round.commandPools.player2.commandedUnitIds.size).toBe(0);
   });
 });

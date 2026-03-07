@@ -21,7 +21,7 @@ export const BEHAVIOR_NAMES: Record<MovementDirective, Record<AttackDirective, s
   advance:        { 'shoot-on-sight': 'Assault',        skirmish: 'Advance in Contact', 'retreat-on-contact': 'Probe',       hunt: 'Search & Destroy', ignore: 'March' },
   'flank-left':   { 'shoot-on-sight': 'Envelop Left',   skirmish: 'Harass Left',        'retreat-on-contact': 'Feint Left',  hunt: 'Pursue Left',      ignore: 'Bypass Left' },
   'flank-right':  { 'shoot-on-sight': 'Envelop Right',  skirmish: 'Harass Right',       'retreat-on-contact': 'Feint Right', hunt: 'Pursue Right',     ignore: 'Bypass Right' },
-  scout:          { 'shoot-on-sight': 'Recon in Force',  skirmish: 'Armed Recon',        'retreat-on-contact': 'Recon',       hunt: 'Track',            ignore: 'Silent Recon' },
+  patrol:         { 'shoot-on-sight': 'Recon in Force',  skirmish: 'Armed Recon',        'retreat-on-contact': 'Recon',       hunt: 'Track',            ignore: 'Silent Recon' },
   hold:           { 'shoot-on-sight': 'Defend',          skirmish: 'Harassing Defense',  'retreat-on-contact': 'Tripwire',    hunt: 'Ambush',           ignore: 'Dig In' },
 };
 
@@ -37,9 +37,6 @@ export function resolveTarget(unit: Unit, context: DirectiveContext): ResolvedTa
   const target = unit.directiveTarget;
 
   switch (target.type) {
-    case 'central-objective':
-      return { hex: context.centralObjective, isValid: true };
-
     case 'hex':
       return { hex: target.hex!, isValid: true };
 
@@ -52,7 +49,7 @@ export function resolveTarget(unit: Unit, context: DirectiveContext): ResolvedTa
         unit.directiveTarget = { type: 'enemy-unit', unitId: nearest.id };
         return { hex: nearest.position, isValid: false };
       }
-      unit.directiveTarget = { type: 'central-objective' };
+      unit.directiveTarget = { type: 'hex', hex: context.centralObjective };
       return { hex: context.centralObjective, isValid: false };
     }
 
@@ -67,21 +64,6 @@ export function resolveTarget(unit: Unit, context: DirectiveContext): ResolvedTa
         return { hex: nearestFriendly.position, isValid: false };
       }
       return { hex: unit.position, isValid: false };
-    }
-
-    case 'city': {
-      const cityId = target.cityId!;
-      if (context.cities.has(cityId)) {
-        const [qStr, rStr] = cityId.split(',');
-        return { hex: createHex(Number(qStr), Number(rStr)), isValid: true };
-      }
-      const fallbackCity = findNearestEnemyCity(unit, context);
-      if (fallbackCity) {
-        unit.directiveTarget = { type: 'city', cityId: fallbackCity.key };
-        return { hex: fallbackCity.hex, isValid: false };
-      }
-      unit.directiveTarget = { type: 'central-objective' };
-      return { hex: context.centralObjective, isValid: false };
     }
 
     case 'deployment-zone': {
@@ -112,7 +94,7 @@ export function executeDirective(unit: Unit, context: DirectiveContext): UnitAct
     case 'hold': return executeHold(unit, context);
     case 'flank-left': return executeFlank(unit, context, 'left');
     case 'flank-right': return executeFlank(unit, context, 'right');
-    case 'scout': return executeScout(unit, context);
+    case 'patrol': return executePatrol(unit, context);
   }
 }
 
@@ -165,10 +147,8 @@ function executeHold(unit: Unit, context: DirectiveContext): UnitAction {
   if (attackAction) return attackAction;
 
   const resolved = resolveTarget(unit, context);
-  if (unit.directiveTarget.type !== 'central-objective') {
-    const dist = cubeDistance(unit.position, resolved.hex);
-    if (dist > 1) return moveToward(unit, context, resolved.hex);
-  }
+  const dist = cubeDistance(unit.position, resolved.hex);
+  if (dist > 1) return moveToward(unit, context, resolved.hex);
 
   return { type: 'hold' };
 }
@@ -234,26 +214,21 @@ function executeFlank(
   return moveToward(unit, context, intermediateTarget);
 }
 
-function executeScout(unit: Unit, context: DirectiveContext): UnitAction {
+function executePatrol(unit: Unit, context: DirectiveContext): UnitAction {
   const attackAction = resolveAttackBehavior(unit, context);
   if (attackAction) return attackAction;
 
-  // Check for adjacent enemies (distance 1) — scout-specific retreat behavior
+  // Check for adjacent enemies (distance 1) — patrol-specific retreat behavior
   const nearestEnemy = findNearestEnemy(unit, context);
   if (nearestEnemy && cubeDistance(unit.position, nearestEnemy.position) === 1) {
     // Retreat: move to neighbor hex that maximizes distance from nearest enemy
     return retreatFrom(unit, context, nearestEnemy);
   }
 
-  if (unit.directiveTarget.type !== 'central-objective') {
-    const resolved = resolveTarget(unit, context);
-    const dist = cubeDistance(unit.position, resolved.hex);
-    if (dist <= 3) return { type: 'hold' };
-    return moveToward(unit, context, resolved.hex);
-  }
-
-  // Move toward hex farthest from all friendly units (explore new territory)
-  return scoutExplore(unit, context);
+  const resolved = resolveTarget(unit, context);
+  const dist = cubeDistance(unit.position, resolved.hex);
+  if (dist <= 3) return { type: 'hold' };
+  return moveToward(unit, context, resolved.hex);
 }
 
 function executeSupport(unit: Unit, context: DirectiveContext): UnitAction {
@@ -267,27 +242,10 @@ function executeSupport(unit: Unit, context: DirectiveContext): UnitAction {
     return moveToward(unit, context, resolved.hex);
   }
 
-  if (unit.directiveTarget.type !== 'central-objective') {
-    const resolved = resolveTarget(unit, context);
-    const dist = cubeDistance(unit.position, resolved.hex);
-    if (dist <= 1) return { type: 'hold' };
-    return moveToward(unit, context, resolved.hex);
-  }
-
-  // Default: original behavior
-  const nearbyFriendly = findNearestFriendly(unit, context, 3);
-  if (!nearbyFriendly) {
-    const anyFriendly = findNearestFriendly(unit, context, Infinity);
-    if (!anyFriendly) return { type: 'hold' };
-    return moveToward(unit, context, anyFriendly.position);
-  }
-
-  const dist = cubeDistance(unit.position, nearbyFriendly.position);
-  if (dist <= 2) {
-    return { type: 'hold' };
-  }
-
-  return moveToward(unit, context, nearbyFriendly.position);
+  const resolved = resolveTarget(unit, context);
+  const dist = cubeDistance(unit.position, resolved.hex);
+  if (dist <= 1) return { type: 'hold' };
+  return moveToward(unit, context, resolved.hex);
 }
 
 // -----------------------------------------------------------------------------
@@ -424,28 +382,6 @@ function findNearestFriendly(
 }
 
 /**
- * Find the nearest enemy city (not owned by the unit's owner).
- */
-function findNearestEnemyCity(
-  unit: Unit,
-  context: DirectiveContext,
-): { key: string; hex: CubeCoord } | null {
-  let nearest: { key: string; hex: CubeCoord } | null = null;
-  let nearestDist = Infinity;
-  for (const [key, owner] of context.cities) {
-    if (owner === unit.owner) continue;
-    const [qStr, rStr] = key.split(',');
-    const hex = createHex(Number(qStr), Number(rStr));
-    const dist = cubeDistance(unit.position, hex);
-    if (dist < nearestDist) {
-      nearestDist = dist;
-      nearest = { key, hex };
-    }
-  }
-  return nearest;
-}
-
-/**
  * Retreat from an enemy: pick the neighbor hex that maximizes distance
  * from the threat, is on the map, and is not occupied.
  */
@@ -484,77 +420,3 @@ function retreatFrom(
   return { type: 'hold' };
 }
 
-/**
- * Scout exploration: move toward the hex farthest from all friendly units.
- * This pushes the scout into unexplored territory.
- */
-function scoutExplore(unit: Unit, context: DirectiveContext): UnitAction {
-  const occupied = buildOccupiedSet(unit, context);
-
-  // Evaluate all hexes on the map, find the one farthest from all friendly units
-  let bestHex: CubeCoord | null = null;
-  let bestMinFriendlyDist = -1;
-
-  for (const key of context.terrain.keys()) {
-    if (occupied.has(key)) continue;
-
-    const [qStr, rStr] = key.split(',');
-    const candidate = createHex(Number(qStr), Number(rStr));
-
-    // Compute minimum distance from any friendly unit
-    let minFriendlyDist = Infinity;
-    for (const friendly of context.friendlyUnits) {
-      const dist = cubeDistance(candidate, friendly.position);
-      if (dist < minFriendlyDist) {
-        minFriendlyDist = dist;
-      }
-    }
-
-    if (minFriendlyDist > bestMinFriendlyDist) {
-      bestMinFriendlyDist = minFriendlyDist;
-      bestHex = candidate;
-    }
-  }
-
-  if (!bestHex) {
-    return { type: 'hold' };
-  }
-
-  // Path toward that exploration target
-  const path = findPath(
-    unit.position,
-    bestHex,
-    context.terrain,
-    unit.type,
-    occupied,
-    unit.movementDirective,
-    context.modifiers,
-    context.elevation,
-  );
-
-  if (!path || path.length <= 1) {
-    return { type: 'hold' };
-  }
-
-  // Walk path spending movement budget (cost-based)
-  let costBudget = context.unitStats[unit.type].moveRange;
-  let lastValidIndex = 0;
-  for (let i = 1; i < path.length; i++) {
-    const prevKey = hexToKey(path[i - 1]!);
-    const curKey = hexToKey(path[i]!);
-    const terrain = context.terrain.get(curKey);
-    if (!terrain) break;
-    const stepCost = getMoveCost(
-      terrain, unit.type, unit.movementDirective,
-      context.modifiers.get(curKey),
-      context.elevation.get(prevKey),
-      context.elevation.get(curKey),
-    );
-    if (stepCost === Infinity) break;
-    costBudget -= stepCost;
-    if (costBudget < 0) break;
-    lastValidIndex = i;
-  }
-  if (lastValidIndex === 0) return { type: 'hold' };
-  return { type: 'move', targetHex: path[lastValidIndex]! };
-}

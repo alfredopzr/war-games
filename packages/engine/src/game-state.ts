@@ -17,17 +17,12 @@ import type {
   Command,
   RoundEndResult,
   Unit,
-  UnitAction,
-  DirectiveContext,
 } from './types';
 import { generateMap } from './map-gen';
 import { createUnit, UNIT_STATS, scaledUnitStats } from './units';
 import { canAfford, calculateIncome, applyCarryover, applyMaintenance } from './economy';
-import { createCommandPool, spendCommand } from './commands';
-import { hexToKey, cubeDistance, hexNeighbors } from './hex';
-import { canAttack, calculateDamage } from './combat';
-import { calculateVisibility } from './vision';
-import { executeDirective } from './directives';
+import { createCommandPool } from './commands';
+import { hexToKey, cubeDistance } from './hex';
 
 // -----------------------------------------------------------------------------
 // createGame
@@ -66,7 +61,7 @@ export function createGame(seed?: number): GameState {
       currentPlayer: 'player1',
       maxTurns: 12,
       turnsPlayed: 0,
-      commandPool: createCommandPool(),
+      commandPools: { player1: createCommandPool(), player2: createCommandPool() },
       objective: { occupiedBy: null, turnsHeld: 0 },
       unitsKilledThisRound: { player1: 0, player2: 0 },
     },
@@ -119,7 +114,7 @@ export function placeUnit(
     throw new Error('Cannot afford unit');
   }
 
-  const unit = createUnit(unitType, playerId, position, movementDirective, attackDirective, specialtyModifier, directiveTarget);
+  const unit = createUnit(unitType, playerId, position, movementDirective, attackDirective, specialtyModifier, directiveTarget ?? { type: 'hex', hex: position });
   state.players[playerId].resources -= cost;
   state.players[playerId].units.push(unit);
 
@@ -139,7 +134,7 @@ export function startBattlePhase(state: GameState): GameState {
   state.round.turnNumber = 1;
   state.round.currentPlayer = 'player1';
   state.round.turnsPlayed = 0;
-  state.round.commandPool = createCommandPool();
+  state.round.commandPools = { player1: createCommandPool(), player2: createCommandPool() };
   state.round.objective = { occupiedBy: null, turnsHeld: 0 };
   state.round.unitsKilledThisRound = { player1: 0, player2: 0 };
 
@@ -163,334 +158,24 @@ export function filterValidCommands(
   playerId: PlayerId,
 ): Command[] {
   const friendlyUnits = state.players[playerId].units;
+  const pool = state.round.commandPools[playerId];
+  const seen = new Set<string>();
+  let remaining = pool.remaining;
 
   return commands.filter((cmd) => {
+    if (cmd.type !== 'redirect') return false;
+    if (remaining <= 0) return false;
+
     const unit = friendlyUnits.find((u) => u.id === cmd.unitId);
     if (!unit) return false;
-    // Only redirect commands exist — just verify unit is alive
-    return cmd.type === 'redirect';
+
+    if (seen.has(cmd.unitId)) return false;
+    if (pool.commandedUnitIds.has(cmd.unitId)) return false;
+
+    seen.add(cmd.unitId);
+    remaining--;
+    return true;
   });
-}
-
-// -----------------------------------------------------------------------------
-// executeTurn
-// -----------------------------------------------------------------------------
-
-export function executeTurn(
-  state: GameState,
-  commands: Command[],
-  randomFn?: () => number,
-): GameState {
-  if (state.phase !== 'battle') {
-    throw new Error('Can only execute turns during battle phase');
-  }
-
-  // Clear pending events from previous turn
-  state.pendingEvents = [];
-
-  const currentPlayer = state.round.currentPlayer;
-  const enemyPlayer: PlayerId = currentPlayer === 'player1' ? 'player2' : 'player1';
-  const friendlyUnits = state.players[currentPlayer].units;
-
-  // Track which units were directly commanded
-  let commandPool = state.round.commandPool;
-  const commandedUnitIds = new Set<string>();
-
-  // Apply player commands
-  for (const command of commands) {
-    const unit = findUnitById(friendlyUnits, command.unitId);
-    if (!unit) continue; // dead unit — skip, don't spend CP
-    commandPool = spendCommand(commandPool, command);
-    commandedUnitIds.add(command.unitId);
-
-    applyCommand(state, command, currentPlayer, enemyPlayer, randomFn);
-  }
-
-  state.round.commandPool = commandPool;
-
-  // Execute directive AI for non-commanded friendly units
-  // Pass 1: Scout units act first
-  for (const unit of [...friendlyUnits]) {
-    if (unit.movementDirective !== 'scout') continue;
-    executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
-  }
-
-  // Pass 2: All other non-commanded units
-  for (const unit of [...friendlyUnits]) {
-    if (unit.movementDirective === 'scout') continue;
-    executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
-  }
-
-  // Update city ownership BEFORE objective tracking (so KotH gate has current data)
-  updateCityOwnership(state);
-
-  // Update objective tracking (with city gate check)
-  updateObjective(state);
-
-  return state;
-}
-
-// -----------------------------------------------------------------------------
-// Directive Execution Helper
-// -----------------------------------------------------------------------------
-
-function executeUnitDirective(
-  state: GameState,
-  unit: Unit,
-  commandedUnitIds: Set<string>,
-  friendlyUnits: Unit[],
-  currentPlayer: PlayerId,
-  enemyPlayer: PlayerId,
-  randomFn?: () => number,
-): void {
-  if (commandedUnitIds.has(unit.id)) return;
-  if (unit.hasActed) return;
-  // Unit may have been killed during command resolution
-  if (!friendlyUnits.includes(unit)) return;
-
-  const context: DirectiveContext = {
-    friendlyUnits: [...friendlyUnits],
-    enemyUnits: [...state.players[enemyPlayer].units],
-    terrain: state.map.terrain,
-    elevation: state.map.elevation,
-    modifiers: state.map.modifiers,
-    centralObjective: state.map.centralObjective,
-    cities: state.cityOwnership,
-    unitStats: state.unitStats,
-    mapRadius: state.map.mapRadius,
-    deploymentZone: currentPlayer === 'player1' ? state.map.player1Deployment : state.map.player2Deployment,
-  };
-
-  const action = executeDirective(unit, context);
-  applyDirectiveAction(state, unit, action, currentPlayer, enemyPlayer, randomFn);
-  unit.hasActed = true;
-
-  // Support specialty: heal adjacent friendly with lowest HP (below maxHp)
-  if (unit.specialtyModifier === 'support') {
-    const neighbors = hexNeighbors(unit.position);
-    const neighborKeys = new Set(neighbors.map(hexToKey));
-    let bestTarget: Unit | null = null;
-    let lowestHp = Infinity;
-
-    for (const friendly of friendlyUnits) {
-      if (friendly.id === unit.id) continue;
-      const fKey = hexToKey(friendly.position);
-      if (!neighborKeys.has(fKey)) continue;
-      const stats = UNIT_STATS[friendly.type];
-      if (friendly.hp < stats.maxHp && friendly.hp < lowestHp) {
-        lowestHp = friendly.hp;
-        bestTarget = friendly;
-      }
-    }
-
-    if (bestTarget) {
-      bestTarget.hp += 1;
-      state.pendingEvents.push({
-        type: 'heal',
-        actingPlayer: currentPlayer,
-        phase: 'combat',
-        healerId: unit.id,
-        healerType: unit.type,
-        targetId: bestTarget.id,
-        targetType: bestTarget.type,
-        healAmount: 1,
-        targetHpAfter: bestTarget.hp,
-      });
-    }
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Command Application
-// -----------------------------------------------------------------------------
-
-function applyCommand(
-  state: GameState,
-  command: Command,
-  _currentPlayer: PlayerId,
-  _enemyPlayer: PlayerId,
-  _randomFn?: () => number,
-): void {
-  const friendlyUnits = state.players[_currentPlayer].units;
-
-  const unit = findUnitById(friendlyUnits, command.unitId);
-  if (!unit) return;
-
-  unit.movementDirective = command.newMovementDirective;
-  unit.attackDirective = command.newAttackDirective;
-  unit.specialtyModifier = command.newSpecialtyModifier;
-  if (command.target) {
-    unit.directiveTarget = command.target;
-  }
-  // DO NOT set hasActed — directive AI runs this unit with new directive this turn.
-  // Behavioral change from old code: DESIGN.md:168 + 175 imply unit acts same turn.
-}
-
-// -----------------------------------------------------------------------------
-// Directive Action Application
-// -----------------------------------------------------------------------------
-
-function applyDirectiveAction(
-  state: GameState,
-  unit: Unit,
-  action: UnitAction,
-  currentPlayer: PlayerId,
-  enemyPlayer: PlayerId,
-  randomFn?: () => number,
-): void {
-  switch (action.type) {
-    case 'move': {
-      const targetKey = hexToKey(action.targetHex);
-      // Validate the hex exists and is unoccupied
-      if (!state.map.terrain.has(targetKey)) break;
-
-      const allUnits = [...state.players.player1.units, ...state.players.player2.units];
-      const isOccupied = allUnits.some(
-        (u) => u.id !== unit.id && hexToKey(u.position) === targetKey,
-      );
-      if (isOccupied) break;
-
-      const moveFrom = { ...unit.position };
-      unit.position = action.targetHex;
-      state.pendingEvents.push({
-        type: 'move',
-        actingPlayer: currentPlayer,
-        phase: 'movement',
-        unitId: unit.id,
-        unitType: unit.type,
-        from: moveFrom,
-        to: action.targetHex,
-      });
-      break;
-    }
-
-    case 'attack': {
-      const enemyUnits = state.players[enemyPlayer].units;
-      const defender = findUnitById(enemyUnits, action.targetUnitId);
-      if (!defender) break;
-
-      const attackerVisible = calculateVisibility([unit], state.map.terrain, state.map.elevation, state.unitStats);
-      if (!canAttack(unit, defender, attackerVisible)) break;
-
-      const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
-      const damage = calculateDamage(unit, defender, defenderTerrain, randomFn);
-      const defenderPosCopy = { ...defender.position };
-      const attackerPosCopy = { ...unit.position };
-      defender.hp -= damage;
-
-      if (defender.hp <= 0) {
-        state.pendingEvents.push({
-          type: 'kill',
-          actingPlayer: currentPlayer,
-          phase: 'combat',
-          attackerId: unit.id,
-          attackerType: unit.type,
-          attackerPosition: attackerPosCopy,
-          defenderId: defender.id,
-          defenderType: defender.type,
-          defenderPosition: defenderPosCopy,
-          damage,
-          defenderTerrain,
-        });
-        removeUnit(state.players[enemyPlayer].units, defender.id);
-        state.round.unitsKilledThisRound[currentPlayer] += 1;
-      } else {
-        state.pendingEvents.push({
-          type: 'damage',
-          actingPlayer: currentPlayer,
-          phase: 'combat',
-          attackerId: unit.id,
-          attackerType: unit.type,
-          attackerPosition: attackerPosCopy,
-          defenderId: defender.id,
-          defenderType: defender.type,
-          defenderPosition: defenderPosCopy,
-          damage,
-          defenderHpAfter: defender.hp,
-          defenderTerrain,
-        });
-      }
-      break;
-    }
-
-    case 'hold':
-      break;
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Objective Tracking
-// -----------------------------------------------------------------------------
-
-function updateObjective(state: GameState): void {
-  const objectiveKey = hexToKey(state.map.centralObjective);
-  const allUnits = [...state.players.player1.units, ...state.players.player2.units];
-
-  const unitOnObjective = allUnits.find(
-    (u) => hexToKey(u.position) === objectiveKey,
-  );
-
-  const previousOccupier = state.round.objective.occupiedBy;
-
-  if (!unitOnObjective) {
-    if (previousOccupier !== null) {
-      state.pendingEvents.push({
-        type: 'objective-change',
-        actingPlayer: previousOccupier,
-        phase: 'objective',
-        objectiveHex: state.map.centralObjective,
-        previousOccupier,
-        newOccupier: null,
-      });
-    }
-    state.round.objective = { occupiedBy: null, turnsHeld: 0 };
-    return;
-  }
-
-  const occupier = unitOnObjective.owner;
-
-  // KotH city gate: occupier must hold 2+ cities to progress
-  const citiesHeld = countCitiesHeld(state, occupier);
-
-  if (state.round.objective.occupiedBy === occupier) {
-    if (citiesHeld >= 2) {
-      state.round.objective.turnsHeld += 1;
-      state.pendingEvents.push({
-        type: 'koth-progress',
-        actingPlayer: occupier,
-        phase: 'objective',
-        occupier,
-        turnsHeld: state.round.objective.turnsHeld,
-        citiesHeld,
-      });
-    } else {
-      // Present but not progressing — reset turnsHeld
-      state.round.objective.turnsHeld = 0;
-    }
-  } else {
-    // New occupier seized the objective
-    state.pendingEvents.push({
-      type: 'objective-change',
-      actingPlayer: occupier,
-      phase: 'objective',
-      objectiveHex: state.map.centralObjective,
-      previousOccupier,
-      newOccupier: occupier,
-      unitId: unitOnObjective.id,
-      unitType: unitOnObjective.type,
-    });
-    state.round.objective = { occupiedBy: occupier, turnsHeld: citiesHeld >= 2 ? 1 : 0 };
-    if (citiesHeld >= 2) {
-      state.pendingEvents.push({
-        type: 'koth-progress',
-        actingPlayer: occupier,
-        phase: 'objective',
-        occupier,
-        turnsHeld: 1,
-        citiesHeld,
-      });
-    }
-  }
 }
 
 // -----------------------------------------------------------------------------
@@ -633,7 +318,7 @@ export function scoreRound(
   state.round.turnNumber = 0;
   state.round.currentPlayer = 'player1';
   state.round.turnsPlayed = 0;
-  state.round.commandPool = createCommandPool();
+  state.round.commandPools = { player1: createCommandPool(), player2: createCommandPool() };
   state.round.objective = { occupiedBy: null, turnsHeld: 0 };
   state.round.unitsKilledThisRound = { player1: 0, player2: 0 };
 
@@ -666,96 +351,8 @@ export function getWinner(state: GameState): PlayerId | null {
 }
 
 // -----------------------------------------------------------------------------
-// City Ownership
-// -----------------------------------------------------------------------------
-
-function updateCityOwnership(state: GameState): void {
-  const allUnits = [...state.players.player1.units, ...state.players.player2.units];
-  const unitByHex = new Map<string, Unit>();
-  for (const unit of allUnits) {
-    unitByHex.set(hexToKey(unit.position), unit);
-  }
-
-  for (const cityKey of state.cityOwnership.keys()) {
-    const unit = unitByHex.get(cityKey);
-    if (unit) {
-      const currentOwner = state.cityOwnership.get(cityKey);
-      if (currentOwner !== unit.owner) {
-        // City flips to new owner — unit loses ceil(maxHp * 0.1)
-        state.cityOwnership.set(cityKey, unit.owner);
-
-        // Emit capture/recapture event
-        if (currentOwner === null) {
-          state.pendingEvents.push({
-            type: 'capture',
-            actingPlayer: unit.owner,
-            phase: 'capture',
-            unitId: unit.id,
-            unitType: unit.type,
-            cityKey,
-            previousOwner: null,
-          });
-        } else {
-          state.pendingEvents.push({
-            type: 'recapture',
-            actingPlayer: unit.owner,
-            phase: 'capture',
-            unitId: unit.id,
-            unitType: unit.type,
-            cityKey,
-            previousOwner: currentOwner as PlayerId,
-          });
-        }
-
-        const captureCost = Math.ceil(state.unitStats[unit.type].maxHp * 0.1);
-        unit.hp -= captureCost;
-        if (unit.hp <= 0) {
-          state.pendingEvents.push({
-            type: 'capture-death',
-            actingPlayer: unit.owner,
-            phase: 'capture',
-            unitId: unit.id,
-            unitType: unit.type,
-            cityKey,
-            captureCost,
-          });
-          removeUnit(state.players[unit.owner].units, unit.id);
-        } else {
-          state.pendingEvents.push({
-            type: 'capture-damage',
-            actingPlayer: unit.owner,
-            phase: 'capture',
-            unitId: unit.id,
-            unitType: unit.type,
-            cityKey,
-            captureCost,
-            hpAfter: unit.hp,
-          });
-        }
-      }
-      // City auto-hold: if the unit's target was this city, switch to hold
-      if (unit.directiveTarget.type === 'city' && unit.directiveTarget.cityId === cityKey) {
-        unit.movementDirective = 'hold';
-      }
-      // If city already owned by this player, no HP cost
-    }
-  }
-}
-
-// -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
-
-function findUnitById(units: Unit[], id: string): Unit | undefined {
-  return units.find((u) => u.id === id);
-}
-
-function removeUnit(units: Unit[], id: string): void {
-  const index = units.findIndex((u) => u.id === id);
-  if (index !== -1) {
-    units.splice(index, 1);
-  }
-}
 
 function getClosestDistance(units: Unit[], target: CubeCoord): number {
   if (units.length === 0) return Infinity;

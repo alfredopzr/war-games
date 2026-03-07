@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
 import type { GameState, Unit, CubeCoord, UnitType, MovementDirective, AttackDirective, SpecialtyModifier, DirectiveTarget, Command, PlayerId, BattleEvent } from '@hexwar/engine';
-import type { TurnEvent } from '../renderer/replay-sequencer';
 import { perf } from '../perf-monitor';
 
 export type GameMode = 'vsAI' | 'online';
@@ -87,8 +86,8 @@ interface GameStore {
   toastMessage: string | null;
 
   // Turn replay
-  turnReplayEvents: TurnEvent[];
   isReplayPlaying: boolean;
+  preRevealUnitPositions: Map<string, CubeCoord> | null;
 
   // Debug
   debugFogOff: boolean;
@@ -133,8 +132,8 @@ interface GameStore {
   addBattleLogEntries: (entries: BattleLogEntry[]) => void;
   clearBattleLog: () => void;
   showToast: (msg: string) => void;
-  setTurnReplayEvents: (events: TurnEvent[]) => void;
   setReplayPlaying: (playing: boolean) => void;
+  setPreRevealUnitPositions: (positions: Map<string, CubeCoord> | null) => void;
   showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown) => void;
   continueToNextRound: () => void;
   resetGame: () => void;
@@ -169,6 +168,7 @@ export const useGameStore = create<GameStore>((set) => ({
   survivingUnitIds: new Set<string>(),
   turnReplayEvents: [],
   isReplayPlaying: false,
+  preRevealUnitPositions: null,
   targetSelectionMode: false,
   toastMessage: null,
   debugFogOff: false,
@@ -357,7 +357,7 @@ export const useGameStore = create<GameStore>((set) => ({
     for (const p of aiPlacements) {
       console.log(`  ${p.unitType} @ (${p.position.q},${p.position.r}) [${p.movementDirective}/${p.attackDirective}] cost=${p.cost}`);
       try {
-        placeUnit(store.gameState, 'player2', p.unitType, p.position, p.movementDirective, p.attackDirective, p.specialtyModifier);
+        placeUnit(store.gameState, 'player2', p.unitType, p.position, p.movementDirective, p.attackDirective, p.specialtyModifier, p.directiveTarget);
       } catch (e) {
         console.warn(`  FAILED: ${e instanceof Error ? e.message : e}`);
       }
@@ -388,9 +388,8 @@ export const useGameStore = create<GameStore>((set) => ({
     }, 1500);
   },
 
-  setTurnReplayEvents: (events: TurnEvent[]): void => set({ turnReplayEvents: events }),
-
   setReplayPlaying: (playing: boolean): void => set({ isReplayPlaying: playing }),
+  setPreRevealUnitPositions: (positions: Map<string, CubeCoord> | null): void => set({ preRevealUnitPositions: positions }),
 
   showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown): void =>
     set({
@@ -467,7 +466,6 @@ export const useGameStore = create<GameStore>((set) => ({
       buildTimeRemaining: 120,
       buildTimerInterval: null,
       survivingUnitIds: new Set<string>(),
-      turnReplayEvents: [],
       isReplayPlaying: false,
       toastMessage: null,
       targetSelectionMode: false,

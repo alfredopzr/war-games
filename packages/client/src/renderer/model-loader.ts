@@ -40,6 +40,7 @@ export function loadModel(glbPath: string): Promise<GLTF> {
 
 export function preloadFactionModels(faction: Faction): Promise<GLTF[]> {
   const manifest = MODEL_MANIFEST[faction];
+  if (!manifest) return Promise.resolve([]);
   const unitTypes: UnitType[] = ['infantry', 'tank', 'artillery', 'recon'];
   const paths = new Set(unitTypes.map((t) => manifest[t].glbPath));
   return Promise.all([...paths].map(loadModel));

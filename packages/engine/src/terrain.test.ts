@@ -90,7 +90,7 @@ describe('flank directive forest cost', () => {
   it('non-flank directives keep forest cost at 2', () => {
     expect(getMoveCost('forest', 'infantry', 'advance')).toBe(2);
     expect(getMoveCost('forest', 'infantry', 'hold')).toBe(2);
-    expect(getMoveCost('forest', 'infantry', 'scout')).toBe(2);
+    expect(getMoveCost('forest', 'infantry', 'patrol')).toBe(2);
     expect(getMoveCost('forest', 'infantry')).toBe(2);
   });
 
@@ -140,27 +140,33 @@ describe('getDefenseModifier', () => {
 });
 
 describe('getVisionBonus', () => {
+  // Formula: floor(baseVisionRange * elevation / MTN_PEAK_MAX)
+  // MTN_PEAK_MAX = 20, using baseVisionRange = 10 for clean math
+
   it('elevation 0 gives 0 bonus', () => {
-    expect(getVisionBonus(0)).toBe(0);
+    expect(getVisionBonus(0, 10)).toBe(0);
   });
 
-  it('elevation 2 gives 0 bonus', () => {
-    expect(getVisionBonus(2)).toBe(0);
+  it('elevation 2 gives +1 bonus', () => {
+    expect(getVisionBonus(2, 10)).toBe(1);
   });
 
-  it('elevation 3 gives +1 bonus', () => {
-    expect(getVisionBonus(3)).toBe(1);
+  it('elevation 5 gives +2 bonus', () => {
+    expect(getVisionBonus(5, 10)).toBe(2);
   });
 
-  it('elevation 6 gives +2 bonus', () => {
-    expect(getVisionBonus(6)).toBe(2);
+  it('elevation 10 gives +5 bonus (half peak = half base)', () => {
+    expect(getVisionBonus(10, 10)).toBe(5);
   });
 
-  it('elevation 12 gives +4 bonus', () => {
-    expect(getVisionBonus(12)).toBe(4);
+  it('elevation 20 gives +10 bonus (peak = 100% of base)', () => {
+    expect(getVisionBonus(20, 10)).toBe(10);
   });
 
-  it('elevation 20 gives +6 bonus', () => {
-    expect(getVisionBonus(20)).toBe(6);
+  it('scales with base vision range', () => {
+    // Infantry (base 7) at elev 10: floor(7 * 10 / 20) = 3
+    expect(getVisionBonus(10, 7)).toBe(3);
+    // Recon (base 15) at elev 10: floor(15 * 10 / 20) = 7
+    expect(getVisionBonus(10, 15)).toBe(7);
   });
 });

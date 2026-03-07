@@ -32,7 +32,8 @@ interface ActionRecord {
 
 const metrics = new Map<string, MetricBucket>();
 const actions: ActionRecord[] = [];
-let enabled = true;
+// let enabled = true;
+let enabled = false;
 let lastReport = performance.now();
 
 // Frame counter

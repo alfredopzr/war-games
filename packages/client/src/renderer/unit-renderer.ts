@@ -5,6 +5,7 @@ import { hexToKey } from '@hexwar/engine';
 import { cachedHexToWorld } from './render-cache';
 import { getThreeContext } from './three-scene';
 import { UNIT_LABELS } from './constants';
+import { getPalette } from './palette';
 
 // ---------------------------------------------------------------------------
 // Ghost markers — last-known enemy positions as Three.js objects
@@ -16,13 +17,20 @@ let ghostGroup: THREE.Group | null = null;
 // Shared ghost geometry + material (identical for all ghost markers)
 const sharedGhostGeo = new THREE.CircleGeometry(0.35, 16);
 sharedGhostGeo.rotateX(-Math.PI / 2);
-const sharedGhostMat = new THREE.MeshBasicMaterial({
-  color: 0x888888,
-  transparent: true,
-  opacity: 0.4,
-  depthWrite: false,
-  side: THREE.DoubleSide,
-});
+
+let sharedGhostMat: THREE.MeshBasicMaterial;
+
+function ensureGhostMat(): void {
+  if (!sharedGhostMat) {
+    sharedGhostMat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+  }
+  sharedGhostMat.color.setHex(getPalette().unit.ghost);
+}
 
 /** Render ghost markers. Live units handled by Three.js unit-model.ts. */
 export function renderUnits(
@@ -46,6 +54,7 @@ export function renderUnits(
     ctx.scene.add(ghostGroup);
     return;
   }
+  ensureGhostMat();
 
   const elevationMap = state.map.elevation;
 
@@ -65,7 +74,7 @@ export function renderUnits(
     const label = UNIT_LABELS[ghost.type] ?? '?';
     const labelEl = document.createElement('div');
     labelEl.textContent = label;
-    labelEl.style.cssText = 'font-family:monospace; font-size:12px; font-weight:bold; color:#aaa; opacity:0.5; pointer-events:none;';
+    labelEl.style.cssText = `font-family:monospace; font-size:12px; font-weight:bold; color:${getPalette().unit.ghostLabel}; opacity:0.5; pointer-events:none;`;
     const cssLabel = new CSS2DObject(labelEl);
     cssLabel.position.set(world.x, world.y + 0.05, world.z);
     ghostGroup.add(cssLabel);

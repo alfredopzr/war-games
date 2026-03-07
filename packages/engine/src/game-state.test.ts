@@ -1,16 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { GameState, PlayerId, CubeCoord, Command, BattleEvent } from './types';
+import type { GameState, PlayerId, CubeCoord, Command } from './types';
 import { resetUnitIdCounter, UNIT_STATS } from './units';
 import { hexToKey, createHex } from './hex';
 import {
   createGame,
   placeUnit,
   startBattlePhase,
-  executeTurn,
   checkRoundEnd,
   scoreRound,
   getWinner,
+  filterValidCommands,
 } from './game-state';
+import { resolveTurn } from './resolution-pipeline';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -195,8 +196,10 @@ describe('startBattlePhase', () => {
     state = placeInfantry(state, 'player2', 0);
     state = startBattlePhase(state);
 
-    expect(state.round.commandPool.remaining).toBe(4);
-    expect(state.round.commandPool.commandedUnitIds.size).toBe(0);
+    expect(state.round.commandPools.player1.remaining).toBe(4);
+    expect(state.round.commandPools.player1.commandedUnitIds.size).toBe(0);
+    expect(state.round.commandPools.player2.remaining).toBe(4);
+    expect(state.round.commandPools.player2.commandedUnitIds.size).toBe(0);
   });
 
   it('sets currentPlayer to player1', () => {
@@ -241,10 +244,10 @@ describe('startBattlePhase', () => {
 });
 
 // ---------------------------------------------------------------------------
-// executeTurn
+// resolveTurn (via pipeline)
 // ---------------------------------------------------------------------------
 
-describe('executeTurn', () => {
+describe('resolveTurn', () => {
   beforeEach(() => resetUnitIdCounter());
 
   it('commanded units execute their redirect commands', () => {
@@ -252,93 +255,16 @@ describe('executeTurn', () => {
     const unit = state.players.player1.units[0]!;
     const unitId = unit.id;
 
-    // Redirect the unit to hold and shoot-on-sight
     const commands: Command[] = [
       { type: 'redirect', unitId, newMovementDirective: 'hold', newAttackDirective: 'shoot-on-sight', newSpecialtyModifier: null },
     ];
 
-    state = executeTurn(state, commands);
+    resolveTurn(state, commands, [], () => 1.0);
 
-    // Unit should have its directive updated
     const updated = state.players.player1.units.find((u) => u.id === unitId);
     expect(updated).toBeDefined();
     expect(updated!.movementDirective).toBe('hold');
     expect(updated!.attackDirective).toBe('shoot-on-sight');
-  });
-
-  it('non-commanded units execute directives', () => {
-    let state = setupBattleGame();
-    // Execute a turn with no commands — all units should still act via directives
-    const unitPositionsBefore = state.players.player1.units.map((u) => hexToKey(u.position));
-
-    state = executeTurn(state, []);
-
-    // After directive execution, at least some units should have acted
-    // (they all have 'advance' directive, so they should try to move)
-    const unitPositionsAfter = state.players.player1.units.map((u) => hexToKey(u.position));
-    // At least one unit should have changed position (advance toward objective)
-    const anyMoved = unitPositionsBefore.some(
-      (pos, i) => pos !== unitPositionsAfter[i],
-    );
-    expect(anyMoved).toBe(true);
-  });
-
-  it('attack damage is applied correctly and dead units are removed', () => {
-    let state = makeGame(42);
-
-    // Place units adjacent to each other for combat
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const attacker = state.players.player1.units[0]!;
-    const defender = state.players.player2.units[0]!;
-
-    // Place them adjacent manually
-    attacker.position = createHex(4, 0);
-    defender.position = createHex(5, 0);
-
-    // Redirect attacker to hunt the defender
-    const commands: Command[] = [
-      { type: 'redirect', unitId: attacker.id, newMovementDirective: attacker.movementDirective, newAttackDirective: 'hunt', newSpecialtyModifier: null, target: { type: 'enemy-unit', unitId: defender.id } },
-    ];
-
-    const defenderHpBefore = defender.hp;
-    // Use deterministic randomFn
-    state = executeTurn(state, commands, () => 1.0);
-
-    // Damage should have been applied
-    const defAfter = state.players.player2.units.find((u) => u.id === defender.id);
-    if (defAfter) {
-      expect(defAfter.hp).toBeLessThan(defenderHpBefore);
-    }
-    // If killed, unit should be removed
-  });
-
-  it('rejects turns during build phase', () => {
-    const state = makeGame();
-    expect(() => executeTurn(state, [])).toThrow('Can only execute turns during battle phase');
-  });
-
-  it('objective tracking updates when unit occupies central hex', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    // Move a unit onto the central objective
-    const unit = state.players.player1.units[0]!;
-    unit.position = state.map.centralObjective;
-
-    // Give player1 ownership of 2 cities so KotH gate passes
-    const cityKeys = [...state.cityOwnership.keys()];
-    state.cityOwnership.set(cityKeys[0]!, 'player1');
-    state.cityOwnership.set(cityKeys[1]!, 'player1');
-
-    state = executeTurn(state, [], () => 1.0);
-
-    expect(state.round.objective.occupiedBy).toBe('player1');
-    expect(state.round.objective.turnsHeld).toBeGreaterThanOrEqual(1);
   });
 
   it('redirect command changes unit directive', () => {
@@ -350,199 +276,10 @@ describe('executeTurn', () => {
       { type: 'redirect', unitId: unit.id, newMovementDirective: 'hold', newAttackDirective: 'ignore', newSpecialtyModifier: null },
     ];
 
-    state = executeTurn(state, commands);
-    // Directive should be changed
+    resolveTurn(state, commands, [], () => 1.0);
+
     const updated = state.players.player1.units.find((u) => u.id === unit.id);
     expect(updated?.movementDirective).toBe('hold');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// City Capture HP Cost
-// ---------------------------------------------------------------------------
-
-describe('city capture HP cost', () => {
-  beforeEach(() => resetUnitIdCounter());
-
-  it('capturing a city costs 1 HP', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const cityKeys = [...state.cityOwnership.keys()];
-    if (cityKeys.length === 0) return;
-    const cityKey = cityKeys[0]!;
-
-    const unit = state.players.player1.units[0]!;
-    const cityCoord = findCoordForKey(state, cityKey);
-    if (!cityCoord) return;
-    unit.position = cityCoord;
-
-    const hpBefore = unit.hp;
-    state = executeTurn(state, [], () => 1.0);
-
-    // City should be captured and unit lost 1 HP
-    expect(state.cityOwnership.get(cityKey)).toBe('player1');
-    const unitAfter = state.players.player1.units.find((u) => u.id === unit.id);
-    if (unitAfter) {
-      expect(unitAfter.hp).toBe(hpBefore - 1);
-    }
-  });
-
-  it('city capture can kill the unit (hp drops to 0)', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const cityKeys = [...state.cityOwnership.keys()];
-    if (cityKeys.length === 0) return;
-    const cityKey = cityKeys[0]!;
-
-    const unit = state.players.player1.units[0]!;
-    const cityCoord = findCoordForKey(state, cityKey);
-    if (!cityCoord) return;
-    unit.position = cityCoord;
-    unit.hp = 3; // captureCost = ceil(30 * 0.1) = 3, so unit dies from capture
-
-    state = executeTurn(state, [], () => 1.0);
-
-    // City should still flip
-    expect(state.cityOwnership.get(cityKey)).toBe('player1');
-    // Unit should be dead
-    const unitAfter = state.players.player1.units.find((u) => u.id === unit.id);
-    expect(unitAfter).toBeUndefined();
-  });
-
-  it('no HP cost when city already owned by the player', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const cityKeys = [...state.cityOwnership.keys()];
-    if (cityKeys.length === 0) return;
-    const cityKey = cityKeys[0]!;
-
-    // Pre-own the city
-    state.cityOwnership.set(cityKey, 'player1');
-
-    const unit = state.players.player1.units[0]!;
-    const cityCoord = findCoordForKey(state, cityKey);
-    if (!cityCoord) return;
-    unit.position = cityCoord;
-
-    const hpBefore = unit.hp;
-    state = executeTurn(state, [], () => 1.0);
-
-    const unitAfter = state.players.player1.units.find((u) => u.id === unit.id);
-    if (unitAfter) {
-      expect(unitAfter.hp).toBe(hpBefore); // No HP cost
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// KotH City Gate
-// ---------------------------------------------------------------------------
-
-describe('KotH city gate', () => {
-  beforeEach(() => resetUnitIdCounter());
-
-  it('KotH does not increment turnsHeld without 2 city control', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    // Move player1 onto objective but no cities held
-    const unit = state.players.player1.units[0]!;
-    unit.position = state.map.centralObjective;
-
-    state = executeTurn(state, [], () => 1.0);
-
-    // turnsHeld should be 0 (present but not progressing)
-    expect(state.round.objective.occupiedBy).toBe('player1');
-    expect(state.round.objective.turnsHeld).toBe(0);
-  });
-
-  it('KotH increments turnsHeld with 2+ cities', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    // Give player1 2 cities
-    const cityKeys = [...state.cityOwnership.keys()];
-    state.cityOwnership.set(cityKeys[0]!, 'player1');
-    state.cityOwnership.set(cityKeys[1]!, 'player1');
-
-    // Move player1 onto objective
-    const unit = state.players.player1.units[0]!;
-    unit.position = state.map.centralObjective;
-
-    state = executeTurn(state, [], () => 1.0);
-
-    expect(state.round.objective.occupiedBy).toBe('player1');
-    expect(state.round.objective.turnsHeld).toBeGreaterThanOrEqual(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Scout executes first
-// ---------------------------------------------------------------------------
-
-describe('scout units execute first', () => {
-  beforeEach(() => resetUnitIdCounter());
-
-  it('scout units act before other directives', () => {
-    let state = makeGame(42);
-    // Place a scout and an advance unit
-    const scoutHex = getDeploymentHex(state, 'player1', 0);
-    const advanceHex = getDeploymentHex(state, 'player1', 1);
-    state = placeUnit(state, 'player1', 'recon', scoutHex, 'scout', 'ignore', null);
-    state = placeUnit(state, 'player1', 'infantry', advanceHex, 'advance', 'ignore', null);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    // Both units should act — this validates that the two-pass system doesn't crash
-    state = executeTurn(state, []);
-
-    // Both units should act — this validates that the two-pass system doesn't crash
-    expect(state.players.player1.units.length).toBeGreaterThan(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Support heals adjacent friendly
-// ---------------------------------------------------------------------------
-
-describe('support directive heals adjacent', () => {
-  beforeEach(() => resetUnitIdCounter());
-
-  it('support unit heals adjacent friendly with lowest HP', () => {
-    let state = makeGame(42);
-
-    // Place support unit and a damaged friendly adjacent to each other
-    const supportHex = getDeploymentHex(state, 'player1', 0);
-    const damagedHex = getDeploymentHex(state, 'player1', 1);
-    state = placeUnit(state, 'player1', 'infantry', supportHex, 'hold', 'ignore', 'support');
-    state = placeUnit(state, 'player1', 'infantry', damagedHex, 'advance', 'ignore', null);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    // Place them adjacent
-    const supportUnit = state.players.player1.units[0]!;
-    const damagedUnit = state.players.player1.units[1]!;
-    supportUnit.position = createHex(4, 0);
-    damagedUnit.position = createHex(5, 0);
-    damagedUnit.hp = 1; // Below maxHp (infantry maxHp = 30)
-
-    state = executeTurn(state, [], () => 1.0);
-
-    // The key guarantee: support healing code runs without crashing
-    expect(state.players.player1.units.length).toBeGreaterThan(0);
   });
 });
 
@@ -859,7 +596,7 @@ describe('getWinner', () => {
 describe('full round flow integration', () => {
   beforeEach(() => resetUnitIdCounter());
 
-  it('complete flow: create -> place -> battle -> check -> score', () => {
+  it('complete flow: create -> place -> battle -> resolve -> check -> score', () => {
     let state = makeGame(42);
 
     // Build phase: place units
@@ -875,9 +612,9 @@ describe('full round flow integration', () => {
     state = startBattlePhase(state);
     expect(state.phase).toBe('battle');
 
-    // Execute several turns
+    // Execute several turns via pipeline
     for (let i = 0; i < 4; i++) {
-      state = executeTurn(state, [], () => 1.0);
+      resolveTurn(state, [], [], () => 1.0);
     }
 
     // Force round end by elimination
@@ -926,54 +663,6 @@ describe('city ownership', () => {
     }
   });
 
-  it('city is captured when a unit ends turn on it', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    // Find a city hex
-    const cityKeys = [...state.cityOwnership.keys()];
-    if (cityKeys.length === 0) return; // skip if map has no cities
-    const cityKey = cityKeys[0]!;
-
-    // Move unit onto the city hex
-    const unit = state.players.player1.units[0]!;
-    const cityCoord = findCoordForKey(state, cityKey);
-    if (!cityCoord) return;
-    unit.position = cityCoord;
-
-    state = executeTurn(state, [], () => 1.0);
-
-    expect(state.cityOwnership.get(cityKey)).toBe('player1');
-  });
-
-  it('enemy captures city by ending turn on it', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const cityKeys = [...state.cityOwnership.keys()];
-    if (cityKeys.length === 0) return;
-    const cityKey = cityKeys[0]!;
-
-    // P1 captures first
-    const p1Unit = state.players.player1.units[0]!;
-    const cityCoord = findCoordForKey(state, cityKey);
-    if (!cityCoord) return;
-    p1Unit.position = cityCoord;
-    state = executeTurn(state, [], () => 1.0);
-    expect(state.cityOwnership.get(cityKey)).toBe('player1');
-
-    // P2 moves onto same city (P1 unit is elsewhere now from directive AI)
-    state.round.currentPlayer = 'player2';
-    const p2Unit = state.players.player2.units[0]!;
-    p2Unit.position = cityCoord;
-    state = executeTurn(state, [], () => 1.0);
-    expect(state.cityOwnership.get(cityKey)).toBe('player2');
-  });
-
   it('countCitiesHeld reads from ownership map', () => {
     let state = makeGame(42);
     state = placeInfantry(state, 'player1', 0);
@@ -1012,283 +701,77 @@ describe('city ownership', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Structured Event Emission
+// filterValidCommands
 // ---------------------------------------------------------------------------
 
-describe('structured event emission', () => {
-  beforeEach(() => resetUnitIdCounter());
-
-  it('emits move event with from/to positions', () => {
+describe('filterValidCommands', () => {
+  function setupBattle(): GameState {
     let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const unit = state.players.player1.units[0]!;
-    const originalPos = { ...unit.position };
-
-    state = executeTurn(state, []);
-
-    const moveEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'move' }> => e.type === 'move');
-    // Advance directive should produce at least one move
-    if (unit.position.q !== originalPos.q || unit.position.r !== originalPos.r) {
-      const unitMove = moveEvents.find((e) => e.unitId === unit.id);
-      expect(unitMove).toBeDefined();
-      expect(unitMove!.from).toEqual(originalPos);
-      expect(unitMove!.unitType).toBe('infantry');
-      expect(unitMove!.phase).toBe('movement');
+    // Place 6 infantry per player so we can test exceeding CP limit
+    for (let i = 0; i < 6; i++) {
+      state = placeInfantry(state, 'player1', i);
+      state = placeInfantry(state, 'player2', i);
     }
+    state = startBattlePhase(state);
+    return state;
+  }
+
+  function makeRedirect(unitId: string): Command {
+    return {
+      type: 'redirect',
+      unitId,
+      newMovementDirective: 'hold',
+      newAttackDirective: 'ignore',
+      newSpecialtyModifier: null,
+    };
+  }
+
+  it('caps commands at pool.remaining', () => {
+    const state = setupBattle();
+    const units = state.players.player1.units;
+    const commands = units.map(u => makeRedirect(u.id));
+
+    // 6 commands, pool.remaining = 4
+    expect(commands.length).toBe(6);
+    const valid = filterValidCommands(state, commands, 'player1');
+    expect(valid.length).toBe(4);
   });
 
-  it('emits damage event with attacker/defender details', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
+  it('rejects duplicate unit commands in same batch', () => {
+    const state = setupBattle();
+    const unitId = state.players.player1.units[0]!.id;
+    const commands = [makeRedirect(unitId), makeRedirect(unitId)];
 
-    const attacker = state.players.player1.units[0]!;
-    const defender = state.players.player2.units[0]!;
-    attacker.position = createHex(4, 0);
-    defender.position = createHex(5, 0);
-    defender.hp = 10; // High HP so it survives
-
-    const commands: Command[] = [
-      { type: 'redirect', unitId: attacker.id, newMovementDirective: 'hold', newAttackDirective: 'shoot-on-sight', newSpecialtyModifier: null },
-    ];
-
-    state = executeTurn(state, commands, () => 1.0);
-
-    const damageEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'damage' }> => e.type === 'damage');
-    if (damageEvents.length > 0) {
-      const evt = damageEvents[0]!;
-      expect(evt.attackerId).toBe(attacker.id);
-      expect(evt.attackerType).toBe('infantry');
-      expect(evt.defenderId).toBe(defender.id);
-      expect(evt.defenderType).toBe('infantry');
-      expect(evt.damage).toBeGreaterThan(0);
-      expect(evt.defenderHpAfter).toBeLessThan(10);
-      expect(evt.phase).toBe('combat');
-    }
+    const valid = filterValidCommands(state, commands, 'player1');
+    expect(valid.length).toBe(1);
   });
 
-  it('emits kill event when defender dies', () => {
-    let state = makeGame(42);
-    state = placeUnit(state, 'player1', 'tank', getDeploymentHex(state, 'player1', 0), 'hold', 'shoot-on-sight', null);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
+  it('rejects units already commanded this round', () => {
+    const state = setupBattle();
+    const unitId = state.players.player1.units[0]!.id;
+    state.round.commandPools.player1.commandedUnitIds.add(unitId);
+    state.round.commandPools.player1.remaining = 3;
 
-    const attacker = state.players.player1.units[0]!;
-    const defender = state.players.player2.units[0]!;
-    attacker.position = createHex(4, 0);
-    defender.position = createHex(5, 0);
-    defender.hp = 1; // Will die from any hit
-
-    state = executeTurn(state, [], () => 1.0);
-
-    const killEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'kill' }> => e.type === 'kill');
-    expect(killEvents.length).toBeGreaterThan(0);
-    const evt = killEvents[0]!;
-    expect(evt.attackerId).toBe(attacker.id);
-    expect(evt.defenderId).toBe(defender.id);
-    expect(evt.phase).toBe('combat');
-    // No defenderHpAfter on kill events
-    expect('defenderHpAfter' in evt).toBe(false);
+    const commands = [makeRedirect(unitId)];
+    const valid = filterValidCommands(state, commands, 'player1');
+    expect(valid.length).toBe(0);
   });
 
-  it('emits capture event for neutral city', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
+  it('rejects commands for enemy units', () => {
+    const state = setupBattle();
+    const enemyUnitId = state.players.player2.units[0]!.id;
+    const commands = [makeRedirect(enemyUnitId)];
 
-    const cityKeys = [...state.cityOwnership.keys()];
-    if (cityKeys.length === 0) return;
-    const cityKey = cityKeys[0]!;
-    const cityCoord = findCoordForKey(state, cityKey);
-    if (!cityCoord) return;
-
-    const unit = state.players.player1.units[0]!;
-    unit.position = cityCoord;
-
-    state = executeTurn(state, [], () => 1.0);
-
-    const captureEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'capture' }> => e.type === 'capture');
-    expect(captureEvents.length).toBeGreaterThan(0);
-    const evt = captureEvents[0]!;
-    expect(evt.cityKey).toBe(cityKey);
-    expect(evt.previousOwner).toBeNull();
-    expect(evt.unitId).toBe(unit.id);
-    expect(evt.phase).toBe('capture');
+    const valid = filterValidCommands(state, commands, 'player1');
+    expect(valid.length).toBe(0);
   });
 
-  it('emits recapture event for enemy city', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
+  it('rejects non-redirect command types', () => {
+    const state = setupBattle();
+    const unitId = state.players.player1.units[0]!.id;
+    const commands = [{ ...makeRedirect(unitId), type: 'bogus' as Command['type'] }];
 
-    const cityKeys = [...state.cityOwnership.keys()];
-    if (cityKeys.length === 0) return;
-    const cityKey = cityKeys[0]!;
-    const cityCoord = findCoordForKey(state, cityKey);
-    if (!cityCoord) return;
-
-    // Pre-own the city by enemy
-    state.cityOwnership.set(cityKey, 'player2');
-
-    const unit = state.players.player1.units[0]!;
-    unit.position = cityCoord;
-
-    state = executeTurn(state, [], () => 1.0);
-
-    const recaptureEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'recapture' }> => e.type === 'recapture');
-    expect(recaptureEvents.length).toBeGreaterThan(0);
-    const evt = recaptureEvents[0]!;
-    expect(evt.cityKey).toBe(cityKey);
-    expect(evt.previousOwner).toBe('player2');
-    expect(evt.phase).toBe('capture');
-  });
-
-  it('emits capture-damage event', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const cityKeys = [...state.cityOwnership.keys()];
-    if (cityKeys.length === 0) return;
-    const cityKey = cityKeys[0]!;
-    const cityCoord = findCoordForKey(state, cityKey);
-    if (!cityCoord) return;
-
-    const unit = state.players.player1.units[0]!;
-    unit.position = cityCoord;
-
-    state = executeTurn(state, [], () => 1.0);
-
-    const cdEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'capture-damage' }> => e.type === 'capture-damage');
-    // Only emitted if unit survived capture
-    const unitAfter = state.players.player1.units.find((u) => u.id === unit.id);
-    if (unitAfter) {
-      expect(cdEvents.length).toBeGreaterThan(0);
-      expect(cdEvents[0]!.captureCost).toBeGreaterThan(0);
-      expect(cdEvents[0]!.hpAfter).toBeGreaterThan(0);
-    }
-  });
-
-  it('emits capture-death event when unit dies from capture', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const cityKeys = [...state.cityOwnership.keys()];
-    if (cityKeys.length === 0) return;
-    const cityKey = cityKeys[0]!;
-    const cityCoord = findCoordForKey(state, cityKey);
-    if (!cityCoord) return;
-
-    const unit = state.players.player1.units[0]!;
-    unit.position = cityCoord;
-    unit.hp = 1; // Will die from capture cost
-
-    state = executeTurn(state, [], () => 1.0);
-
-    const deathEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'capture-death' }> => e.type === 'capture-death');
-    expect(deathEvents.length).toBeGreaterThan(0);
-    expect(deathEvents[0]!.cityKey).toBe(cityKey);
-    expect(deathEvents[0]!.phase).toBe('capture');
-  });
-
-  it('emits objective-change when unit seizes objective', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const unit = state.players.player1.units[0]!;
-    unit.position = state.map.centralObjective;
-
-    state = executeTurn(state, [], () => 1.0);
-
-    const objEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'objective-change' }> => e.type === 'objective-change');
-    expect(objEvents.length).toBeGreaterThan(0);
-    const evt = objEvents[0]!;
-    expect(evt.newOccupier).toBe('player1');
-    expect(evt.unitId).toBe(unit.id);
-    expect(evt.phase).toBe('objective');
-  });
-
-  it('emits koth-progress when occupier holds with cities', () => {
-    let state = makeGame(42);
-    state = placeInfantry(state, 'player1', 0);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    // Give player1 2 cities
-    const cityKeys = [...state.cityOwnership.keys()];
-    state.cityOwnership.set(cityKeys[0]!, 'player1');
-    state.cityOwnership.set(cityKeys[1]!, 'player1');
-
-    const unit = state.players.player1.units[0]!;
-    unit.position = state.map.centralObjective;
-
-    // First turn: seize
-    state = executeTurn(state, [], () => 1.0);
-    state.pendingEvents = [];
-
-    // Restore state for second turn (same occupier)
-    unit.position = state.map.centralObjective;
-    unit.hasActed = false;
-    state.round.currentPlayer = 'player1';
-
-    state = executeTurn(state, [], () => 1.0);
-
-    const kothEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'koth-progress' }> => e.type === 'koth-progress');
-    expect(kothEvents.length).toBeGreaterThan(0);
-    const evt = kothEvents[0]!;
-    expect(evt.occupier).toBe('player1');
-    expect(evt.turnsHeld).toBeGreaterThanOrEqual(1);
-    expect(evt.citiesHeld).toBeGreaterThanOrEqual(2);
-    expect(evt.phase).toBe('objective');
-  });
-
-  it('emits heal event from support unit', () => {
-    let state = makeGame(42);
-    const supportHex = getDeploymentHex(state, 'player1', 0);
-    const damagedHex = getDeploymentHex(state, 'player1', 1);
-    state = placeUnit(state, 'player1', 'infantry', supportHex, 'hold', 'ignore', 'support');
-    state = placeUnit(state, 'player1', 'infantry', damagedHex, 'hold', 'ignore', null);
-    state = placeInfantry(state, 'player2', 0);
-    state = startBattlePhase(state);
-
-    const supportUnit = state.players.player1.units[0]!;
-    const damagedUnit = state.players.player1.units[1]!;
-    supportUnit.position = createHex(4, 0);
-    damagedUnit.position = createHex(5, 0);
-    damagedUnit.hp = 1; // Below maxHp
-
-    state = executeTurn(state, [], () => 1.0);
-
-    const healEvents = state.pendingEvents.filter((e): e is Extract<BattleEvent, { type: 'heal' }> => e.type === 'heal');
-    expect(healEvents.length).toBe(1);
-    const evt = healEvents[0]!;
-    expect(evt.healerId).toBe(supportUnit.id);
-    expect(evt.targetId).toBe(damagedUnit.id);
-    expect(evt.healAmount).toBe(1);
-    expect(evt.targetHpAfter).toBe(2);
-    expect(evt.phase).toBe('combat');
+    const valid = filterValidCommands(state, commands, 'player1');
+    expect(valid.length).toBe(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Helpers (test-internal)
-// ---------------------------------------------------------------------------
-
-function findCoordForKey(_state: GameState, key: string): CubeCoord | null {
-  // Parse hex key "q,r,s" back to CubeCoord
-  const parts = key.split(',').map(Number);
-  if (parts.length !== 3) return null;
-  return createHex(parts[0]!, parts[1]!);
-}
-

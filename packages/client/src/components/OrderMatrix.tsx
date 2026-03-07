@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, type ReactElement } from 'react';
-import type { MovementDirective, AttackDirective, SpecialtyModifier } from '@hexwar/engine';
+import type { MovementDirective, AttackDirective, SpecialtyModifier, UnitType } from '@hexwar/engine';
 import { BEHAVIOR_NAMES } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
-const MOVEMENTS: readonly MovementDirective[] = ['advance', 'flank-left', 'flank-right', 'scout', 'hold'];
+const MOVEMENTS: readonly MovementDirective[] = ['advance', 'flank-left', 'flank-right', 'patrol', 'hold'];
 const ATTACKS: readonly AttackDirective[] = ['shoot-on-sight', 'skirmish', 'retreat-on-contact', 'hunt', 'ignore'];
 const SPECIALTIES: readonly (SpecialtyModifier | null)[] = [null, 'support', 'engineer', 'sniper'];
 
@@ -11,7 +11,7 @@ const MOVEMENT_LABELS: Record<MovementDirective, string> = {
   advance: 'Advance',
   'flank-left': 'Flank L',
   'flank-right': 'Flank R',
-  scout: 'Patrol',
+  patrol: 'Patrol',
   hold: 'Hold',
 };
 
@@ -30,6 +30,15 @@ const SPECIALTY_LABELS: Record<string, string> = {
   sniper: 'Sniper',
 };
 
+const HUNT_TARGET_OPTIONS: readonly (UnitType | null)[] = [null, 'infantry', 'tank', 'artillery', 'recon'];
+const HUNT_TARGET_LABELS: Record<string, string> = {
+  '': 'Any',
+  infantry: 'Infantry',
+  tank: 'Tank',
+  artillery: 'Artillery',
+  recon: 'Recon',
+};
+
 interface OrderMatrixProps {
   onSelect?: (movement: MovementDirective, attack: AttackDirective, specialty: SpecialtyModifier | null) => void;
   onBothConfirmed?: () => void;
@@ -45,6 +54,8 @@ export function OrderMatrix({ onSelect, onBothConfirmed }: OrderMatrixProps): Re
   const currentMovement = selectedUnit?.movementDirective ?? 'advance';
   const currentAttack = selectedUnit?.attackDirective ?? 'ignore';
   const currentSpecialty = selectedUnit?.specialtyModifier ?? null;
+  const currentPatrolRadius = selectedUnit?.patrolRadius ?? 3;
+  const currentHuntPriority = selectedUnit?.huntPriorityType ?? null;
 
   // Reset when unit changes
   useEffect(() => {
@@ -80,6 +91,40 @@ export function OrderMatrix({ onSelect, onBothConfirmed }: OrderMatrixProps): Re
       if (movementPicked && onBothConfirmed) onBothConfirmed();
     },
     [apply, currentMovement, currentSpecialty, movementPicked, onBothConfirmed],
+  );
+
+  const setPatrolRadius = useCallback(
+    (radius: number): void => {
+      if (!selectedUnit) return;
+      const store = useGameStore.getState();
+      const player = store.gameState?.players[store.currentPlayerView];
+      const unit = player?.units.find((u) => u.id === selectedUnit.id);
+      if (unit) {
+        unit.patrolRadius = radius;
+        useGameStore.setState({
+          gameState: { ...store.gameState! },
+          selectedUnit: { ...selectedUnit, patrolRadius: radius },
+        });
+      }
+    },
+    [selectedUnit],
+  );
+
+  const setHuntPriority = useCallback(
+    (priority: UnitType | null): void => {
+      if (!selectedUnit) return;
+      const store = useGameStore.getState();
+      const player = store.gameState?.players[store.currentPlayerView];
+      const unit = player?.units.find((u) => u.id === selectedUnit.id);
+      if (unit) {
+        unit.huntPriorityType = priority ?? undefined;
+        useGameStore.setState({
+          gameState: { ...store.gameState! },
+          selectedUnit: { ...selectedUnit, huntPriorityType: priority ?? undefined },
+        });
+      }
+    },
+    [selectedUnit],
   );
 
   if (!selectedUnit) return null;
@@ -122,6 +167,45 @@ export function OrderMatrix({ onSelect, onBothConfirmed }: OrderMatrixProps): Re
         <div className="order-result-label">Order</div>
         <div className="order-result-name">{orderName}</div>
       </div>
+
+      {currentMovement === 'patrol' && (
+        <div className="order-modifier">
+          <div className="order-modifier-label">Patrol Radius: {currentPatrolRadius}</div>
+          <input
+            type="range"
+            className="order-slider"
+            min={2}
+            max={5}
+            step={1}
+            value={currentPatrolRadius}
+            onChange={(e) => setPatrolRadius(Number(e.target.value))}
+          />
+          <div className="order-slider-ticks">
+            <span>2</span><span>3</span><span>4</span><span>5</span>
+          </div>
+        </div>
+      )}
+
+      {currentAttack === 'hunt' && (
+        <div className="order-modifier">
+          <div className="order-modifier-label">Priority Target</div>
+          <div className="order-modifier-pills">
+            {HUNT_TARGET_OPTIONS.map((opt) => {
+              const key = opt ?? '';
+              return (
+                <button
+                  key={key}
+                  className={`specialty-pill ${(opt ?? null) === currentHuntPriority ? 'active' : ''}`}
+                  onClick={() => setHuntPriority(opt)}
+                  type="button"
+                >
+                  {HUNT_TARGET_LABELS[key]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="order-specialty">
         {SPECIALTIES.map((spec) => {

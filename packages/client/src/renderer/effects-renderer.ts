@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { getThreeContext, markLabelsDirty } from './three-scene';
+import { getPalette } from './palette';
 
 // ---------------------------------------------------------------------------
 // Effects renderer — CSS2D damage numbers, Three.js lines
@@ -46,9 +47,10 @@ function getEffectsGroup(): THREE.Group {
 
 /** Spawn a floating damage number that rises and fades. */
 export function spawnDamageNumber(x: number, y: number, z: number, damage: number): void {
+  const pal = getPalette();
   const el = document.createElement('div');
   el.textContent = damage > 0 ? `-${damage}` : 'CAPTURED';
-  el.style.cssText = 'font-family:monospace; font-size:16px; font-weight:bold; color:#9a4a3a; pointer-events:none;';
+  el.style.cssText = `font-family:monospace; font-size:16px; font-weight:bold; color:${pal.effect.damageText}; pointer-events:none;`;
 
   const cssObj = new CSS2DObject(el);
   cssObj.position.set(x, y + 0.5, z);
@@ -67,6 +69,7 @@ export function spawnDamageNumber(x: number, y: number, z: number, damage: numbe
 export function spawnAttackTracer(
   fromX: number, fromY: number, fromZ: number,
   toX: number, toY: number, toZ: number,
+  color: number = 0xffff88,
 ): void {
   const points = [
     new THREE.Vector3(fromX, fromY + 0.3, fromZ),
@@ -74,7 +77,7 @@ export function spawnAttackTracer(
   ];
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
-    color: 0xffff88,
+    color,
     transparent: true,
     opacity: 1,
   });
@@ -92,6 +95,7 @@ export function spawnAttackTracer(
 
 /** Spawn a death marker (X shape) at a world position. */
 export function spawnDeathMarker(x: number, y: number, z: number): void {
+  const pal = getPalette();
   const size = 0.3;
   const group = new THREE.Group();
   group.position.set(x, y + 0.3, z);
@@ -105,7 +109,7 @@ export function spawnDeathMarker(x: number, y: number, z: number): void {
     ];
     const geo = new THREE.BufferGeometry().setFromPoints(points);
     const mat = new THREE.LineBasicMaterial({
-      color: 0xff2222,
+      color: pal.effect.death,
       transparent: true,
       opacity: 1,
     });
@@ -122,6 +126,78 @@ export function spawnDeathMarker(x: number, y: number, z: number): void {
     group,
     fadeRate: 0.33,
     materials,
+  });
+}
+
+/** Spawn a floating green heal number at a world position. */
+export function spawnHealNumber(x: number, y: number, z: number, amount: number): void {
+  const pal = getPalette();
+  const el = document.createElement('div');
+  el.textContent = `+${amount} HP`;
+  el.style.cssText = `font-family:monospace; font-size:16px; font-weight:bold; color:${pal.effect.healText}; pointer-events:none;`;
+
+  const cssObj = new CSS2DObject(el);
+  cssObj.position.set(x, y + 0.5, z);
+  getEffectsGroup().add(cssObj);
+
+  activeEffects.push({
+    kind: 'damage-number',
+    object: cssObj,
+    element: el,
+    speed: 0.8,
+    fadeRate: 1.5,
+  });
+}
+
+/** Spawn a "REVEALED" text at a world position. */
+export function spawnRevealedText(x: number, y: number, z: number): void {
+  const pal = getPalette();
+  const el = document.createElement('div');
+  el.textContent = 'REVEALED';
+  el.style.cssText = `font-family:monospace; font-size:16px; font-weight:bold; color:${pal.effect.revealedText}; pointer-events:none;`;
+
+  const cssObj = new CSS2DObject(el);
+  cssObj.position.set(x, y + 0.5, z);
+  getEffectsGroup().add(cssObj);
+
+  activeEffects.push({
+    kind: 'damage-number',
+    object: cssObj,
+    element: el,
+    speed: 0.8,
+    fadeRate: 1.5,
+  });
+}
+
+/** Spawn an expanding reveal ring at a world position. */
+export function spawnRevealRing(x: number, y: number, z: number): void {
+  const pal = getPalette();
+  const segments = 24;
+  const radius = 2.0;
+  const points: THREE.Vector3[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    points.push(new THREE.Vector3(
+      x + Math.cos(angle) * radius,
+      y + 0.3,
+      z + Math.sin(angle) * radius,
+    ));
+  }
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineBasicMaterial({
+    color: pal.effect.revealRing,
+    transparent: true,
+    opacity: 1,
+  });
+  const line = new THREE.Line(geometry, material);
+  line.renderOrder = 4;
+  getEffectsGroup().add(line);
+
+  activeEffects.push({
+    kind: 'attack-tracer',
+    object: line,
+    age: 0,
+    lifetime: 0.6,
   });
 }
 

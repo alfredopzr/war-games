@@ -10,6 +10,7 @@ import {
   type Faction,
   type AnimAction,
 } from './constants';
+import { getPalette, getHpColor } from './palette';
 import { getModelFromCache } from './model-loader';
 import { getThreeContext } from './three-scene';
 
@@ -54,7 +55,7 @@ const DIRECTIVE_ICONS: Record<string, string> = {
   'hold': '\u25A0',
   'flank-left': '\u25C4',
   'flank-right': '\u25BA',
-  'scout': '\u25CF',
+  'patrol': '\u25CF',
 };
 
 // ---------------------------------------------------------------------------
@@ -65,7 +66,7 @@ const UNIT_SCALE: Record<string, number> = {
   infantry:  1.20,
   tank:      1.80,
   artillery: 1.50,
-  recon:     2.00,
+  recon:     1.30,
 };
 
 // ---------------------------------------------------------------------------
@@ -80,7 +81,9 @@ function createUnitModel(
   const ctx = getThreeContext();
   if (!ctx) return null;
 
-  const manifest = MODEL_MANIFEST[faction][unit.type];
+  const factionManifest = MODEL_MANIFEST[faction];
+  if (!factionManifest) return null;
+  const manifest = factionManifest[unit.type];
   const gltf = getModelFromCache(manifest.glbPath);
   if (!gltf) return null;
 
@@ -164,12 +167,12 @@ function createUnitModel(
   const modelHeight = origSize.y;
 
   const hpWrapper = document.createElement('div');
-  hpWrapper.style.cssText = 'pointer-events:none; width:28px; height:4px; background:#333; border-radius:1px; overflow:hidden;';
+  hpWrapper.style.cssText = `pointer-events:none; width:28px; height:4px; background:${getPalette().unit.hpTrack}; border-radius:1px; overflow:hidden;`;
 
   const hpFill = document.createElement('div');
   const maxHp = UNIT_STATS[unit.type].maxHp;
   const ratio = unit.hp / maxHp;
-  hpFill.style.cssText = `width:${ratio * 100}%; height:100%; background:${hpColor(ratio)}; transition:width 0.2s;`;
+  hpFill.style.cssText = `width:${ratio * 100}%; height:100%; background:${getHpColor(ratio)}; transition:width 0.2s;`;
   hpWrapper.appendChild(hpFill);
 
   const hpLabel = new CSS2DObject(hpWrapper);
@@ -212,16 +215,6 @@ function removeUnitModel(unitId: string): void {
   model.hpLabel.removeFromParent();
   model.directiveLabel.removeFromParent();
   unitModels.delete(unitId);
-}
-
-// ---------------------------------------------------------------------------
-// HP bar color helper
-// ---------------------------------------------------------------------------
-
-function hpColor(ratio: number): string {
-  if (ratio > 0.6) return '#6a8a48';
-  if (ratio > 0.3) return '#a08a40';
-  return '#9a4a3a';
 }
 
 // ---------------------------------------------------------------------------
@@ -320,7 +313,7 @@ export function syncUnitModels(
         const maxHp = UNIT_STATS[unit.type].maxHp;
         const ratio = unit.hp / maxHp;
         existing.hpFill.style.width = `${ratio * 100}%`;
-        existing.hpFill.style.background = hpColor(ratio);
+        existing.hpFill.style.background = getHpColor(ratio);
 
         // Update directive icon
         existing.directiveEl.textContent = DIRECTIVE_ICONS[unit.movementDirective] ?? '';

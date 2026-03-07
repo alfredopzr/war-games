@@ -30,15 +30,12 @@ export function DirectiveSelector(): ReactElement | null {
   if (!selectedUnit) return null;
   if (selectedUnit.owner !== currentPlayerView) return null;
 
-  const hasTarget = selectedUnit.directiveTarget.type !== 'central-objective';
-  const ready = ordersPicked && hasTarget && !targetSelectionMode;
+  const ready = ordersPicked && !targetSelectionMode;
 
   let buttonLabel: string;
   if (!ordersPicked) {
     buttonLabel = 'Select Orders';
   } else if (targetSelectionMode) {
-    buttonLabel = 'Select Target';
-  } else if (!hasTarget) {
     buttonLabel = 'Select Target';
   } else {
     buttonLabel = 'Dispatch';
