@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
-import type { GameState, Unit, CubeCoord, UnitType, MovementDirective, AttackDirective, SpecialtyModifier, DirectiveTarget, Command, PlayerId } from '@hexwar/engine';
+import type { GameState, Unit, CubeCoord, UnitType, MovementDirective, AttackDirective, SpecialtyModifier, DirectiveTarget, Command, PlayerId, BattleEvent } from '@hexwar/engine';
 import type { TurnEvent } from '../renderer/replay-sequencer';
 import { perf } from '../perf-monitor';
 
@@ -9,12 +9,7 @@ export type LobbyState = 'menu' | 'creating' | 'waiting' | 'joining' | null;
 
 export interface BattleLogEntry {
   turn: number;
-  player: PlayerId;
-  type: 'kill' | 'capture' | 'recapture' | 'damage'
-    | 'capture-damage' | 'capture-death'
-    | 'objective-change' | 'koth-progress'
-    | 'round-end' | 'game-end';
-  message: string;
+  event: BattleEvent;
 }
 
 type CommandMode = 'none' | 'move' | 'attack';

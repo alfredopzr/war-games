@@ -151,7 +151,7 @@ function resolveSimultaneousLocal(
   const logEntries: BattleLogEntry[] = [];
   if (gameState.pendingEvents.length > 0) {
     for (const evt of gameState.pendingEvents) {
-      logEntries.push({ turn: turnNum, player: evt.actingPlayer, type: evt.type, message: evt.message });
+      logEntries.push({ turn: turnNum, event: evt });
     }
     gameState.pendingEvents = [];
   }
@@ -173,7 +173,7 @@ function resolveSimultaneousLocal(
 
     if (gameState.pendingEvents.length > 0) {
       for (const evt of gameState.pendingEvents) {
-        logEntries.push({ turn: turnNum, player: evt.actingPlayer, type: evt.type, message: evt.message });
+        logEntries.push({ turn: turnNum, event: evt });
       }
       gameState.pendingEvents = [];
     }
@@ -224,14 +224,15 @@ function resolveSimultaneousLocal(
   // Deferred state application — called after replay finishes (or immediately if no events)
   const applyFinalState = (): void => {
     if (roundEnd.roundOver) {
-      const winnerLabel = roundEnd.winner === 'player1' ? 'P1' : roundEnd.winner === 'player2' ? 'P2' : 'No one';
-      const reasonLabel = roundEnd.reason === 'king-of-the-hill' ? 'King of the Hill'
-        : roundEnd.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
       useGameStore.getState().addBattleLogEntries([{
         turn: turnNum,
-        player: roundEnd.winner ?? 'player1',
-        type: 'round-end',
-        message: `${winnerLabel} wins the round (${reasonLabel})`,
+        event: {
+          type: 'round-end',
+          actingPlayer: roundEnd.winner ?? 'player1',
+          phase: 'round',
+          winner: roundEnd.winner,
+          reason: roundEnd.reason!,
+        },
       }]);
 
       const p1Breakdown = computeIncomeBreakdown(gameState, 'player1', roundEnd.winner);
@@ -239,12 +240,14 @@ function resolveSimultaneousLocal(
       scoreRound(gameState, roundEnd.winner);
 
       if (gameState.phase === 'game-over' && gameState.winner) {
-        const gameWinnerLabel = gameState.winner === 'player1' ? 'P1' : 'P2';
         useGameStore.getState().addBattleLogEntries([{
           turn: turnNum,
-          player: gameState.winner,
-          type: 'game-end',
-          message: `${gameWinnerLabel} wins the game!`,
+          event: {
+            type: 'game-end',
+            actingPlayer: gameState.winner,
+            phase: 'round',
+            winner: gameState.winner,
+          },
         }]);
       }
 

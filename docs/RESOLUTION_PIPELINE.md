@@ -46,21 +46,26 @@ Every unit carries two directive layers. These are set during the planning phase
 | `advance(target)` | Move toward target hex via shortest path |
 | `flank-left(target)` | Move toward target via flanking arc, offset left of approach vector |
 | `flank-right(target)` | Move toward target via flanking arc, offset right of approach vector |
+| `scout` | Patrol within vision radius, acts first in execution order |
 | `hold` | Do not move |
-| `retreat` | Move toward deployment zone |
 
 Flank direction is an explicit player choice — terrain on one side of the approach may be favorable while the other is exposed. The flanking waypoint is computed perpendicular to the unit→target vector, offset by `floor(mapDiameter × 0.25)` hexes (§A6). Left/right refer to the perpendicular direction relative to the approach axis, not to a fixed map axis.
+
+> **Implementation note:** `retreat` from the original design was replaced by `scout` during Sprint 1. Retreat behavior is available via `retreat-on-contact` in the engagement directive layer.
 
 **Engagement Directive (Rules of Engagement)** — defines behavior when enemy contact occurs:
 
 | ROE | Behavior |
 |-----|----------|
-| `assault` | Stop movement immediately and engage |
+| `shoot-on-sight` | Stop movement immediately and engage |
 | `skirmish` | Fire once while passing, continue moving |
-| `cautious` | Stop if threatened, do not initiate |
+| `retreat-on-contact` | Disengage and move away from threat |
+| `hunt` | Actively seek and pursue enemy units |
 | `ignore` | Complete movement regardless of contact |
 
-Specialty actions (capture, support, scout, fortify) are **modifiers** on these two layers, not a third category.
+> **Implementation note:** Original spec labels `assault`/`cautious` were renamed to `shoot-on-sight`/`retreat-on-contact` for player-facing clarity. `hunt` was added as an active pursuit ROE.
+
+Specialty actions (support, engineer, sniper) are **modifiers** on these two layers, not a third category.
 
 **Interaction examples:**
 

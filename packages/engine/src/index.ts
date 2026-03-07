@@ -10,8 +10,14 @@ export type {
   UnitAction, Command, CommandPool,
   GamePhase, ObjectiveState, PlayerState, RoundState, GameState, GameMap,
   IncomeParams, MapValidation, RoundEndResult, DirectiveContext, ResolvedTarget,
+  // Battle events
+  BattleEvent, BattleEventType, BattleEventPhase,
+  BattleEventMove, BattleEventDamage, BattleEventKill,
+  BattleEventCapture, BattleEventRecapture, BattleEventCaptureDamage, BattleEventCaptureDeath,
+  BattleEventObjectiveChange, BattleEventKothProgress,
+  BattleEventRoundEnd, BattleEventGameEnd, BattleEventHeal,
+  BattleEventIntercept, BattleEventCounter, BattleEventMelee, BattleEventReveal,
   // Network protocol
-  BattleEvent, BattleEventType,
   ClientCreateRoom, ClientJoinRoom, ClientLeaveRoom, ClientReconnect,
   ClientPlaceUnit, ClientRemoveUnit, ClientSetDirective,
   ClientConfirmBuild, ClientSubmitCommands, ClientMessage,
@@ -68,6 +74,9 @@ export { executeDirective, resolveTarget, resolveAttackBehavior, BEHAVIOR_NAMES,
 
 // Commands
 export { createCommandPool, spendCommand, canIssueCommand, CP_PER_ROUND, validateDirectiveTarget } from './commands';
+
+// Battle event formatter
+export { formatBattleEvent } from './battle-events';
 
 // Game state
 export {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactElement } from 'react';
+import { formatBattleEvent } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
 export function BattleLog(): ReactElement | null {
@@ -26,9 +27,9 @@ export function BattleLog(): ReactElement | null {
           <div className="battle-log-empty">No events yet</div>
         ) : (
           battleLog.map((entry, i) => (
-            <div key={i} className={`battle-log-entry log-${entry.type}`}>
+            <div key={i} className={`battle-log-entry log-${entry.event.type}`}>
               <span className="log-turn">T{entry.turn}</span>
-              <span className="log-msg">{entry.message}</span>
+              <span className="log-msg">{formatBattleEvent(entry.event)}</span>
             </div>
           ))
         )}

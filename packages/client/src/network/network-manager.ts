@@ -10,6 +10,7 @@ import type {
   Command,
   SerializableGameState,
   Unit,
+  BattleEvent,
 } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 import { diffTurnEvents, startReplay } from '../renderer/replay-sequencer';
@@ -217,7 +218,7 @@ class NetworkManager {
       'turn-result',
       (data: {
         state: SerializableGameState;
-        events: Array<{ type: string; actingPlayer: PlayerId; message: string }>;
+        events: BattleEvent[];
       }) => {
         const newState = deserializeGameState(data.state);
         const s = store();
@@ -248,12 +249,8 @@ class NetworkManager {
 
         // Battle log (immediate)
         if (data.events.length > 0) {
-          const entries = data.events.map((e) => ({
-            turn: newState.round.turnNumber,
-            player: e.actingPlayer,
-            type: e.type as 'kill' | 'damage' | 'capture' | 'recapture',
-            message: e.message,
-          }));
+          const turn = newState.round.turnNumber;
+          const entries = data.events.map((e) => ({ turn, event: e }));
           s.addBattleLogEntries(entries);
         }
 

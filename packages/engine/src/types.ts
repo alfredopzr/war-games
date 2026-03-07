@@ -242,20 +242,181 @@ export interface ResolvedTarget {
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// Battle Events
+// Battle Events — Discriminated Union
+// -----------------------------------------------------------------------------
+// Canonical event schema. See docs/EVENT_LOG_SPEC.md for the full contract.
+// Each variant maps to a phase in the 10-phase resolution pipeline.
 // -----------------------------------------------------------------------------
 
-export type BattleEventType =
-  | 'kill' | 'damage' | 'capture' | 'recapture'
-  | 'capture-damage' | 'capture-death'
-  | 'objective-change' | 'koth-progress'
-  | 'round-end' | 'game-end';
+export type BattleEventPhase = 'movement' | 'combat' | 'capture' | 'objective' | 'round';
 
-export interface BattleEvent {
-  readonly type: BattleEventType;
+interface BattleEventBase {
   readonly actingPlayer: PlayerId;
-  readonly message: string;
+  readonly phase: BattleEventPhase;
 }
+
+// --- Emitted now ---
+
+export interface BattleEventMove extends BattleEventBase {
+  readonly type: 'move';
+  readonly unitId: string;
+  readonly unitType: UnitType;
+  readonly from: CubeCoord;
+  readonly to: CubeCoord;
+}
+
+export interface BattleEventDamage extends BattleEventBase {
+  readonly type: 'damage';
+  readonly attackerId: string;
+  readonly attackerType: UnitType;
+  readonly attackerPosition: CubeCoord;
+  readonly defenderId: string;
+  readonly defenderType: UnitType;
+  readonly defenderPosition: CubeCoord;
+  readonly damage: number;
+  readonly defenderHpAfter: number;
+  readonly defenderTerrain: TerrainType;
+}
+
+export interface BattleEventKill extends BattleEventBase {
+  readonly type: 'kill';
+  readonly attackerId: string;
+  readonly attackerType: UnitType;
+  readonly attackerPosition: CubeCoord;
+  readonly defenderId: string;
+  readonly defenderType: UnitType;
+  readonly defenderPosition: CubeCoord;
+  readonly damage: number;
+  readonly defenderTerrain: TerrainType;
+}
+
+export interface BattleEventCapture extends BattleEventBase {
+  readonly type: 'capture';
+  readonly unitId: string;
+  readonly unitType: UnitType;
+  readonly cityKey: string;
+  readonly previousOwner: PlayerId | null;
+}
+
+export interface BattleEventRecapture extends BattleEventBase {
+  readonly type: 'recapture';
+  readonly unitId: string;
+  readonly unitType: UnitType;
+  readonly cityKey: string;
+  readonly previousOwner: PlayerId;
+}
+
+export interface BattleEventCaptureDamage extends BattleEventBase {
+  readonly type: 'capture-damage';
+  readonly unitId: string;
+  readonly unitType: UnitType;
+  readonly cityKey: string;
+  readonly captureCost: number;
+  readonly hpAfter: number;
+}
+
+export interface BattleEventCaptureDeath extends BattleEventBase {
+  readonly type: 'capture-death';
+  readonly unitId: string;
+  readonly unitType: UnitType;
+  readonly cityKey: string;
+  readonly captureCost: number;
+}
+
+export interface BattleEventObjectiveChange extends BattleEventBase {
+  readonly type: 'objective-change';
+  readonly objectiveHex: CubeCoord;
+  readonly previousOccupier: PlayerId | null;
+  readonly newOccupier: PlayerId | null;
+  readonly unitId?: string;
+  readonly unitType?: UnitType;
+}
+
+export interface BattleEventKothProgress extends BattleEventBase {
+  readonly type: 'koth-progress';
+  readonly occupier: PlayerId;
+  readonly turnsHeld: number;
+  readonly citiesHeld: number;
+}
+
+export interface BattleEventRoundEnd extends BattleEventBase {
+  readonly type: 'round-end';
+  readonly winner: PlayerId | null;
+  readonly reason: 'king-of-the-hill' | 'elimination' | 'turn-limit';
+}
+
+export interface BattleEventGameEnd extends BattleEventBase {
+  readonly type: 'game-end';
+  readonly winner: PlayerId;
+}
+
+export interface BattleEventHeal extends BattleEventBase {
+  readonly type: 'heal';
+  readonly healerId: string;
+  readonly healerType: UnitType;
+  readonly targetId: string;
+  readonly targetType: UnitType;
+  readonly healAmount: number;
+  readonly targetHpAfter: number;
+}
+
+// --- Defined now, emitted in Sprint 3/4 ---
+
+export interface BattleEventIntercept extends BattleEventBase {
+  readonly type: 'intercept';
+  readonly attackerId: string;
+  readonly attackerType: UnitType;
+  readonly defenderId: string;
+  readonly defenderType: UnitType;
+  readonly hex: CubeCoord;
+  readonly damage: number;
+}
+
+export interface BattleEventCounter extends BattleEventBase {
+  readonly type: 'counter';
+  readonly attackerId: string;
+  readonly attackerType: UnitType;
+  readonly defenderId: string;
+  readonly defenderType: UnitType;
+  readonly damage: number;
+  readonly defenderHpAfter: number;
+}
+
+export interface BattleEventMelee extends BattleEventBase {
+  readonly type: 'melee';
+  readonly unitAId: string;
+  readonly unitAType: UnitType;
+  readonly unitBId: string;
+  readonly unitBType: UnitType;
+  readonly hex: CubeCoord;
+}
+
+export interface BattleEventReveal extends BattleEventBase {
+  readonly type: 'reveal';
+  readonly unitId: string;
+  readonly unitType: UnitType;
+  readonly hexes: CubeCoord[];
+}
+
+export type BattleEvent =
+  | BattleEventMove
+  | BattleEventDamage
+  | BattleEventKill
+  | BattleEventCapture
+  | BattleEventRecapture
+  | BattleEventCaptureDamage
+  | BattleEventCaptureDeath
+  | BattleEventObjectiveChange
+  | BattleEventKothProgress
+  | BattleEventRoundEnd
+  | BattleEventGameEnd
+  | BattleEventHeal
+  | BattleEventIntercept
+  | BattleEventCounter
+  | BattleEventMelee
+  | BattleEventReveal;
+
+export type BattleEventType = BattleEvent['type'];
 
 // -----------------------------------------------------------------------------
 // Client → Server Messages

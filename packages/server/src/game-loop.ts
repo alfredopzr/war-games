@@ -16,9 +16,7 @@ import type {
   SpecialtyModifier,
   DirectiveTarget,
   Command,
-  GameState,
   BattleEvent,
-  Unit,
 } from '@hexwar/engine';
 
 import {
@@ -32,6 +30,7 @@ import {
   createCommandPool,
   UNIT_STATS,
   mulberry32,
+  formatBattleEvent,
 } from '@hexwar/engine';
 
 import { filterStateForPlayer } from './state-filter';
@@ -81,85 +80,6 @@ function emitFilteredStatePerPlayer(
       ...extraFieldsFn(playerId),
     });
   }
-}
-
-interface UnitSnapshot {
-  type: string;
-  owner: PlayerId;
-  hp: number;
-}
-
-function snapshotUnits(state: GameState): Map<string, UnitSnapshot> {
-  const map = new Map<string, UnitSnapshot>();
-  for (const player of Object.values(state.players)) {
-    for (const unit of player.units) {
-      map.set(unit.id, { type: unit.type, owner: unit.owner, hp: unit.hp });
-    }
-  }
-  return map;
-}
-
-function snapshotCities(state: GameState): Map<string, PlayerId | null> {
-  return new Map(state.cityOwnership);
-}
-
-function generateBattleEvents(
-  prevUnits: Map<string, UnitSnapshot>,
-  prevCities: Map<string, PlayerId | null>,
-  newState: GameState,
-  actingPlayer: PlayerId,
-): BattleEvent[] {
-  const events: BattleEvent[] = [];
-
-  // Build a map of current units
-  const currentUnits = new Map<string, Unit>();
-  for (const player of Object.values(newState.players)) {
-    for (const unit of player.units) {
-      currentUnits.set(unit.id, unit);
-    }
-  }
-
-  // Check for kills and damage
-  for (const [unitId, prev] of prevUnits) {
-    const current = currentUnits.get(unitId);
-    if (!current) {
-      // Unit is gone — kill event
-      events.push({
-        type: 'kill',
-        actingPlayer,
-        message: `${actingPlayer} destroyed a ${prev.type} belonging to ${prev.owner}`,
-      });
-    } else if (current.hp < prev.hp) {
-      // Unit took damage
-      events.push({
-        type: 'damage',
-        actingPlayer,
-        message: `${actingPlayer} dealt ${prev.hp - current.hp} damage to ${prev.owner}'s ${prev.type}`,
-      });
-    }
-  }
-
-  // Check for city captures/recaptures
-  for (const [cityKey, prevOwner] of prevCities) {
-    const newOwner = newState.cityOwnership.get(cityKey) ?? null;
-    if (newOwner !== prevOwner && newOwner !== null) {
-      if (prevOwner === null) {
-        events.push({
-          type: 'capture',
-          actingPlayer,
-          message: `${actingPlayer} captured a city at ${cityKey}`,
-        });
-      } else {
-        events.push({
-          type: 'recapture',
-          actingPlayer,
-          message: `${actingPlayer} recaptured a city at ${cityKey} from ${prevOwner}`,
-        });
-      }
-    }
-  }
-
-  return events;
 }
 
 // -----------------------------------------------------------------------------
@@ -414,9 +334,6 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
     ? ['player1', 'player2']
     : ['player2', 'player1'];
 
-  // Snapshot state before any resolution
-  const prevUnits = snapshotUnits(state);
-  const prevCities = snapshotCities(state);
   const turnsHeldBefore = state.round.objective.turnsHeld;
   const occupierBefore = state.round.objective.occupiedBy;
 
@@ -428,11 +345,8 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
 
   executeTurn(state, room.bufferedCommands.get(order[0])!, combatRng1);
 
-  const events1 = generateBattleEvents(prevUnits, prevCities, state, order[0]);
-  if (state.pendingEvents.length > 0) {
-    events1.push(...state.pendingEvents);
-    state.pendingEvents = [];
-  }
+  const events1 = [...state.pendingEvents];
+  state.pendingEvents = [];
 
   const occupierAfterFirst = state.round.objective.occupiedBy;
 
@@ -449,19 +363,14 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
       unit.hasActed = false;
     }
 
-    const midUnits = snapshotUnits(state);
-    const midCities = snapshotCities(state);
     turnSeed2 = (room.gameSeed! * 41 + originalTurnNumber) | 0;
     const rng2 = mulberry32(turnSeed2);
     const combatRng2 = (): number => 0.85 + rng2() * 0.3;
 
     executeTurn(state, room.bufferedCommands.get(order[1])!, combatRng2);
 
-    events2 = generateBattleEvents(midUnits, midCities, state, order[1]);
-    if (state.pendingEvents.length > 0) {
-      events2.push(...state.pendingEvents);
-      state.pendingEvents = [];
-    }
+    events2 = [...state.pendingEvents];
+    state.pendingEvents = [];
 
     // Fix turnsHeld double increment: if same occupier held across both calls
     // and turnsHeld went up by more than 1, clamp to +1
@@ -481,7 +390,7 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
   const allEvents = [...events1, ...events2];
 
   for (const event of allEvents) {
-    log('info', 'game', event.message);
+    log('info', 'game', formatBattleEvent(event));
   }
 
   // Record turn log
@@ -501,13 +410,12 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
   const roundEnd = earlyRoundEnd.roundOver ? earlyRoundEnd : checkRoundEnd(state);
 
   if (roundEnd.roundOver) {
-    const winnerLabel = roundEnd.winner === 'player1' ? 'P1' : roundEnd.winner === 'player2' ? 'P2' : 'No one';
-    const reasonLabel = roundEnd.reason === 'king-of-the-hill' ? 'King of the Hill'
-      : roundEnd.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
     allEvents.push({
       type: 'round-end',
       actingPlayer: roundEnd.winner ?? 'player1',
-      message: `${winnerLabel} wins the round (${reasonLabel})`,
+      phase: 'round',
+      winner: roundEnd.winner,
+      reason: roundEnd.reason!,
     });
   }
 
@@ -525,11 +433,11 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
     room.gameState = scoreRound(state, roundEnd.winner);
 
     if (room.gameState.phase === 'game-over') {
-      const gameWinnerLabel = room.gameState.winner === 'player1' ? 'P1' : 'P2';
       allEvents.push({
         type: 'game-end',
         actingPlayer: room.gameState.winner ?? 'player1',
-        message: `${gameWinnerLabel} wins the game!`,
+        phase: 'round',
+        winner: room.gameState.winner!,
       });
       log('info', 'game', `Game over in room ${room.id}, winner: ${room.gameState.winner}, turns: ${room.turnLog.length}`);
       emitFilteredStatePerPlayer(io, room, 'game-over', () => ({

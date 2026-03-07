@@ -285,6 +285,17 @@ function executeUnitDirective(
 
     if (bestTarget) {
       bestTarget.hp += 1;
+      state.pendingEvents.push({
+        type: 'heal',
+        actingPlayer: currentPlayer,
+        phase: 'combat',
+        healerId: unit.id,
+        healerType: unit.type,
+        targetId: bestTarget.id,
+        targetType: bestTarget.type,
+        healAmount: 1,
+        targetHpAfter: bestTarget.hp,
+      });
     }
   }
 }
@@ -339,7 +350,17 @@ function applyDirectiveAction(
       );
       if (isOccupied) break;
 
+      const moveFrom = { ...unit.position };
       unit.position = action.targetHex;
+      state.pendingEvents.push({
+        type: 'move',
+        actingPlayer: currentPlayer,
+        phase: 'movement',
+        unitId: unit.id,
+        unitType: unit.type,
+        from: moveFrom,
+        to: action.targetHex,
+      });
       break;
     }
 
@@ -353,11 +374,41 @@ function applyDirectiveAction(
 
       const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
       const damage = calculateDamage(unit, defender, defenderTerrain, randomFn);
+      const defenderPosCopy = { ...defender.position };
+      const attackerPosCopy = { ...unit.position };
       defender.hp -= damage;
 
       if (defender.hp <= 0) {
+        state.pendingEvents.push({
+          type: 'kill',
+          actingPlayer: currentPlayer,
+          phase: 'combat',
+          attackerId: unit.id,
+          attackerType: unit.type,
+          attackerPosition: attackerPosCopy,
+          defenderId: defender.id,
+          defenderType: defender.type,
+          defenderPosition: defenderPosCopy,
+          damage,
+          defenderTerrain,
+        });
         removeUnit(state.players[enemyPlayer].units, defender.id);
         state.round.unitsKilledThisRound[currentPlayer] += 1;
+      } else {
+        state.pendingEvents.push({
+          type: 'damage',
+          actingPlayer: currentPlayer,
+          phase: 'combat',
+          attackerId: unit.id,
+          attackerType: unit.type,
+          attackerPosition: attackerPosCopy,
+          defenderId: defender.id,
+          defenderType: defender.type,
+          defenderPosition: defenderPosCopy,
+          damage,
+          defenderHpAfter: defender.hp,
+          defenderTerrain,
+        });
       }
       break;
     }
@@ -383,11 +434,13 @@ function updateObjective(state: GameState): void {
 
   if (!unitOnObjective) {
     if (previousOccupier !== null) {
-      const prevLabel = previousOccupier === 'player1' ? 'P1' : 'P2';
       state.pendingEvents.push({
         type: 'objective-change',
         actingPlayer: previousOccupier,
-        message: `${prevLabel} lost control of the objective`,
+        phase: 'objective',
+        objectiveHex: state.map.centralObjective,
+        previousOccupier,
+        newOccupier: null,
       });
     }
     state.round.objective = { occupiedBy: null, turnsHeld: 0 };
@@ -395,7 +448,6 @@ function updateObjective(state: GameState): void {
   }
 
   const occupier = unitOnObjective.owner;
-  const label = occupier === 'player1' ? 'P1' : 'P2';
 
   // KotH city gate: occupier must hold 2+ cities to progress
   const citiesHeld = countCitiesHeld(state, occupier);
@@ -406,7 +458,10 @@ function updateObjective(state: GameState): void {
       state.pendingEvents.push({
         type: 'koth-progress',
         actingPlayer: occupier,
-        message: `${label} holds objective (${state.round.objective.turnsHeld}/2 turns)`,
+        phase: 'objective',
+        occupier,
+        turnsHeld: state.round.objective.turnsHeld,
+        citiesHeld,
       });
     } else {
       // Present but not progressing — reset turnsHeld
@@ -417,14 +472,22 @@ function updateObjective(state: GameState): void {
     state.pendingEvents.push({
       type: 'objective-change',
       actingPlayer: occupier,
-      message: `${label} seized the objective`,
+      phase: 'objective',
+      objectiveHex: state.map.centralObjective,
+      previousOccupier,
+      newOccupier: occupier,
+      unitId: unitOnObjective.id,
+      unitType: unitOnObjective.type,
     });
     state.round.objective = { occupiedBy: occupier, turnsHeld: citiesHeld >= 2 ? 1 : 0 };
     if (citiesHeld >= 2) {
       state.pendingEvents.push({
         type: 'koth-progress',
         actingPlayer: occupier,
-        message: `${label} holds objective (1/2 turns)`,
+        phase: 'objective',
+        occupier,
+        turnsHeld: 1,
+        citiesHeld,
       });
     }
   }
@@ -613,8 +676,6 @@ function updateCityOwnership(state: GameState): void {
     unitByHex.set(hexToKey(unit.position), unit);
   }
 
-  const unitLabels: Record<string, string> = { infantry: 'Infantry', tank: 'Tank', artillery: 'Artillery', recon: 'Recon' };
-
   for (const cityKey of state.cityOwnership.keys()) {
     const unit = unitByHex.get(cityKey);
     if (unit) {
@@ -622,22 +683,53 @@ function updateCityOwnership(state: GameState): void {
       if (currentOwner !== unit.owner) {
         // City flips to new owner — unit loses ceil(maxHp * 0.1)
         state.cityOwnership.set(cityKey, unit.owner);
+
+        // Emit capture/recapture event
+        if (currentOwner === null) {
+          state.pendingEvents.push({
+            type: 'capture',
+            actingPlayer: unit.owner,
+            phase: 'capture',
+            unitId: unit.id,
+            unitType: unit.type,
+            cityKey,
+            previousOwner: null,
+          });
+        } else {
+          state.pendingEvents.push({
+            type: 'recapture',
+            actingPlayer: unit.owner,
+            phase: 'capture',
+            unitId: unit.id,
+            unitType: unit.type,
+            cityKey,
+            previousOwner: currentOwner as PlayerId,
+          });
+        }
+
         const captureCost = Math.ceil(state.unitStats[unit.type].maxHp * 0.1);
         unit.hp -= captureCost;
-        const label = unit.owner === 'player1' ? 'P1' : 'P2';
-        const unitName = unitLabels[unit.type] ?? unit.type;
         if (unit.hp <= 0) {
-          removeUnit(state.players[unit.owner].units, unit.id);
           state.pendingEvents.push({
             type: 'capture-death',
             actingPlayer: unit.owner,
-            message: `${label} ${unitName} died capturing a city`,
+            phase: 'capture',
+            unitId: unit.id,
+            unitType: unit.type,
+            cityKey,
+            captureCost,
           });
+          removeUnit(state.players[unit.owner].units, unit.id);
         } else {
           state.pendingEvents.push({
             type: 'capture-damage',
             actingPlayer: unit.owner,
-            message: `${label} ${unitName} took ${captureCost} damage capturing a city (${unit.hp} HP left)`,
+            phase: 'capture',
+            unitId: unit.id,
+            unitType: unit.type,
+            cityKey,
+            captureCost,
+            hpAfter: unit.hp,
           });
         }
       }
