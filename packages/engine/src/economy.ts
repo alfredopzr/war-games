@@ -1,16 +1,17 @@
 import type { IncomeParams } from './types';
+import balanceData from './balance.json';
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants — derived from balance.json (single source of truth)
 // ---------------------------------------------------------------------------
 
-export const BASE_INCOME = 650;
-export const CITY_INCOME = 125;
-export const KILL_BONUS = 25;
-export const ROUND_WIN_BONUS = 200;
-export const CATCH_UP_BONUS = 250;
-export const CARRYOVER_RATE = 0.5;
-export const MAINTENANCE_RATE = 0.15;
+export const BASE_INCOME = balanceData.economy.baseIncome;
+export const CITY_INCOME = balanceData.economy.cityIncome;
+export const KILL_BONUS = balanceData.economy.killBonus;
+export const ROUND_WIN_BONUS = balanceData.economy.roundWinBonus;
+export const CATCH_UP_BONUS = balanceData.economy.catchUpBonus;
+export const CARRYOVER_RATE = balanceData.economy.carryoverRate;
+export const MAINTENANCE_RATE = balanceData.economy.maintenanceRate;
 
 // ---------------------------------------------------------------------------
 // Functions

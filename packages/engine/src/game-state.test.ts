@@ -404,7 +404,7 @@ describe('city capture HP cost', () => {
     const cityCoord = findCoordForKey(state, cityKey);
     if (!cityCoord) return;
     unit.position = cityCoord;
-    unit.hp = 1; // Will die from capture
+    unit.hp = 3; // captureCost = ceil(30 * 0.1) = 3, so unit dies from capture
 
     state = executeTurn(state, [], () => 1.0);
 
@@ -537,7 +537,7 @@ describe('support directive heals adjacent', () => {
     const damagedUnit = state.players.player1.units[1]!;
     supportUnit.position = createHex(4, 0);
     damagedUnit.position = createHex(5, 0);
-    damagedUnit.hp = 1; // Below maxHp (infantry maxHp = 3)
+    damagedUnit.hp = 1; // Below maxHp (infantry maxHp = 30)
 
     state = executeTurn(state, [], () => 1.0);
 
@@ -626,8 +626,8 @@ describe('checkRoundEnd', () => {
     state.players.player1.units[0]!.position = createHex(central.q + 1, central.r);
     state.players.player2.units[0]!.position = createHex(central.q - 1, central.r);
 
-    state.players.player1.units[0]!.hp = 3;
-    state.players.player2.units[0]!.hp = 1;
+    state.players.player1.units[0]!.hp = 25;
+    state.players.player2.units[0]!.hp = 10;
 
     const result = checkRoundEnd(state);
     expect(result.roundOver).toBe(true);
@@ -647,8 +647,8 @@ describe('checkRoundEnd', () => {
     state.players.player1.units[0]!.position = createHex(central.q + 1, central.r);
     state.players.player2.units[0]!.position = createHex(central.q - 1, central.r);
 
-    state.players.player1.units[0]!.hp = 3;
-    state.players.player2.units[0]!.hp = 3;
+    state.players.player1.units[0]!.hp = 25;
+    state.players.player2.units[0]!.hp = 25;
 
     const result = checkRoundEnd(state);
     expect(result.roundOver).toBe(true);

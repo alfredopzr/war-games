@@ -3,62 +3,20 @@ import {
   MOVE_DIVISOR_INFANTRY, MOVE_DIVISOR_TANK,
   MOVE_DIVISOR_ARTILLERY, MOVE_DIVISOR_RECON,
 } from './map-gen-params';
+import balanceData from './balance.json';
 
 // =============================================================================
-// Unit Stats — design spec values for all 4 MVP unit types
+// Unit Stats — derived from balance.json (single source of truth)
+// Invariant: ATK = HP × 0.35, DEF = max(1, round(HP × 0.05))
 // =============================================================================
 
 /** Default stats used when no map is available. Overridden by scaledUnitStats(). */
-export const UNIT_STATS: Record<UnitType, UnitStats> = {
-  infantry: {
-    type: 'infantry',
-    cost: 100,
-    maxHp: 3,
-    atk: 2,
-    def: 2,
-    moveRange: 3,
-    attackRange: 1,
-    minAttackRange: 1,
-    visionRange: 3,
-    canClimb: true,
-  },
-  tank: {
-    type: 'tank',
-    cost: 250,
-    maxHp: 4,
-    atk: 4,
-    def: 3,
-    moveRange: 4,
-    attackRange: 1,
-    minAttackRange: 1,
-    visionRange: 3,
-    canClimb: false,
-  },
-  artillery: {
-    type: 'artillery',
-    cost: 200,
-    maxHp: 2,
-    atk: 5,
-    def: 1,
-    moveRange: 2,
-    attackRange: 3,
-    minAttackRange: 2,
-    visionRange: 3,
-    canClimb: false,
-  },
-  recon: {
-    type: 'recon',
-    cost: 100,
-    maxHp: 2,
-    atk: 1,
-    def: 1,
-    moveRange: 5,
-    attackRange: 1,
-    minAttackRange: 1,
-    visionRange: 6,
-    canClimb: true,
-  },
-} as const;
+export const UNIT_STATS: Record<UnitType, UnitStats> = Object.fromEntries(
+  (Object.keys(balanceData.units) as UnitType[]).map((type) => [
+    type,
+    { type, ...balanceData.units[type] },
+  ]),
+) as Record<UnitType, UnitStats>;
 
 const MOVE_DIVISORS: Record<UnitType, number> = {
   infantry: MOVE_DIVISOR_INFANTRY,
@@ -118,15 +76,17 @@ export function resetUnitIdCounter(): void {
 }
 
 // =============================================================================
-// Type Advantage Matrix
+// Type Advantage Matrix — clean 4-unit RPS cycle from balance.json
+// Cycle: Tank→Infantry→Recon→Artillery→Tank
+// Each unit: one 2.0× counter, one 0.6× disadvantage, rest 1.0×
+//
+// OPEN: hunt attack directive — initiative modifiers and counter-fire
+// eligibility undefined. Behaves as shoot-on-sight for current
+// directive AI (resolveAttackBehavior). Will be specced when combat
+// timeline (S3) is built. See ROADMAP.md OD list.
 // =============================================================================
 
-const TYPE_ADVANTAGE: Record<UnitType, Record<UnitType, number>> = {
-  infantry:  { infantry: 1.0, tank: 0.5, artillery: 1.2, recon: 1.0 },
-  tank:      { infantry: 1.5, tank: 1.0, artillery: 1.2, recon: 1.5 },
-  artillery: { infantry: 1.3, tank: 1.3, artillery: 1.0, recon: 1.3 },
-  recon:     { infantry: 0.8, tank: 0.3, artillery: 1.5, recon: 1.0 },
-};
+const TYPE_ADVANTAGE = balanceData.typeAdvantage as Record<UnitType, Record<UnitType, number>>;
 
 export function getTypeAdvantage(attacker: UnitType, defender: UnitType): number {
   return TYPE_ADVANTAGE[attacker][defender];

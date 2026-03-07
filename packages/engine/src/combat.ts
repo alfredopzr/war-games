@@ -10,9 +10,16 @@ import { UNIT_STATS, getTypeAdvantage } from './units';
 /**
  * Calculate damage dealt by attacker to defender.
  *
- * Formula:
+ * Formula (GAME_MATH_ENGINE.md §Damage Formula):
  *   baseDamage = ATK * typeMultiplier * randomFactor
- *   finalDamage = max(1, floor(baseDamage - DEF * terrainDefense))
+ *   finalDamage = max(1, floor(baseDamage * (1 - terrainDefense) - DEF))
+ *
+ * Terrain reduces gross damage as a percentage first, then DEF subtracts flat.
+ * DEF is meaningful on all terrain including plains (terrainDef=0).
+ *
+ * OPEN: Counter-fire mechanics deferred. Currently all combat is
+ * single-strike (no return fire). Counter-fire gating rules will be
+ * defined with the combat timeline (S3 Phase 5/6).
  *
  * @param randomFn - Injectable RNG returning a value in [0.85, 1.15].
  *                   Defaults to uniform random in that range.
@@ -34,7 +41,7 @@ export function calculateDamage(
 
   const randomFactor = randomFn();
   const baseDamage = attackerStats.atk * typeMultiplier * randomFactor;
-  const finalDamage = Math.max(1, Math.floor(baseDamage - effectiveDef * terrainDef));
+  const finalDamage = Math.max(1, Math.floor(baseDamage * (1 - terrainDef) - effectiveDef));
 
   return finalDamage;
 }

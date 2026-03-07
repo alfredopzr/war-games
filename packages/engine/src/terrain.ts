@@ -1,29 +1,14 @@
 import type { TerrainType, TerrainDefinition, UnitType, MovementDirective, HexModifier } from './types';
 import { UNIT_STATS } from './units';
 import { CLIMB_COST_PER_ELEV, CLIMB_THRESHOLD, DOWNHILL_COST_MULT, VISION_ELEV_DIVISOR } from './map-gen-params';
+import balanceData from './balance.json';
 
-export const TERRAIN: Record<TerrainType, TerrainDefinition> = {
-  plains: {
-    type: 'plains',
-    moveCost: 1,
-    defenseModifier: 0,
-  },
-  forest: {
-    type: 'forest',
-    moveCost: 2,
-    defenseModifier: 0.25,
-  },
-  mountain: {
-    type: 'mountain',
-    moveCost: 1,
-    defenseModifier: 0,
-  },
-  city: {
-    type: 'city',
-    moveCost: 1,
-    defenseModifier: 0,
-  },
-} as const;
+export const TERRAIN: Record<TerrainType, TerrainDefinition> = Object.fromEntries(
+  (Object.keys(balanceData.terrain) as TerrainType[]).map((type) => [
+    type,
+    { type, ...balanceData.terrain[type] },
+  ]),
+) as Record<TerrainType, TerrainDefinition>;
 
 export function getMoveCost(
   terrain: TerrainType,

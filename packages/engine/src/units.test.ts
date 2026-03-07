@@ -8,8 +8,8 @@ describe('UNIT_STATS', () => {
     expect(s).toEqual({
       type: 'infantry',
       cost: 100,
-      maxHp: 3,
-      atk: 2,
+      maxHp: 30,
+      atk: 10,
       def: 2,
       moveRange: 3,
       attackRange: 1,
@@ -24,9 +24,9 @@ describe('UNIT_STATS', () => {
     expect(s).toEqual({
       type: 'tank',
       cost: 250,
-      maxHp: 4,
-      atk: 4,
-      def: 3,
+      maxHp: 40,
+      atk: 14,
+      def: 2,
       moveRange: 4,
       attackRange: 1,
       minAttackRange: 1,
@@ -40,8 +40,8 @@ describe('UNIT_STATS', () => {
     expect(s).toEqual({
       type: 'artillery',
       cost: 200,
-      maxHp: 2,
-      atk: 5,
+      maxHp: 20,
+      atk: 10,
       def: 1,
       moveRange: 2,
       attackRange: 3,
@@ -56,8 +56,8 @@ describe('UNIT_STATS', () => {
     expect(s).toEqual({
       type: 'recon',
       cost: 100,
-      maxHp: 2,
-      atk: 1,
+      maxHp: 20,
+      atk: 7,
       def: 1,
       moveRange: 5,
       attackRange: 1,
@@ -134,16 +134,18 @@ describe('createUnit', () => {
 });
 
 describe('getTypeAdvantage', () => {
-  it('tank vs infantry = 1.5', () => {
-    expect(getTypeAdvantage('tank', 'infantry')).toBe(1.5);
+  it('counter matchups are 2.0×', () => {
+    expect(getTypeAdvantage('tank', 'infantry')).toBe(2.0);
+    expect(getTypeAdvantage('infantry', 'recon')).toBe(2.0);
+    expect(getTypeAdvantage('recon', 'artillery')).toBe(2.0);
+    expect(getTypeAdvantage('artillery', 'tank')).toBe(2.0);
   });
 
-  it('infantry vs tank = 0.5', () => {
-    expect(getTypeAdvantage('infantry', 'tank')).toBe(0.5);
-  });
-
-  it('recon vs artillery = 1.5', () => {
-    expect(getTypeAdvantage('recon', 'artillery')).toBe(1.5);
+  it('disadvantaged matchups are 0.6×', () => {
+    expect(getTypeAdvantage('infantry', 'tank')).toBe(0.6);
+    expect(getTypeAdvantage('recon', 'infantry')).toBe(0.6);
+    expect(getTypeAdvantage('artillery', 'recon')).toBe(0.6);
+    expect(getTypeAdvantage('tank', 'artillery')).toBe(0.6);
   });
 
   it('same type returns 1.0', () => {
@@ -151,6 +153,13 @@ describe('getTypeAdvantage', () => {
     for (const t of types) {
       expect(getTypeAdvantage(t, t)).toBe(1.0);
     }
+  });
+
+  it('non-cycle matchups are neutral 1.0×', () => {
+    expect(getTypeAdvantage('infantry', 'artillery')).toBe(1.0);
+    expect(getTypeAdvantage('artillery', 'infantry')).toBe(1.0);
+    expect(getTypeAdvantage('tank', 'recon')).toBe(1.0);
+    expect(getTypeAdvantage('recon', 'tank')).toBe(1.0);
   });
 });
 

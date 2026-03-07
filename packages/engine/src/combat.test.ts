@@ -34,51 +34,45 @@ const dist3: CubeCoord = { q: 3, r: 0, s: -3 };
 
 describe('calculateDamage', () => {
   it('always deals at least 1 damage (weak attacker vs strong defender)', () => {
-    // recon (ATK=1) vs tank (DEF=3) on mountain (defMod=0.4), low roll
+    // recon (ATK=7) vs tank (DEF=2) with 0.6× disadvantage, low roll
+    // 7 * 0.6 * 0.85 * (1-0) - 2 = 3.57 - 2 = 1.57 → floor = 1
     const attacker = makeUnit({ type: 'recon', owner: 'player1', position: origin });
     const defender = makeUnit({ type: 'tank', owner: 'player2', position: adjacent });
-    const damage = calculateDamage(attacker, defender, 'mountain', () => 0.85);
+    const damage = calculateDamage(attacker, defender, 'plains', () => 0.85);
     expect(damage).toBeGreaterThanOrEqual(1);
   });
 
-  it('tank vs infantry on plains, roll=1.0 => 6 damage', () => {
-    // ATK=4, type mult tank->infantry=1.5, roll=1.0 => base=4*1.5*1.0=6.0
-    // DEF=2, plains defMod=0 => final=max(1, floor(6 - 2*0))=6
+  it('tank vs infantry on plains, roll=1.0 => 26 damage', () => {
+    // ATK=14, type mult tank->infantry=2.0, roll=1.0
+    // base=14*2.0*1.0=28, plains defMod=0 => final=floor(28*(1-0) - 2)=26
     const attacker = makeUnit({ type: 'tank', owner: 'player1', position: origin });
     const defender = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent });
     const damage = calculateDamage(attacker, defender, 'plains', () => 1.0);
-    expect(damage).toBe(6);
+    expect(damage).toBe(26);
   });
 
-  it('tank vs infantry in forest, roll=1.0 => 5 damage', () => {
-    // base=6.0, DEF=2, forest defMod=0.25 => final=max(1, floor(6 - 2*0.25))=max(1,5)=5
+  it('tank vs infantry in forest, roll=1.0 => 19 damage', () => {
+    // base=28, forest defMod=0.25 => final=floor(28*0.75 - 2)=floor(21-2)=19
     const attacker = makeUnit({ type: 'tank', owner: 'player1', position: origin });
     const defender = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent });
     const damage = calculateDamage(attacker, defender, 'forest', () => 1.0);
-    expect(damage).toBe(5);
+    expect(damage).toBe(19);
   });
 
   it('hold directive gives +1 effective DEF', () => {
-    // Tank vs infantry on forest: normally DEF=2, terrainDef=0.25
-    // Without hold: base=6.0, final=max(1, floor(6 - 2*0.25))=5
-    // With hold: effectiveDef=3, final=max(1, floor(6 - 3*0.25))=max(1,5)=5
-    // Let's use plains (defMod=0) to see the difference clearly:
-    // Without hold: base=6, final=max(1,floor(6 - 2*0))=6
-    // With hold: base=6, final=max(1,floor(6 - 3*0))=6 — still 6 on plains since terrainDef=0
-    // Use forest: without hold = 5, with hold: max(1, floor(6 - 3*0.25)) = max(1,5)=5
-    // Use city (defMod=0.3): without hold = max(1,floor(6-2*0.3))=max(1,5)=5
-    //                         with hold = max(1,floor(6-3*0.3))=max(1,5)=5
-    // Use forest (defMod=0.25) with rng=0.92:
-    //   baseDamage = 4 * 1.5 * 0.92 = 5.52
-    //   without hold = max(1,floor(5.52 - 2*0.25)) = floor(5.02) = 5
-    //   with hold    = max(1,floor(5.52 - 3*0.25)) = floor(4.77) = 4
-    const attacker = makeUnit({ type: 'tank', owner: 'player1', position: origin });
+    // Infantry (ATK=10) vs infantry (DEF=2) on forest (0.25), rng=0.92
+    // base = 10 * 1.0 * 0.92 = 9.2
+    // Without hold: floor(9.2 * 0.75 - 2) = floor(6.9 - 2) = floor(4.9) = 4
+    // With hold (DEF=3): floor(9.2 * 0.75 - 3) = floor(6.9 - 3) = floor(3.9) = 3
+    const attacker = makeUnit({ type: 'infantry', owner: 'player1', position: origin });
     const defenderNoHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, movementDirective: 'advance' });
     const defenderHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, movementDirective: 'hold' });
 
     const damageNoHold = calculateDamage(attacker, defenderNoHold, 'forest', () => 0.92);
     const damageHold = calculateDamage(attacker, defenderHold, 'forest', () => 0.92);
 
+    expect(damageNoHold).toBe(4);
+    expect(damageHold).toBe(3);
     expect(damageHold).toBeLessThan(damageNoHold);
   });
 
