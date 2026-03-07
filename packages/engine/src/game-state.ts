@@ -369,7 +369,7 @@ function applyDirectiveAction(
       const defender = findUnitById(enemyUnits, action.targetUnitId);
       if (!defender) break;
 
-      const attackerVisible = calculateVisibility([unit], state.map.terrain, state.map.elevation);
+      const attackerVisible = calculateVisibility([unit], state.map.terrain, state.map.elevation, state.unitStats);
       if (!canAttack(unit, defender, attackerVisible)) break;
 
       const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';

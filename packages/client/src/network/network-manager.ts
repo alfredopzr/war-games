@@ -288,7 +288,7 @@ class NetworkManager {
                   syntheticUnits.push({ ...orig, position: pos });
                 }
               }
-              const vis = calculateVisibility(syntheticUnits, newState.map.terrain, newState.map.elevation);
+              const vis = calculateVisibility(syntheticUnits, newState.map.terrain, newState.map.elevation, newState.unitStats);
               useGameStore.getState().setVisibleHexes(vis);
               const prevExplored = useGameStore.getState().exploredHexes;
               const merged = new Set(prevExplored);

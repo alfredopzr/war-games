@@ -2,6 +2,8 @@ import type { UnitType, UnitStats, Unit, PlayerId, CubeCoord, MovementDirective,
 import {
   MOVE_DIVISOR_INFANTRY, MOVE_DIVISOR_TANK,
   MOVE_DIVISOR_ARTILLERY, MOVE_DIVISOR_RECON,
+  VISION_DIVISOR_INFANTRY, VISION_DIVISOR_TANK,
+  VISION_DIVISOR_ARTILLERY, VISION_DIVISOR_RECON,
 } from './map-gen-params';
 import balanceData from './balance.json';
 
@@ -25,8 +27,15 @@ const MOVE_DIVISORS: Record<UnitType, number> = {
   recon: MOVE_DIVISOR_RECON,
 };
 
+const VISION_DIVISORS: Record<UnitType, number> = {
+  infantry: VISION_DIVISOR_INFANTRY,
+  tank: VISION_DIVISOR_TANK,
+  artillery: VISION_DIVISOR_ARTILLERY,
+  recon: VISION_DIVISOR_RECON,
+};
+
 /**
- * Return a copy of UNIT_STATS with moveRange scaled to the map diameter.
+ * Return a copy of UNIT_STATS with moveRange and visionRange scaled to the map diameter.
  * mapDiameter = 2 * mapRadius.
  */
 export function scaledUnitStats(mapDiameter: number): Record<UnitType, UnitStats> {
@@ -36,6 +45,7 @@ export function scaledUnitStats(mapDiameter: number): Record<UnitType, UnitStats
     result[key] = {
       ...base,
       moveRange: Math.max(1, Math.floor(mapDiameter / MOVE_DIVISORS[key])),
+      visionRange: Math.max(1, Math.floor(mapDiameter / VISION_DIVISORS[key])),
     };
   }
   return result;

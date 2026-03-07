@@ -28,6 +28,7 @@ export function calculateVisibility(
   friendlyUnits: Unit[],
   terrainMap: Map<string, TerrainType>,
   elevationMap: Map<string, number>,
+  unitStats?: Record<string, { visionRange: number }>,
 ): Set<string> {
   const visible = new Set<string>();
 
@@ -43,7 +44,8 @@ export function calculateVisibility(
     const unitElev = elevationMap.get(unitKey) ?? 0;
     const unitTerrain = terrainMap.get(unitKey);
     const visionBonus = getVisionBonus(unitElev);
-    let effectiveVision = UNIT_STATS[unit.type].visionRange + visionBonus;
+    const stats = unitStats ?? UNIT_STATS;
+    let effectiveVision = stats[unit.type].visionRange + visionBonus;
 
     // Forest vision penalty: units in forest see less in all directions
     if (unitTerrain === 'forest') {
@@ -110,6 +112,7 @@ export function isUnitVisible(
   observingUnits: Unit[],
   terrainMap: Map<string, TerrainType>,
   elevationMap: Map<string, number>,
+  unitStats?: Record<string, { visionRange: number }>,
 ): boolean {
   const targetKey = hexToKey(target.position);
   const targetTerrain = terrainMap.get(targetKey);
@@ -121,11 +124,11 @@ export function isUnitVisible(
       return obsTerrain === 'forest';
     });
     if (forestObservers.length === 0) return false;
-    const visibleSet = calculateVisibility(forestObservers, terrainMap, elevationMap);
+    const visibleSet = calculateVisibility(forestObservers, terrainMap, elevationMap, unitStats);
     return visibleSet.has(targetKey);
   }
 
   // Non-forest target: check if any observer can see the hex
-  const visibleSet = calculateVisibility(observingUnits, terrainMap, elevationMap);
+  const visibleSet = calculateVisibility(observingUnits, terrainMap, elevationMap, unitStats);
   return visibleSet.has(targetKey);
 }

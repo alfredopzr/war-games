@@ -114,6 +114,7 @@ export function filterStateForPlayer(
     enemyUnits,
     state.map.terrain,
     state.map.elevation,
+    state.unitStats,
   );
 
   // Serialize cityOwnership (small — typically ~5 entries)
@@ -192,6 +193,7 @@ function filterEnemyUnits(
   enemyUnits: Unit[],
   terrain: Map<string, TerrainType>,
   elevation: Map<string, number>,
+  unitStats: Record<string, { visionRange: number }>,
 ): Unit[] {
   // Build phase: blind deployment — no enemy units visible
   if (phase === 'build') {
@@ -199,7 +201,7 @@ function filterEnemyUnits(
   }
 
   // Battle phase: only include enemies on visible hexes
-  const visibleKeys = calculateVisibility(ownUnits, terrain, elevation);
+  const visibleKeys = calculateVisibility(ownUnits, terrain, elevation, unitStats);
 
   return enemyUnits
     .filter((unit) => visibleKeys.has(hexToKey(unit.position)))

@@ -127,7 +127,7 @@ export function executeDirective(unit: Unit, context: DirectiveContext): UnitAct
 export function resolveAttackBehavior(unit: Unit, context: DirectiveContext): UnitAction | null {
   if (unit.attackDirective === 'ignore') return null;
 
-  const visibleHexes = calculateVisibility([unit], context.terrain, context.elevation);
+  const visibleHexes = calculateVisibility([unit], context.terrain, context.elevation, context.unitStats);
   const nearest = findClosestAttackableEnemy(unit, context, visibleHexes);
   if (!nearest) return null;
 
@@ -477,7 +477,7 @@ function retreatFrom(
   }
 
   // All retreat paths blocked — attack if possible as last resort
-  const fallbackVisible = calculateVisibility([unit], context.terrain, context.elevation);
+  const fallbackVisible = calculateVisibility([unit], context.terrain, context.elevation, context.unitStats);
   const enemy = findClosestAttackableEnemy(unit, context, fallbackVisible);
   if (enemy) return { type: 'attack', targetUnitId: enemy.id };
 

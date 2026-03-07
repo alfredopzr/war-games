@@ -250,6 +250,18 @@ export const MOVE_DIVISOR_TANK = 7;
 export const MOVE_DIVISOR_ARTILLERY = 12;
 export const MOVE_DIVISOR_RECON = 5;
 
+/**
+ * Vision range divisors per unit type.
+ * visionRange = floor(mapDiameter / divisor)
+ * Vision is slightly less than move range — you can almost see everywhere
+ * you can reach, but not quite. Creates meaningful "push into the dark."
+ * Recon is the exception: vision = move range (the scout fantasy).
+ */
+export const VISION_DIVISOR_INFANTRY = 11;
+export const VISION_DIVISOR_TANK = 11;
+export const VISION_DIVISOR_ARTILLERY = 15;
+export const VISION_DIVISOR_RECON = 5;
+
 /** Highways won't route through hexes above this elevation. */
 export const HIGHWAY_MAX_ELEVATION = 2.0;
 
