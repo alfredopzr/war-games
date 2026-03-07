@@ -624,12 +624,14 @@ function resolveMovement(
             attackerId: enemy.id,
             attackerType: enemy.type,
             attackerPosition: { ...enemySnap.position },
+            attackerAttackDirective: enemy.attackDirective,
             defenderId: unit.id,
             defenderType: unit.type,
             defenderPosition: { ...hex },
             damage: interceptDamage,
             defenderHpAfter: unit.hp,
             defenderTerrain: defTerrain,
+            approachCategory: approach,
             response: 'none',
           });
 
@@ -642,11 +644,13 @@ function resolveMovement(
               attackerId: enemy.id,
               attackerType: enemy.type,
               attackerPosition: { ...enemySnap.position },
+              attackerAttackDirective: enemy.attackDirective,
               defenderId: unit.id,
               defenderType: unit.type,
               defenderPosition: { ...hex },
               damage: interceptDamage,
               defenderTerrain: defTerrain,
+              approachCategory: approach,
             });
             removeUnit(state, unit);
             state.round.unitsKilledThisRound[enemy.owner] += 1;
@@ -1061,11 +1065,13 @@ function resolveInitiativeFire(
         attackerId: attacker.id,
         attackerType: attacker.type,
         attackerPosition: { ...attacker.position },
+        attackerAttackDirective: attacker.attackDirective,
         defenderId: defender.id,
         defenderType: defender.type,
         defenderPosition: { ...defender.position },
         damage,
         defenderTerrain,
+        approachCategory: eng.approachCategory,
       });
       removeUnit(state, defender);
       deadUnits.add(defender.id);
@@ -1079,12 +1085,14 @@ function resolveInitiativeFire(
         attackerId: attacker.id,
         attackerType: attacker.type,
         attackerPosition: { ...attacker.position },
+        attackerAttackDirective: attacker.attackDirective,
         defenderId: defender.id,
         defenderType: defender.type,
         defenderPosition: { ...defender.position },
         damage,
         defenderHpAfter: defender.hp,
         defenderTerrain,
+        approachCategory: eng.approachCategory,
       });
     }
   }
@@ -1172,11 +1180,13 @@ function resolveCounterFire(
         attackerId: attacker.id,
         attackerType: attacker.type,
         attackerPosition: { ...attacker.position },
+        attackerAttackDirective: attacker.attackDirective,
         defenderId: defender.id,
         defenderType: defender.type,
         defenderPosition: { ...defender.position },
         damage,
         defenderTerrain,
+        approachCategory: eng.approachCategory,
       });
       removeUnit(state, defender);
       state.round.unitsKilledThisRound[attacker.owner] += 1;

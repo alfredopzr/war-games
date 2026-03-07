@@ -306,12 +306,14 @@ export interface BattleEventDamage extends BattleEventBase {
   readonly attackerId: string;
   readonly attackerType: UnitType;
   readonly attackerPosition: CubeCoord;
+  readonly attackerAttackDirective: AttackDirective;
   readonly defenderId: string;
   readonly defenderType: UnitType;
   readonly defenderPosition: CubeCoord;
   readonly damage: number;
   readonly defenderHpAfter: number;
   readonly defenderTerrain: TerrainType;
+  readonly approachCategory: ApproachCategory;
   readonly response?: 'none';
 }
 
@@ -320,11 +322,13 @@ export interface BattleEventKill extends BattleEventBase {
   readonly attackerId: string;
   readonly attackerType: UnitType;
   readonly attackerPosition: CubeCoord;
+  readonly attackerAttackDirective: AttackDirective;
   readonly defenderId: string;
   readonly defenderType: UnitType;
   readonly defenderPosition: CubeCoord;
   readonly damage: number;
   readonly defenderTerrain: TerrainType;
+  readonly approachCategory: ApproachCategory;
 }
 
 export interface BattleEventCapture extends BattleEventBase {

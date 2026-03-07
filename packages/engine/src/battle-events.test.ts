@@ -17,9 +17,11 @@ describe('formatBattleEvent', () => {
       type: 'damage', actingPlayer: 'player1', phase: 'combat', pipelinePhase: 0,
       attackerId: 'u1', attackerType: 'tank',
       attackerPosition: { q: 0, r: 0, s: 0 },
+      attackerAttackDirective: 'shoot-on-sight',
       defenderId: 'u2', defenderType: 'infantry',
       defenderPosition: { q: 1, r: 0, s: -1 },
       damage: 2, defenderHpAfter: 1, defenderTerrain: 'plains',
+      approachCategory: 'front',
     };
     expect(formatBattleEvent(event)).toBe('P1 Tank dealt 2 damage to Infantry (1 HP left)');
   });
@@ -29,9 +31,11 @@ describe('formatBattleEvent', () => {
       type: 'kill', actingPlayer: 'player2', phase: 'combat', pipelinePhase: 0,
       attackerId: 'u3', attackerType: 'artillery',
       attackerPosition: { q: 0, r: 0, s: 0 },
+      attackerAttackDirective: 'shoot-on-sight',
       defenderId: 'u4', defenderType: 'recon',
       defenderPosition: { q: 2, r: 0, s: -2 },
       damage: 5, defenderTerrain: 'forest',
+      approachCategory: 'flank',
     };
     expect(formatBattleEvent(event)).toBe('P2 Artillery destroyed Recon');
   });
