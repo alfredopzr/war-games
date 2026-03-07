@@ -4,6 +4,10 @@ import {
   MOVE_DIVISOR_ARTILLERY, MOVE_DIVISOR_RECON,
   VISION_DIVISOR_INFANTRY, VISION_DIVISOR_TANK,
   VISION_DIVISOR_ARTILLERY, VISION_DIVISOR_RECON,
+  ATTACK_RANGE_DIVISOR_INFANTRY, ATTACK_RANGE_DIVISOR_TANK,
+  ATTACK_RANGE_DIVISOR_ARTILLERY, ATTACK_RANGE_DIVISOR_RECON,
+  MIN_ATTACK_RANGE_DIVISOR_INFANTRY, MIN_ATTACK_RANGE_DIVISOR_TANK,
+  MIN_ATTACK_RANGE_DIVISOR_ARTILLERY, MIN_ATTACK_RANGE_DIVISOR_RECON,
 } from './map-gen-params';
 import balanceData from './balance.json';
 
@@ -34,6 +38,20 @@ const VISION_DIVISORS: Record<UnitType, number> = {
   recon: VISION_DIVISOR_RECON,
 };
 
+const ATTACK_RANGE_DIVISORS: Record<UnitType, number> = {
+  infantry: ATTACK_RANGE_DIVISOR_INFANTRY,
+  tank: ATTACK_RANGE_DIVISOR_TANK,
+  artillery: ATTACK_RANGE_DIVISOR_ARTILLERY,
+  recon: ATTACK_RANGE_DIVISOR_RECON,
+};
+
+const MIN_ATTACK_RANGE_DIVISORS: Record<UnitType, number> = {
+  infantry: MIN_ATTACK_RANGE_DIVISOR_INFANTRY,
+  tank: MIN_ATTACK_RANGE_DIVISOR_TANK,
+  artillery: MIN_ATTACK_RANGE_DIVISOR_ARTILLERY,
+  recon: MIN_ATTACK_RANGE_DIVISOR_RECON,
+};
+
 /**
  * Return a copy of UNIT_STATS with moveRange and visionRange scaled to the map diameter.
  * mapDiameter = 2 * mapRadius.
@@ -46,6 +64,8 @@ export function scaledUnitStats(mapDiameter: number): Record<UnitType, UnitStats
       ...base,
       moveRange: Math.max(1, Math.floor(mapDiameter / MOVE_DIVISORS[key])),
       visionRange: Math.max(1, Math.floor(mapDiameter / VISION_DIVISORS[key])),
+      attackRange: Math.max(1, Math.floor(mapDiameter / ATTACK_RANGE_DIVISORS[key])),
+      minAttackRange: Math.max(1, Math.floor(mapDiameter / MIN_ATTACK_RANGE_DIVISORS[key])),
     };
   }
   return result;

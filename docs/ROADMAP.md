@@ -196,10 +196,11 @@ Layer 2. Parametric map, win condition, economy scaling.
 - [E] **Kill bonus scaling** (2.3): `KILL_BONUS = floor(unit.cost × 0.1)` replaces flat 25
 - [E] ~~**40×28 map** (2.4)~~ DONE early (Mar 5) — hex-of-hexes generates ~2800 hex map. ~~Movement ranges auto-derive from A5~~ DONE (Mar 6) — `scaledUnitStats(mapDiameter)` in `units.ts`
 - [E] **LoS on attacks** (2.5): Add `hexLineDraw` LoS check to `canAttack()`. Artillery can no longer fire through forests.
+- [E] **Wager system — design + engine** (2.7): In-match wager mechanic from `GOLD_ECONOMY_DESIGN.md`. **MVP scope: competitive ante + raise/call/fold between rounds only.** Campaign, consumables, chests, medals, rank system, daily rewards are all post-MVP. Engine needs: ante escrow in `RoundState`, raise/call/fold commands between scoring and build phase, pot resolution on round end, fold tax (gold exit). Server needs: wager message handling, escrow validation. Client needs: ante UI in build phase, raise/call/fold prompt between rounds, pot display.
 - [C] **Render at scale**: terrain mesh batching if needed, camera bounds, minimap
 - [E] **Match length measurement**: instrument AI vs AI for average match duration at 40×28
 
-**Exit criteria:** Game plays on 40×28. All constants scale correctly. KotH removed, multi-city capture working. Match length measured — if >20 min average, adjust movement ranges before proceeding.
+**Exit criteria:** Game plays on 40×28. All constants scale correctly. KotH removed, multi-city capture working. Wager ante/raise/fold works in competitive PvP matches. Match length measured — if >20 min average, adjust movement ranges before proceeding.
 
 ---
 
@@ -297,6 +298,7 @@ DATE       | SPRINT | CHANGE                                          | REASON
 2026-03-07 | S5     | GAP-V7 fixed: reveal effect. | Added unitPosition to BattleEventReveal. New spawnRevealRing() (expanding white circle) + spawnRevealedText() ("REVEALED" in white). Pipeline emits position.
 2026-03-07 | S5     | GAP-R4 assessed: not a real engine gap. | Phase 4 engagement detection is correctly internal — no BattleEvent needed. Visual beat (white flash + "ENGAGED" label) is derivable from Phase 5 events client-side. TODO added for Diego.
 2026-03-07 | S5     | GAP-F3/R12 assessed: real but blocked on combat VFX. | "From fog" tracer rendering needs LOS set in reveal-sequencer + fog-edge intersection. Blocked on per-unit-type VFX rework. TODO added.
+2026-03-07 | S6     | Wager system (2.7) added to Sprint 6 scope.        | Full spec exists in GOLD_ECONOMY_DESIGN.md (pulled from simplify-hex-map branch). MVP scope: competitive ante + raise/call/fold between rounds only. Campaign, consumables, chests, medals, rank, dailies are all post-MVP. Depends on multi-city win condition (2.2) landing first.
 ```
 
 ---
