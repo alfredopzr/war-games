@@ -233,5 +233,6 @@ export function deserializeGameState(data: SerializableGameState): GameState {
     winner: data.winner,
     cityOwnership,
     pendingEvents: [],
+    buildings: [],
   };
 }

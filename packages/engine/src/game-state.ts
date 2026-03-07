@@ -73,6 +73,7 @@ export function createGame(seed?: number): GameState {
     winner: null,
     cityOwnership,
     pendingEvents: [],
+    buildings: [],
   };
 }
 
