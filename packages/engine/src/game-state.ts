@@ -26,6 +26,7 @@ import { hexToKey, cubeDistance, hexNeighbors } from './hex';
 import { canAttack, calculateDamage } from './combat';
 import { findPath } from './pathfinding';
 import { executeDirective } from './directives';
+import { validateBuild, createBuilding, BUILDING_STATS } from './buildings';
 
 // -----------------------------------------------------------------------------
 // createGame
@@ -320,6 +321,7 @@ function applyCommand(
       }
 
       unit.position = command.targetHex;
+      checkMines(state, unit, currentPlayer);
       unit.hasActed = true;
       break;
     }
@@ -357,6 +359,51 @@ function applyCommand(
         unit.directiveTarget = command.target;
       }
       unit.hasActed = true;
+      break;
+    }
+
+    case 'direct-build': {
+      const unit = findUnitById(friendlyUnits, command.unitId);
+      if (!unit) return;
+
+      const validation = validateBuild(state, command.unitId, currentPlayer, command.buildingType, command.targetHex);
+      if (!validation.valid) {
+        throw new Error(validation.reason ?? 'Invalid build');
+      }
+
+      const cost = BUILDING_STATS[command.buildingType].cost;
+      state.players[currentPlayer].resources -= cost;
+      state.buildings.push(createBuilding(command.buildingType, currentPlayer, command.targetHex));
+      unit.hasActed = true;
+      break;
+    }
+
+    case 'attack-building': {
+      const attacker = findUnitById(friendlyUnits, command.unitId);
+      if (!attacker) return;
+
+      const buildingIdx = state.buildings.findIndex((b) => b.id === command.targetBuildingId);
+      if (buildingIdx === -1) return;
+
+      const building = state.buildings[buildingIdx]!;
+      if (building.owner === currentPlayer) {
+        throw new Error('Cannot attack own building');
+      }
+
+      const dist = cubeDistance(attacker.position, building.position);
+      const stats = UNIT_STATS[attacker.type];
+      if (dist < stats.minAttackRange || dist > stats.attackRange) {
+        throw new Error('Building out of attack range');
+      }
+
+      state.buildings.splice(buildingIdx, 1);
+      attacker.hasActed = true;
+
+      state.pendingEvents.push({
+        type: 'building-destroyed',
+        actingPlayer: currentPlayer,
+        message: `${currentPlayer === 'player1' ? 'P1' : 'P2'} destroyed a ${building.type}`,
+      });
       break;
     }
 
@@ -401,6 +448,7 @@ function applyCommand(
         if (path && path.length > 1) {
           const stepIndex = Math.min(stats.moveRange, path.length - 1);
           unit.position = path[stepIndex]!;
+          checkMines(state, unit, currentPlayer);
         }
       }
 
@@ -435,6 +483,7 @@ function applyDirectiveAction(
       if (isOccupied) break;
 
       unit.position = action.targetHex;
+      checkMines(state, unit, currentPlayer);
       break;
     }
 
@@ -746,6 +795,33 @@ function updateCityOwnership(state: GameState): void {
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
+
+function checkMines(state: GameState, unit: Unit, owner: PlayerId): void {
+  const posKey = hexToKey(unit.position);
+  const mineIdx = state.buildings.findIndex(
+    (b) => b.type === 'mines' && b.owner !== owner && hexToKey(b.position) === posKey,
+  );
+  if (mineIdx === -1) return;
+
+  const mine = state.buildings[mineIdx]!;
+  const damage = BUILDING_STATS.mines.damage ?? 2;
+  unit.hp -= damage;
+
+  state.buildings.splice(mineIdx, 1);
+
+  const label = owner === 'player1' ? 'P1' : 'P2';
+  state.pendingEvents.push({
+    type: 'mine-triggered',
+    actingPlayer: mine.owner,
+    message: `${label} unit triggered a mine for ${damage} damage`,
+  });
+
+  if (unit.hp <= 0) {
+    removeUnit(state.players[owner].units, unit.id);
+    const enemy: PlayerId = owner === 'player1' ? 'player2' : 'player1';
+    state.round.unitsKilledThisRound[enemy] += 1;
+  }
+}
 
 function findUnitById(units: Unit[], id: string): Unit | undefined {
   return units.find((u) => u.id === id);

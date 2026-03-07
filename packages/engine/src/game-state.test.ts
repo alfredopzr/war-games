@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { GameState, PlayerId, CubeCoord, Command } from './types';
 import { resetUnitIdCounter, UNIT_STATS } from './units';
-import { hexToKey, createHex } from './hex';
+import { hexToKey, createHex, hexNeighbors } from './hex';
+import { createBuilding, resetBuildingIdCounter, BUILDING_STATS } from './buildings';
 import {
   createGame,
   placeUnit,
@@ -1051,6 +1052,158 @@ describe('city ownership', () => {
     }
   });
 
+});
+
+// ---------------------------------------------------------------------------
+// direct-build command
+// ---------------------------------------------------------------------------
+
+describe('direct-build command', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('engineer builds a recon-tower on adjacent hex', () => {
+    const state = createGame(42);
+    // Find a deployment hex that has a valid adjacent non-DZ non-mountain hex
+    const dzKeys = new Set([
+      ...state.map.player1Deployment.map(hexToKey),
+      ...state.map.player2Deployment.map(hexToKey),
+    ]);
+
+    let deployHex: CubeCoord | undefined;
+    let buildTarget: CubeCoord | undefined;
+
+    for (const dh of state.map.player1Deployment) {
+      const adj = hexNeighbors(dh).find((h) => {
+        const key = hexToKey(h);
+        return state.map.terrain.has(key)
+          && state.map.terrain.get(key) !== 'mountain'
+          && !dzKeys.has(key);
+      });
+      if (adj) {
+        deployHex = dh;
+        buildTarget = adj;
+        break;
+      }
+    }
+
+    expect(deployHex).toBeDefined();
+    expect(buildTarget).toBeDefined();
+
+    placeUnit(state, 'player1', 'engineer', deployHex!);
+    startBattlePhase(state);
+
+    const engineer = state.players.player1.units[0]!;
+    const resourcesBefore = state.players.player1.resources;
+
+    executeTurn(state, [
+      { type: 'direct-build', unitId: engineer.id, buildingType: 'recon-tower', targetHex: buildTarget! },
+    ]);
+
+    expect(state.buildings.length).toBe(1);
+    expect(state.buildings[0]!.type).toBe('recon-tower');
+    expect(state.buildings[0]!.owner).toBe('player1');
+    expect(hexToKey(state.buildings[0]!.position)).toBe(hexToKey(buildTarget!));
+    // Resources should have decreased by building cost (75)
+    expect(state.players.player1.resources).toBe(resourcesBefore - 75);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// attack-building command
+// ---------------------------------------------------------------------------
+
+describe('attack-building command', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('unit destroys an enemy building', () => {
+    const state = createGame(42);
+    const p1Deploy = state.map.player1Deployment[0]!;
+    placeUnit(state, 'player1', 'infantry', p1Deploy);
+    startBattlePhase(state);
+
+    const infantry = state.players.player1.units[0]!;
+    // Place an enemy building adjacent to infantry
+    const adjHex = hexNeighbors(infantry.position).find(
+      (h) => state.map.terrain.has(hexToKey(h)),
+    )!;
+    state.buildings.push(createBuilding('mortar', 'player2', adjHex));
+    expect(state.buildings.length).toBe(1);
+
+    executeTurn(state, [
+      { type: 'attack-building', unitId: infantry.id, targetBuildingId: state.buildings[0]!.id },
+    ]);
+
+    expect(state.buildings.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mine triggering
+// ---------------------------------------------------------------------------
+
+describe('mine triggering', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('mine deals damage when unit moves onto hex via direct-move', () => {
+    const state = createGame(42);
+    const p1Deploy = state.map.player1Deployment[0]!;
+    placeUnit(state, 'player1', 'infantry', p1Deploy);
+    startBattlePhase(state);
+
+    const infantry = state.players.player1.units[0]!;
+    const mineHex = hexNeighbors(infantry.position).find((h) => {
+      const key = hexToKey(h);
+      return state.map.terrain.has(key) && state.map.terrain.get(key) !== 'mountain';
+    })!;
+
+    state.buildings.push(createBuilding('mines', 'player2', mineHex));
+
+    const hpBefore = infantry.hp; // should be 3
+    executeTurn(state, [
+      { type: 'direct-move', unitId: infantry.id, targetHex: mineHex },
+    ]);
+
+    // Mine destroyed
+    expect(state.buildings.length).toBe(0);
+    // Infantry took 2 damage
+    const inf = state.players.player1.units.find((u) => u.id === infantry.id);
+    expect(inf).toBeDefined();
+    expect(inf!.hp).toBe(hpBefore - 2);
+  });
+
+  it('mine kills unit if damage exceeds HP', () => {
+    const state = createGame(42);
+    const p1Deploy = state.map.player1Deployment[0]!;
+    placeUnit(state, 'player1', 'recon', p1Deploy); // recon has 2 HP
+    startBattlePhase(state);
+
+    const recon = state.players.player1.units[0]!;
+    expect(recon.hp).toBe(2);
+
+    const mineHex = hexNeighbors(recon.position).find((h) => {
+      const key = hexToKey(h);
+      return state.map.terrain.has(key) && state.map.terrain.get(key) !== 'mountain';
+    })!;
+
+    state.buildings.push(createBuilding('mines', 'player2', mineHex));
+
+    executeTurn(state, [
+      { type: 'direct-move', unitId: recon.id, targetHex: mineHex },
+    ]);
+
+    expect(state.buildings.length).toBe(0);
+    // Recon should be dead (2 HP - 2 damage = 0)
+    expect(state.players.player1.units.length).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
