@@ -28,7 +28,7 @@ interface BattleEventBase {
 | Type | Phase | Fields | Source |
 |---|---|---|---|
 | `move` | movement | `unitId, unitType, from, to` | `applyDirectiveAction` case 'move' |
-| `damage` | combat | `attackerId, attackerType, attackerPosition, defenderId, defenderType, defenderPosition, damage, defenderHpAfter, defenderTerrain` | `applyDirectiveAction` case 'attack' (defender survives) |
+| `damage` | combat | `attackerId, attackerType, attackerPosition, defenderId, defenderType, defenderPosition, damage, defenderHpAfter, defenderTerrain, response?` | `applyDirectiveAction` case 'attack' (defender survives). `response: 'none'` on Phase 3 passive intercept hits (ignore/retreat-on-contact units that take damage without firing back). |
 | `kill` | combat | `attackerId, attackerType, attackerPosition, defenderId, defenderType, defenderPosition, damage, defenderTerrain` | `applyDirectiveAction` case 'attack' (defender dies) |
 | `capture` | capture | `unitId, unitType, cityKey, previousOwner: null` | `updateCityOwnership` (neutral city) |
 | `recapture` | capture | `unitId, unitType, cityKey, previousOwner: PlayerId` | `updateCityOwnership` (enemy city) |
@@ -44,7 +44,7 @@ interface BattleEventBase {
 
 | Type | Phase | Fields |
 |---|---|---|
-| `intercept` | combat | `attackerId, attackerType, defenderId, defenderType, hex, damage` |
+| `intercept` | combat | `attackerId, attackerType, defenderId, defenderType, hex, damage, defenderResponse: 'engage' \| 'skirmish' \| 'flee' \| 'none'` |
 | `counter` | combat | `attackerId, attackerType, defenderId, defenderType, damage, defenderHpAfter` |
 | `melee` | combat | `unitAId, unitAType, unitBId, unitBType, hex` |
 | `reveal` | combat | `unitId, unitType, hexes: CubeCoord[]` |

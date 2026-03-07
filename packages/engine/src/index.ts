@@ -86,6 +86,9 @@ export {
   checkRoundEnd, scoreRound, getWinner,
 } from './game-state';
 
+// Resolution pipeline
+export { resolveTurn, computeApproachAngle, computeFacing } from './resolution-pipeline';
+
 // AI
 export { aiBuildPhase, aiBattlePhase } from './ai';
 export type { AiBuildAction } from './ai';

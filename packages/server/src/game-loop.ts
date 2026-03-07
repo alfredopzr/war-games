@@ -16,7 +16,6 @@ import type {
   SpecialtyModifier,
   DirectiveTarget,
   Command,
-  BattleEvent,
 } from '@hexwar/engine';
 
 import {
@@ -24,13 +23,12 @@ import {
   placeUnit,
   startBattlePhase,
   filterValidCommands,
-  executeTurn,
   checkRoundEnd,
   scoreRound,
-  createCommandPool,
   UNIT_STATS,
   mulberry32,
   formatBattleEvent,
+  resolveTurn,
 } from '@hexwar/engine';
 
 import { filterStateForPlayer } from './state-filter';
@@ -327,67 +325,20 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
 
   const originalTurnNumber = state.round.turnNumber;
 
-  // Determine resolution order (randomized, deterministic from seed)
-  const orderSeed = (room.gameSeed! * 31 + originalTurnNumber) | 0;
-  const orderRng = mulberry32(orderSeed);
-  const order: [PlayerId, PlayerId] = orderRng() < 0.5
-    ? ['player1', 'player2']
-    : ['player2', 'player1'];
+  // Deterministic RNG for this turn
+  const turnSeed = (room.gameSeed! * 37 + originalTurnNumber) | 0;
+  const rng = mulberry32(turnSeed);
+  const combatRng = (): number => 0.85 + rng() * 0.3;
 
-  const turnsHeldBefore = state.round.objective.turnsHeld;
-  const occupierBefore = state.round.objective.occupiedBy;
+  const p1Cmds = room.bufferedCommands.get('player1') ?? [];
+  const p2Cmds = room.bufferedCommands.get('player2') ?? [];
 
-  // --- Resolve first player ---
-  state.round.currentPlayer = order[0];
-  const turnSeed1 = (room.gameSeed! * 37 + originalTurnNumber) | 0;
-  const rng1 = mulberry32(turnSeed1);
-  const combatRng1 = (): number => 0.85 + rng1() * 0.3;
+  // Single pipeline call replaces two sequential executeTurn() calls
+  resolveTurn(state, p1Cmds, p2Cmds, combatRng);
 
-  executeTurn(state, room.bufferedCommands.get(order[0])!, combatRng1);
-
-  const events1 = [...state.pendingEvents];
+  // Drain events (resolveTurn accumulates in state.pendingEvents)
+  const allEvents = [...state.pendingEvents];
   state.pendingEvents = [];
-
-  const occupierAfterFirst = state.round.objective.occupiedBy;
-
-  // Check early round end (e.g. elimination after first resolution)
-  const earlyRoundEnd = checkRoundEnd(state);
-  let events2: BattleEvent[] = [];
-  let turnSeed2 = 0;
-
-  if (!earlyRoundEnd.roundOver) {
-    // --- Resolve second player ---
-    state.round.currentPlayer = order[1];
-    state.round.commandPool = createCommandPool();
-    for (const unit of state.players[order[1]].units) {
-      unit.hasActed = false;
-    }
-
-    turnSeed2 = (room.gameSeed! * 41 + originalTurnNumber) | 0;
-    const rng2 = mulberry32(turnSeed2);
-    const combatRng2 = (): number => 0.85 + rng2() * 0.3;
-
-    executeTurn(state, room.bufferedCommands.get(order[1])!, combatRng2);
-
-    events2 = [...state.pendingEvents];
-    state.pendingEvents = [];
-
-    // Fix turnsHeld double increment: if same occupier held across both calls
-    // and turnsHeld went up by more than 1, clamp to +1
-    if (
-      state.round.objective.occupiedBy === occupierAfterFirst &&
-      occupierAfterFirst === occupierBefore &&
-      state.round.objective.turnsHeld > turnsHeldBefore + 1
-    ) {
-      state.round.objective.turnsHeld = turnsHeldBefore + 1;
-    }
-  }
-
-  // Increment turn counters (once per simultaneous resolution)
-  state.round.turnsPlayed += 1;
-  state.round.turnNumber += 1;
-
-  const allEvents = [...events1, ...events2];
 
   for (const event of allEvents) {
     log('info', 'game', formatBattleEvent(event));
@@ -396,18 +347,18 @@ function resolveSimultaneousTurn(room: Room, io: Server): void {
   // Record turn log
   room.turnLog.push({
     turnNumber: originalTurnNumber,
-    resolutionOrder: order,
+    resolutionOrder: ['player1', 'player2'],
     players: [
-      { player: order[0], commandsSubmitted: room.bufferedCommands.get(order[0])!.length, rngSeed: turnSeed1 },
-      { player: order[1], commandsSubmitted: room.bufferedCommands.get(order[1])!.length, rngSeed: turnSeed2 },
+      { player: 'player1', commandsSubmitted: p1Cmds.length, rngSeed: turnSeed },
+      { player: 'player2', commandsSubmitted: p2Cmds.length, rngSeed: turnSeed },
     ],
     events: allEvents,
   });
 
   room.bufferedCommands.clear();
 
-  // Check final round end (after both resolutions)
-  const roundEnd = earlyRoundEnd.roundOver ? earlyRoundEnd : checkRoundEnd(state);
+  // Check round end
+  const roundEnd = checkRoundEnd(state);
 
   if (roundEnd.roundOver) {
     allEvents.push({

@@ -100,6 +100,8 @@ export interface Unit {
   specialtyModifier: SpecialtyModifier | null;
   directiveTarget: DirectiveTarget;
   hasActed: boolean;
+  huntTargetId?: string;
+  huntLockTurns?: number;
 }
 
 // -----------------------------------------------------------------------------
@@ -248,6 +250,9 @@ export interface TurnIntent {
   readonly targetHex: CubeCoord;
   readonly path: CubeCoord[];
   readonly facing: CubeCoord;
+  readonly huntTargetId?: string;
+  readonly huntLockTurns?: number;
+  readonly priorityType?: UnitType;
 }
 
 export interface Engagement {
@@ -303,6 +308,7 @@ export interface BattleEventDamage extends BattleEventBase {
   readonly damage: number;
   readonly defenderHpAfter: number;
   readonly defenderTerrain: TerrainType;
+  readonly response?: 'none';
 }
 
 export interface BattleEventKill extends BattleEventBase {
@@ -397,6 +403,7 @@ export interface BattleEventIntercept extends BattleEventBase {
   readonly defenderType: UnitType;
   readonly hex: CubeCoord;
   readonly damage: number;
+  readonly defenderResponse: 'engage' | 'skirmish' | 'flee' | 'none';
 }
 
 export interface BattleEventCounter extends BattleEventBase {

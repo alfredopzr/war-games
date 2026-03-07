@@ -115,9 +115,30 @@ Attack directives accept an optional `priorityType` parameter:
 | `hunt` | `priorityType: UnitType` | Nearest visible enemy |
 | all others | — | — |
 
-`hunt(priorityType)` seeks the specified unit type first among visible enemies. Falls back to nearest visible enemy if none of that type are in vision. **Lock-on behavior:** once a hunt target is acquired, the unit pursues it even if it retreats out of initial vision range, until the target dies, leaves the map, **or 4 turns elapse since lock-on** — whichever comes first. After lock-on expires, the unit re-evaluates visible enemies and may acquire a new target. The 4-turn cap prevents hunt from being dominant on large maps where a fast unit could chase indefinitely.
+`hunt(priorityType)` seeks the specified unit type first among visible enemies. Falls back to nearest visible enemy if none of that type are in vision.
 
-**UI implication:** Directive picker renders a secondary dropdown when `hunt` is selected. All directives that take `targetHex` use the existing hex-click to confirm target. No other directives require UI changes.
+**Hunt lock-on behavior:**
+
+Once a hunt unit acquires a target, it stores `huntTargetId` on its intent. Lock-on persists across ticks:
+
+1. **Acquisition:** Phase 2 intent collection checks visible enemies. If `priorityType` is set, prefer that type. Otherwise, nearest visible enemy. Store the target's unit ID as `huntTargetId`.
+2. **Pursuit:** If the target moves out of vision, the unit continues pathing toward the target's **last known position** for up to 4 ticks. Each tick the target is not visible, increment `huntLockTurns` on the unit.
+3. **Reacquisition:** If the target becomes visible again before the 4-tick cap, reset `huntLockTurns` to 0. Lock-on continues.
+4. **Break:** Lock-on breaks when any of: target dies, target leaves the map, `huntLockTurns >= 4`. On break, reset `huntTargetId` to null and `huntLockTurns` to 0. The unit re-evaluates visible enemies next tick and may acquire a new target.
+5. **Arrival at last known position:** If the unit reaches the target's last known hex and cannot see the target, lock-on breaks immediately (don't waste remaining ticks patrolling an empty hex).
+
+The 4-turn cap prevents hunt from being dominant on large maps where a fast unit could chase indefinitely.
+
+**Unit type change:** `Unit` gains two optional fields:
+
+```typescript
+huntTargetId?: string;     // ID of the locked-on target (null = no lock)
+huntLockTurns?: number;    // ticks since target was last visible (0 = visible this tick)
+```
+
+Default: `huntTargetId = undefined`, `huntLockTurns = 0`. These are only meaningful when `attackDirective === 'hunt'`. Serialized over the network. Not revealed to the opponent (stripped by state-filter like other directives).
+
+**UI implication:** Directive picker renders a secondary unit-type dropdown when `hunt` is selected. All directives that take `targetHex` use the existing hex-click to confirm target. No other directives require UI changes.
 
 **Scout movement pattern in Phase 3:** The scout advances toward `targetHex` until within orbit radius (2-3 hexes), then circles clockwise at that radius. If the orbit path is blocked (terrain, occupied hex), the scout reverses direction. If `targetHex` is not set, it defaults to the unit's current position — the scout orbits in place. The client visualization (dotted circle at radius 3) matches this: the circle IS the orbit path.
 
@@ -223,11 +244,24 @@ interface TurnIntent {
   attackDirective: AttackDirective;
   specialtyModifier: SpecialtyModifier | null;
   cpOverride: Command | null;
-  targetHex: CubeCoord;          // resolved from directive target
+  targetHex: CubeCoord;          // resolved from directive target (see below)
   path: CubeCoord[];             // A* path toward targetHex
   facing: CubeCoord;             // unit vector of movement direction
+  huntTargetId?: string;         // resolved lock-on target (hunt only)
+  huntLockTurns?: number;        // ticks since target was last visible (hunt only)
+  priorityType?: UnitType;       // hunt parameter: preferred target type
 }
 ```
+
+**`targetHex` resolution per directive:**
+
+| Directive | `targetHex` source | Notes |
+|-----------|-------------------|-------|
+| `advance` | `directiveTarget` resolved to hex | Required — no default |
+| `flank-left` | `directiveTarget` resolved to hex | Required — no default |
+| `flank-right` | `directiveTarget` resolved to hex | Required — no default |
+| `scout` | `directiveTarget` if set, else unit's current position | Defaults to orbit-in-place |
+| `hold` | `directiveTarget` if set, else nearest enemy position | Used for facing only (no path) |
 
 CP `redirect` commands update the unit's directives before intent generation. The unit then acts under its new order for the rest of this tick.
 
@@ -238,8 +272,18 @@ All intents generated simultaneously from snapshot state. No unit sees another u
 **Facing computation:**
 
 - Moving units: vector from `position` toward first path step (or toward target if path is empty)
-- `hold` units: vector from `position` toward directive target hex
+- `hold` units: vector from `position` toward `targetHex`
 - Fallback: vector from `position` toward nearest enemy
+
+**Hunt intent resolution:**
+
+If `attackDirective === 'hunt'`, Phase 2 performs additional resolution after path computation:
+
+1. Check if the unit has an existing `huntTargetId` from the previous tick (read from `Unit.huntTargetId`).
+2. If yes and target is visible: path toward target, reset `huntLockTurns` to 0.
+3. If yes and target is NOT visible: path toward target's last known position, increment `huntLockTurns`. If `huntLockTurns >= 4` or unit has arrived at last known position, break lock-on.
+4. If no existing lock-on: scan visible enemies. If `priorityType` is set, prefer that type. Otherwise, nearest. Store as `huntTargetId`.
+5. If no visible enemies and no lock-on: fall back to `targetHex` as movement destination (advance toward it like a normal move).
 
 ---
 
@@ -277,12 +321,16 @@ for each enemy unit with attackRange covering this hex:
 
       if movingUnit.attackDirective is retreat-on-contact:
         movement reverses — unit paths toward deployment zone
+        emit damageEvent(enemy → movingUnit, response: 'none')
         // takes the intercept hit, does not fire back
 
       if movingUnit.attackDirective is ignore:
         movement continues
+        emit damageEvent(enemy → movingUnit, response: 'none')
         // takes the intercept hit, does not engage
 ```
+
+**Passive intercept damage:** When a unit with `retreat-on-contact` or `ignore` ROE takes an intercept hit, a `damage` event is emitted with `response: 'none'`. This is critical for replay — without it, the unit loses HP with no visible cause. The `response` field distinguishes passive hits (unit chose not to fight back) from combat-initiated damage (where both sides may exchange fire). See EVENT_LOG_SPEC.md for the schema addition.
 
 **Intercept cap:** Each unit may be the *source* of maximum 1 intercept event per tick. First eligible enemy fires. Subsequent threats along the path from the same enemy do not fire again.
 
@@ -496,7 +544,7 @@ See `EVENT_LOG_SPEC.md` for the full schema contract. Key event types per phase:
 
 | Phase | Events |
 |-------|--------|
-| Phase 3 (movement) | `move`, `intercept` |
+| Phase 3 (movement) | `move`, `intercept`, `damage` (with `response: 'none'` for passive hits on ignore/retreat units) |
 | Phase 5 (initiative) | `damage`, `kill` |
 | Phase 6 (counter) | `counter`, `damage`, `kill` |
 | Phase 7 (melee) | `melee` |

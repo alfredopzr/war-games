@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import {
-  executeTurn, filterValidCommands, checkRoundEnd, scoreRound,
+  filterValidCommands, checkRoundEnd, scoreRound,
   CP_PER_ROUND, UNIT_STATS,
   calculateIncome, applyCarryover, applyMaintenance,
   aiBattlePhase, createCommandPool, calculateVisibility,
+  resolveTurn,
 } from '@hexwar/engine';
 import type { PlayerId, ObjectiveState, GameState, CubeCoord, Unit } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
@@ -126,71 +127,16 @@ function resolveSimultaneousLocal(
     }
   }
   const citiesBefore = new Map(gameState.cityOwnership);
-  const turnsHeldBefore = gameState.round.objective.turnsHeld;
-  const occupierBefore = gameState.round.objective.occupiedBy;
 
-  // Randomize resolution order
-  const order: [PlayerId, PlayerId] = Math.random() < 0.5
-    ? ['player1', 'player2']
-    : ['player2', 'player1'];
+  // Single pipeline call — both players resolve simultaneously
+  resolveTurn(gameState, p1Commands, aiCommands, () => 0.85 + Math.random() * 0.3);
 
-  const commandsMap: Record<PlayerId, import('@hexwar/engine').Command[]> = {
-    player1: p1Commands,
-    player2: aiCommands,
-  };
-
-  // --- Resolve first player ---
-  gameState.round.currentPlayer = order[0];
-  gameState.round.commandPool = createCommandPool();
-  for (const unit of gameState.players[order[0]].units) {
-    unit.hasActed = false;
-  }
-
-  executeTurn(gameState, commandsMap[order[0]]);
-
+  // Drain events
   const logEntries: BattleLogEntry[] = [];
-  if (gameState.pendingEvents.length > 0) {
-    for (const evt of gameState.pendingEvents) {
-      logEntries.push({ turn: turnNum, event: evt });
-    }
-    gameState.pendingEvents = [];
+  for (const evt of gameState.pendingEvents) {
+    logEntries.push({ turn: turnNum, event: evt });
   }
-
-  const occupierAfterFirst = gameState.round.objective.occupiedBy;
-
-  // Check early round end (elimination after first resolution)
-  const earlyRoundEnd = checkRoundEnd(gameState);
-
-  if (!earlyRoundEnd.roundOver) {
-    // --- Resolve second player ---
-    gameState.round.currentPlayer = order[1];
-    gameState.round.commandPool = createCommandPool();
-    for (const unit of gameState.players[order[1]].units) {
-      unit.hasActed = false;
-    }
-
-    executeTurn(gameState, commandsMap[order[1]]);
-
-    if (gameState.pendingEvents.length > 0) {
-      for (const evt of gameState.pendingEvents) {
-        logEntries.push({ turn: turnNum, event: evt });
-      }
-      gameState.pendingEvents = [];
-    }
-
-    // Fix turnsHeld double-increment
-    if (
-      gameState.round.objective.occupiedBy === occupierAfterFirst &&
-      occupierAfterFirst === occupierBefore &&
-      gameState.round.objective.turnsHeld > turnsHeldBefore + 1
-    ) {
-      gameState.round.objective.turnsHeld = turnsHeldBefore + 1;
-    }
-  }
-
-  // Increment turn counters (once per simultaneous resolution)
-  gameState.round.turnsPlayed += 1;
-  gameState.round.turnNumber += 1;
+  gameState.pendingEvents = [];
 
   // Snapshot after resolution
   const unitsAfter = new Map<string, { position: { q: number; r: number; s: number }; hp: number; owner: PlayerId }>();
@@ -219,7 +165,7 @@ function resolveSimultaneousLocal(
   }
 
   // Check round end
-  const roundEnd = earlyRoundEnd.roundOver ? earlyRoundEnd : checkRoundEnd(gameState);
+  const roundEnd = checkRoundEnd(gameState);
 
   // Deferred state application — called after replay finishes (or immediately if no events)
   const applyFinalState = (): void => {

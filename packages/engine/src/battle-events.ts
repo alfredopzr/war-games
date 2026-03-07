@@ -60,8 +60,13 @@ export function formatBattleEvent(event: BattleEvent): string {
     case 'heal':
       return `${pl(event.actingPlayer)} ${unitLabel(event.healerType)} healed ${unitLabel(event.targetType)} +${event.healAmount} HP (${event.targetHpAfter} HP)`;
 
-    case 'intercept':
-      return `${unitLabel(event.attackerType)} intercepted ${unitLabel(event.defenderType)} for ${event.damage} damage`;
+    case 'intercept': {
+      const responseLabel = event.defenderResponse === 'engage' ? ' (stopped)'
+        : event.defenderResponse === 'skirmish' ? ' (returned fire)'
+        : event.defenderResponse === 'flee' ? ' (fled)'
+        : '';
+      return `${unitLabel(event.attackerType)} intercepted ${unitLabel(event.defenderType)} for ${event.damage} damage${responseLabel}`;
+    }
 
     case 'counter':
       return `${unitLabel(event.attackerType)} counter-fired at ${unitLabel(event.defenderType)} for ${event.damage} damage`;

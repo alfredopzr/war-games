@@ -127,14 +127,34 @@ describe('formatBattleEvent', () => {
     expect(formatBattleEvent(event)).toBe('P1 Infantry healed Tank +1 HP (4 HP)');
   });
 
-  it('formats intercept event', () => {
+  it('formats intercept event with engage response', () => {
     const event: BattleEvent = {
       type: 'intercept', actingPlayer: 'player1', phase: 'combat',
       attackerId: 'u1', attackerType: 'recon',
       defenderId: 'u2', defenderType: 'infantry',
-      hex: { q: 3, r: -1, s: -2 }, damage: 2,
+      hex: { q: 3, r: -1, s: -2 }, damage: 2, defenderResponse: 'engage',
     };
-    expect(formatBattleEvent(event)).toBe('Recon intercepted Infantry for 2 damage');
+    expect(formatBattleEvent(event)).toBe('Recon intercepted Infantry for 2 damage (stopped)');
+  });
+
+  it('formats intercept event with flee response', () => {
+    const event: BattleEvent = {
+      type: 'intercept', actingPlayer: 'player1', phase: 'combat',
+      attackerId: 'u1', attackerType: 'recon',
+      defenderId: 'u2', defenderType: 'infantry',
+      hex: { q: 3, r: -1, s: -2 }, damage: 5, defenderResponse: 'flee',
+    };
+    expect(formatBattleEvent(event)).toBe('Recon intercepted Infantry for 5 damage (fled)');
+  });
+
+  it('formats intercept event with none response', () => {
+    const event: BattleEvent = {
+      type: 'intercept', actingPlayer: 'player1', phase: 'combat',
+      attackerId: 'u1', attackerType: 'recon',
+      defenderId: 'u2', defenderType: 'infantry',
+      hex: { q: 3, r: -1, s: -2 }, damage: 3, defenderResponse: 'none',
+    };
+    expect(formatBattleEvent(event)).toBe('Recon intercepted Infantry for 3 damage');
   });
 
   it('formats counter event', () => {
