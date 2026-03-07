@@ -148,9 +148,9 @@ describe('pathCost', () => {
     const p0 = createHex(0, 0);
     const p1 = createHex(1, 0);
     const p2 = createHex(2, -1);
-    terrain.set(hexToKey(p0), 'plains');   // cost 1
-    terrain.set(hexToKey(p1), 'forest');   // cost 2
-    terrain.set(hexToKey(p2), 'plains');   // cost 1
+    terrain.set(hexToKey(p0), 'plains'); // cost 1
+    terrain.set(hexToKey(p1), 'forest'); // cost 2
+    terrain.set(hexToKey(p2), 'plains'); // cost 1
 
     const cost = pathCost([p0, p1, p2], terrain, 'infantry');
     // Cost is sum of steps INTO each hex (excluding start): forest(2) + plains(1) = 3

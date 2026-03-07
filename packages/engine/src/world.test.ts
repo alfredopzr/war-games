@@ -13,7 +13,7 @@ describe('hexToWorld', () => {
   it('moves right along x for increasing q', () => {
     const w = hexToWorld(createHex(2, 0));
     expect(w.x).toBe(WORLD_HEX_SIZE * 1.5 * 2);
-    expect(w.z).toBeCloseTo(WORLD_HEX_SIZE * Math.sqrt(3) / 2 * 2);
+    expect(w.z).toBeCloseTo(((WORLD_HEX_SIZE * Math.sqrt(3)) / 2) * 2);
   });
 
   it('applies elevation to y', () => {
@@ -31,7 +31,7 @@ describe('worldToHex', () => {
         const back = worldToHex(w.x, w.z);
         expect(back.q).toBe(q);
         expect(back.r).toBe(r);
-        expect(back.s).toBe((-q - r) || 0);
+        expect(back.s).toBe(-q - r || 0);
       }
     }
   });

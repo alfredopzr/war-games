@@ -17,6 +17,7 @@ import type {
   CubeCoord,
   GridSize,
   ObjectiveState,
+  BuildingType,
 } from './types';
 
 // -----------------------------------------------------------------------------
@@ -39,6 +40,14 @@ interface SerializableRoundState {
   unitsKilledThisRound: Record<PlayerId, number>;
 }
 
+interface SerializableBuilding {
+  readonly id: string;
+  readonly type: BuildingType;
+  readonly owner: PlayerId;
+  readonly position: CubeCoord;
+  readonly isRevealed: boolean;
+}
+
 interface SerializableGameMap {
   readonly terrain: Record<string, TerrainType>;
   readonly elevation: Record<string, number>;
@@ -56,6 +65,7 @@ export interface SerializableGameState {
   maxRounds: number;
   winner: PlayerId | null;
   cityOwnership: Record<string, PlayerId | null>;
+  buildings: SerializableBuilding[];
 }
 
 // -----------------------------------------------------------------------------
@@ -138,6 +148,13 @@ export function serializeGameState(state: GameState): SerializableGameState {
     maxRounds: state.maxRounds,
     winner: state.winner,
     cityOwnership,
+    buildings: state.buildings.map((b) => ({
+      id: b.id,
+      type: b.type,
+      owner: b.owner,
+      position: { ...b.position },
+      isRevealed: b.isRevealed,
+    })),
   };
 }
 
@@ -233,6 +250,12 @@ export function deserializeGameState(data: SerializableGameState): GameState {
     winner: data.winner,
     cityOwnership,
     pendingEvents: [],
-    buildings: [],
+    buildings: (data.buildings ?? []).map((b) => ({
+      id: b.id,
+      type: b.type,
+      owner: b.owner,
+      position: { ...b.position },
+      isRevealed: b.isRevealed,
+    })),
   };
 }

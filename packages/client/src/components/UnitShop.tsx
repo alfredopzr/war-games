@@ -22,11 +22,7 @@ function UnitCard({
   isActive: boolean;
   onSelect: (type: UnitType) => void;
 }): ReactElement {
-  const className = [
-    'unit-card',
-    isActive ? 'active' : '',
-    !canAfford ? 'disabled' : '',
-  ]
+  const className = ['unit-card', isActive ? 'active' : '', !canAfford ? 'disabled' : '']
     .filter(Boolean)
     .join(' ');
 
@@ -45,7 +41,9 @@ function UnitCard({
         <span>ATK {stats.atk}</span>
         <span>DEF {stats.def}</span>
         <span>Move {stats.moveRange}</span>
-        <span>Rng {stats.minAttackRange}-{stats.attackRange}</span>
+        <span>
+          Rng {stats.minAttackRange}-{stats.attackRange}
+        </span>
       </div>
     </div>
   );
@@ -100,7 +98,9 @@ export function UnitShop(): ReactElement | null {
         </div>
       </div>
       <div className="shop-help-tip">
-        Select a unit, then click a <strong>{playerColor}-highlighted</strong> hex on the <strong>{playerSide}</strong> of the map to place it. Right-click a placed unit to remove it. Click a placed unit to assign a directive.
+        Select a unit, then click a <strong>{playerColor}-highlighted</strong> hex on the{' '}
+        <strong>{playerSide}</strong> of the map to place it. Right-click a placed unit to remove
+        it. Click a placed unit to assign a directive.
       </div>
     </>
   );

@@ -124,7 +124,12 @@ io.on('connection', (socket) => {
 
   socket.on(
     'place-unit',
-    (data: { unitType: string; position: { q: number; r: number; s: number }; directive: string; target?: unknown }) => {
+    (data: {
+      unitType: string;
+      position: { q: number; r: number; s: number };
+      directive: string;
+      target?: unknown;
+    }) => {
       const found = getRoomBySocket(socket.id);
       if (!found) return;
       try {
@@ -208,39 +213,32 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on(
-    'reconnect-attempt',
-    (data: { roomId: string; reconnectToken: string }) => {
-      try {
-        const { room, playerId } = handleReconnect(
-          data.roomId,
-          data.reconnectToken,
-          socket.id,
-        );
-        socket.join(room.id);
-        log('info', 'game', `Player reconnected to room ${room.id}`);
+  socket.on('reconnect-attempt', (data: { roomId: string; reconnectToken: string }) => {
+    try {
+      const { room, playerId } = handleReconnect(data.roomId, data.reconnectToken, socket.id);
+      socket.join(room.id);
+      log('info', 'game', `Player reconnected to room ${room.id}`);
 
-        if (room.gameState) {
-          const filtered = filterStateForPlayer(room.gameState, playerId);
-          socket.emit('game-start', {
-            type: 'game-start',
-            state: filtered,
-            playerId,
-          });
-        }
-
-        socket.to(room.id).emit('opponent-reconnected', {
-          type: 'opponent-reconnected',
-        });
-      } catch (err) {
-        log('warn', 'game', `Reconnect failed for room ${data.roomId}: ${(err as Error).message}`);
-        socket.emit('room-error', {
-          type: 'room-error',
-          message: (err as Error).message,
+      if (room.gameState) {
+        const filtered = filterStateForPlayer(room.gameState, playerId);
+        socket.emit('game-start', {
+          type: 'game-start',
+          state: filtered,
+          playerId,
         });
       }
-    },
-  );
+
+      socket.to(room.id).emit('opponent-reconnected', {
+        type: 'opponent-reconnected',
+      });
+    } catch (err) {
+      log('warn', 'game', `Reconnect failed for room ${data.roomId}: ${(err as Error).message}`);
+      socket.emit('room-error', {
+        type: 'room-error',
+        message: (err as Error).message,
+      });
+    }
+  });
 
   socket.on('disconnect', () => {
     const found = getRoomBySocket(socket.id);

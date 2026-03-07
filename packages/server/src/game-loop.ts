@@ -34,12 +34,7 @@ import {
 } from '@hexwar/engine';
 
 import { filterStateForPlayer } from './state-filter';
-import {
-  startBuildTimer,
-  startTurnTimer,
-  clearBuildTimer,
-  clearTurnTimer,
-} from './timers';
+import { startBuildTimer, startTurnTimer, clearBuildTimer, clearTurnTimer } from './timers';
 import { log } from './logger';
 
 // -----------------------------------------------------------------------------
@@ -218,12 +213,7 @@ export function handlePlaceUnit(
   }
 }
 
-export function handleRemoveUnit(
-  room: Room,
-  playerId: PlayerId,
-  unitId: string,
-  io: Server,
-): void {
+export function handleRemoveUnit(room: Room, playerId: PlayerId, unitId: string, io: Server): void {
   if (!room.gameState) {
     throw new Error('Game has not started');
   }
@@ -293,11 +283,7 @@ export function handleSetDirective(
   }
 }
 
-export function handleConfirmBuild(
-  room: Room,
-  playerId: PlayerId,
-  io: Server,
-): void {
+export function handleConfirmBuild(room: Room, playerId: PlayerId, io: Server): void {
   if (!room.gameState) return;
 
   room.buildConfirmed.add(playerId);
@@ -336,11 +322,7 @@ function transitionToBattle(room: Room, io: Server): void {
 // Command Validation
 // -----------------------------------------------------------------------------
 
-function filterValidCommands(
-  state: GameState,
-  commands: Command[],
-  playerId: PlayerId,
-): Command[] {
+function filterValidCommands(state: GameState, commands: Command[], playerId: PlayerId): Command[] {
   const friendlyUnits = state.players[playerId].units;
   const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
   const enemyUnits = state.players[enemyId].units;
@@ -463,9 +445,14 @@ export function handleSubmitCommands(
   const roundEnd = checkRoundEnd(room.gameState);
 
   if (roundEnd.roundOver) {
-    const winnerLabel = roundEnd.winner === 'player1' ? 'P1' : roundEnd.winner === 'player2' ? 'P2' : 'No one';
-    const reasonLabel = roundEnd.reason === 'king-of-the-hill' ? 'King of the Hill'
-      : roundEnd.reason === 'elimination' ? 'Elimination' : 'Turn Limit';
+    const winnerLabel =
+      roundEnd.winner === 'player1' ? 'P1' : roundEnd.winner === 'player2' ? 'P2' : 'No one';
+    const reasonLabel =
+      roundEnd.reason === 'king-of-the-hill'
+        ? 'King of the Hill'
+        : roundEnd.reason === 'elimination'
+          ? 'Elimination'
+          : 'Turn Limit';
     events.push({
       type: 'round-end',
       actingPlayer: roundEnd.winner ?? 'player1',
@@ -495,7 +482,11 @@ export function handleSubmitCommands(
         actingPlayer: room.gameState.winner ?? 'player1',
         message: `${gameWinnerLabel} wins the game!`,
       });
-      log('info', 'game', `Game over in room ${room.id}, winner: ${room.gameState.winner}, turns: ${room.turnLog.length}`);
+      log(
+        'info',
+        'game',
+        `Game over in room ${room.id}, winner: ${room.gameState.winner}, turns: ${room.turnLog.length}`,
+      );
       emitFilteredStatePerPlayer(io, room, 'game-over', () => ({
         winner: room.gameState!.winner,
       }));

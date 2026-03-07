@@ -14,7 +14,14 @@ import { playUnitAnimation } from './unit-model';
 
 export type TurnEvent =
   | { type: 'move'; unitId: string; from: CubeCoord; to: CubeCoord }
-  | { type: 'attack'; attackerId: string; defenderId: string; damage: number; attackerPos: CubeCoord; defenderPos: CubeCoord }
+  | {
+      type: 'attack';
+      attackerId: string;
+      defenderId: string;
+      damage: number;
+      attackerPos: CubeCoord;
+      defenderPos: CubeCoord;
+    }
   | { type: 'kill'; unitId: string; position: CubeCoord; killedBy: string }
   | { type: 'capture'; cityHex: CubeCoord; newOwner: PlayerId };
 
@@ -87,7 +94,11 @@ export function isReplayActive(): boolean {
   return replayActive;
 }
 
-export function startReplay(events: TurnEvent[], elevationMap: Map<string, number>, onComplete: () => void): void {
+export function startReplay(
+  events: TurnEvent[],
+  elevationMap: Map<string, number>,
+  onComplete: () => void,
+): void {
   replayActive = true;
   replayOnComplete = onComplete;
   replayTimers = [];

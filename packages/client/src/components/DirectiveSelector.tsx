@@ -47,16 +47,10 @@ export function DirectiveSelector(): ReactElement | null {
       <h3>DIRECTIVE</h3>
       {DIRECTIVES.map((d) => {
         const isActive = selectedUnit.directive === d.type;
-        const className = ['directive-option', isActive ? 'active' : '']
-          .filter(Boolean)
-          .join(' ');
+        const className = ['directive-option', isActive ? 'active' : ''].filter(Boolean).join(' ');
 
         return (
-          <div
-            key={d.type}
-            className={className}
-            onClick={() => handleSelect(d.type)}
-          >
+          <div key={d.type} className={className} onClick={() => handleSelect(d.type)}>
             <div className="directive-name">{d.name}</div>
             <div className="directive-desc">{d.desc}</div>
           </div>

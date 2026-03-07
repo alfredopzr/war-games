@@ -128,9 +128,7 @@ export function isUnitVisible(
 
   // Forest concealment: only adjacent observers can see units in forest
   if (targetTerrain === 'forest') {
-    return observingUnits.some(
-      (obs) => cubeDistance(obs.position, target.position) <= 1,
-    );
+    return observingUnits.some((obs) => cubeDistance(obs.position, target.position) <= 1);
   }
 
   // Otherwise check if target hex is in the combined visibility set

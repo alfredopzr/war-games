@@ -45,7 +45,7 @@ export interface WorldCoord {
  */
 export function hexToWorld(hex: CubeCoord, elevation = 0): WorldCoord {
   const x = WORLD_HEX_SIZE * 1.5 * hex.q;
-  const z = WORLD_HEX_SIZE * (SQRT3 / 2 * hex.q + SQRT3 * hex.r);
+  const z = WORLD_HEX_SIZE * ((SQRT3 / 2) * hex.q + SQRT3 * hex.r);
   const y = elevation * WORLD_ELEV_STEP;
   return { x, y, z };
 }
@@ -55,8 +55,8 @@ export function hexToWorld(hex: CubeCoord, elevation = 0): WorldCoord {
  * Ignores Y (elevation).
  */
 export function worldToHex(x: number, z: number): CubeCoord {
-  const q = (2 / 3) * x / WORLD_HEX_SIZE;
-  const r = (-1 / 3 * x + SQRT3 / 3 * z) / WORLD_HEX_SIZE;
+  const q = ((2 / 3) * x) / WORLD_HEX_SIZE;
+  const r = ((-1 / 3) * x + (SQRT3 / 3) * z) / WORLD_HEX_SIZE;
   const s = -q - r;
   return cubeRound(q, r, s);
 }

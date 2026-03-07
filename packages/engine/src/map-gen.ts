@@ -42,7 +42,7 @@ function noiseToTerrain(value: number): TerrainType {
 
 function noiseToElevation(value: number): number {
   // Map [-1, 1] to [0, 3]
-  const raw = (value + 1) / 2 * 4;
+  const raw = ((value + 1) / 2) * 4;
   return Math.max(0, Math.min(3, Math.floor(raw)));
 }
 
@@ -196,16 +196,12 @@ export function validateMap(map: GameMap): MapValidation {
   // Check grid size
   const expectedHexes = map.gridSize.width * map.gridSize.height;
   if (map.terrain.size !== expectedHexes) {
-    errors.push(
-      `Expected ${expectedHexes} hexes, got ${map.terrain.size}`,
-    );
+    errors.push(`Expected ${expectedHexes} hexes, got ${map.terrain.size}`);
   }
 
   // Check elevation map has same count
   if (map.elevation.size !== expectedHexes) {
-    errors.push(
-      `Expected ${expectedHexes} elevation entries, got ${map.elevation.size}`,
-    );
+    errors.push(`Expected ${expectedHexes} elevation entries, got ${map.elevation.size}`);
   }
 
   // Check central objective is city

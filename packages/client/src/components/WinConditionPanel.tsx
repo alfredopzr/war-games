@@ -22,7 +22,8 @@ export function WinConditionPanel(): ReactElement | null {
   const { objective } = gameState.round;
   const p1Units = gameState.players.player1.units.length;
   const p2Units = gameState.players.player2.units.length;
-  const totalTurnsPlayed = gameState.round.turnsPlayed.player1 + gameState.round.turnsPlayed.player2;
+  const totalTurnsPlayed =
+    gameState.round.turnsPlayed.player1 + gameState.round.turnsPlayed.player2;
   const totalMaxTurns = gameState.round.maxTurnsPerSide * 2;
 
   // KotH status
@@ -57,11 +58,15 @@ export function WinConditionPanel(): ReactElement | null {
         </div>
         <div className={`wc-entry ${elimMet ? 'wc-met' : ''}`}>
           <span className="wc-label">Elim</span>
-          <span className="wc-value">P1: {p1Units} units | P2: {p2Units} units</span>
+          <span className="wc-value">
+            P1: {p1Units} units | P2: {p2Units} units
+          </span>
         </div>
         <div className={`wc-entry ${turnsMet ? 'wc-met' : ''}`}>
           <span className="wc-label">Turns</span>
-          <span className="wc-value">{totalTurnsPlayed} / {totalMaxTurns} played</span>
+          <span className="wc-value">
+            {totalTurnsPlayed} / {totalMaxTurns} played
+          </span>
         </div>
       </div>
     </div>

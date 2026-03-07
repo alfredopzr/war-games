@@ -81,16 +81,15 @@ const PADDING = 1.0; // world units of padding around the map
  * Fit the orthographic camera to show the entire hex grid.
  * Camera is tilted CAMERA_TILT_DEG from vertical (looking down at the XZ plane).
  */
-export function fitCameraToMap(
-  gridSize: GridSize,
-  elevationMap: Map<string, number>,
-): void {
+export function fitCameraToMap(gridSize: GridSize, elevationMap: Map<string, number>): void {
   if (!ctx) return;
 
   // Compute world-space bounding box of all hexes
   const hexes = getAllHexes(gridSize);
-  let minX = Infinity, maxX = -Infinity;
-  let minZ = Infinity, maxZ = -Infinity;
+  let minX = Infinity,
+    maxX = -Infinity;
+  let minZ = Infinity,
+    maxZ = -Infinity;
   let maxY = 0;
 
   for (const hex of hexes) {

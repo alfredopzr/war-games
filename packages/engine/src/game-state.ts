@@ -95,9 +95,8 @@ export function placeUnit(
     throw new Error('Can only place units during build phase');
   }
 
-  const deploymentZone = playerId === 'player1'
-    ? state.map.player1Deployment
-    : state.map.player2Deployment;
+  const deploymentZone =
+    playerId === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
 
   const posKey = hexToKey(position);
   const inZone = deploymentZone.some((hex) => hexToKey(hex) === posKey);
@@ -191,13 +190,29 @@ export function executeTurn(
   // Pass 1: Scout units act first
   for (const unit of [...friendlyUnits]) {
     if (unit.directive !== 'scout') continue;
-    executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
+    executeUnitDirective(
+      state,
+      unit,
+      commandedUnitIds,
+      friendlyUnits,
+      currentPlayer,
+      enemyPlayer,
+      randomFn,
+    );
   }
 
   // Pass 2: All other non-commanded units
   for (const unit of [...friendlyUnits]) {
     if (unit.directive === 'scout') continue;
-    executeUnitDirective(state, unit, commandedUnitIds, friendlyUnits, currentPlayer, enemyPlayer, randomFn);
+    executeUnitDirective(
+      state,
+      unit,
+      commandedUnitIds,
+      friendlyUnits,
+      currentPlayer,
+      enemyPlayer,
+      randomFn,
+    );
   }
 
   // Mortar buildings fire (after all units have moved)
@@ -343,7 +358,13 @@ function applyCommand(
       }
 
       const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
-      const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn, state.buildings);
+      const damage = calculateDamage(
+        attacker,
+        defender,
+        defenderTerrain,
+        randomFn,
+        state.buildings,
+      );
       defender.hp -= damage;
 
       if (defender.hp <= 0) {
@@ -370,7 +391,13 @@ function applyCommand(
       const unit = findUnitById(friendlyUnits, command.unitId);
       if (!unit) return;
 
-      const validation = validateBuild(state, command.unitId, currentPlayer, command.buildingType, command.targetHex);
+      const validation = validateBuild(
+        state,
+        command.unitId,
+        currentPlayer,
+        command.buildingType,
+        command.targetHex,
+      );
       if (!validation.valid) {
         throw new Error(validation.reason ?? 'Invalid build');
       }
@@ -415,9 +442,8 @@ function applyCommand(
       const unit = findUnitById(friendlyUnits, command.unitId);
       if (!unit) return;
 
-      const deploymentZone = currentPlayer === 'player1'
-        ? state.map.player1Deployment
-        : state.map.player2Deployment;
+      const deploymentZone =
+        currentPlayer === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
 
       // Find closest deployment zone hex
       const allUnits = [...state.players.player1.units, ...state.players.player2.units];
@@ -522,9 +548,7 @@ function updateObjective(state: GameState): void {
   const objectiveKey = hexToKey(state.map.centralObjective);
   const allUnits = [...state.players.player1.units, ...state.players.player2.units];
 
-  const unitOnObjective = allUnits.find(
-    (u) => hexToKey(u.position) === objectiveKey,
-  );
+  const unitOnObjective = allUnits.find((u) => hexToKey(u.position) === objectiveKey);
 
   const previousOccupier = state.round.objective.occupiedBy;
 
@@ -583,10 +607,7 @@ function updateObjective(state: GameState): void {
 
 export function checkRoundEnd(state: GameState): RoundEndResult {
   // a. King of the Hill
-  if (
-    state.round.objective.occupiedBy !== null &&
-    state.round.objective.turnsHeld >= 2
-  ) {
+  if (state.round.objective.occupiedBy !== null && state.round.objective.turnsHeld >= 2) {
     return {
       roundOver: true,
       winner: state.round.objective.occupiedBy,
@@ -611,10 +632,7 @@ export function checkRoundEnd(state: GameState): RoundEndResult {
 
   // c. Turn limit
   const { maxTurnsPerSide, turnsPlayed } = state.round;
-  if (
-    turnsPlayed.player1 >= maxTurnsPerSide &&
-    turnsPlayed.player2 >= maxTurnsPerSide
-  ) {
+  if (turnsPlayed.player1 >= maxTurnsPerSide && turnsPlayed.player2 >= maxTurnsPerSide) {
     const winner = resolveTurnLimitTiebreaker(state);
     return { roundOver: true, winner, reason: 'turn-limit' };
   }
@@ -626,12 +644,8 @@ function resolveTurnLimitTiebreaker(state: GameState): PlayerId {
   const objectiveKey = hexToKey(state.map.centralObjective);
 
   // 1. Who has a unit on the central hex
-  const p1OnCenter = state.players.player1.units.some(
-    (u) => hexToKey(u.position) === objectiveKey,
-  );
-  const p2OnCenter = state.players.player2.units.some(
-    (u) => hexToKey(u.position) === objectiveKey,
-  );
+  const p1OnCenter = state.players.player1.units.some((u) => hexToKey(u.position) === objectiveKey);
+  const p2OnCenter = state.players.player2.units.some((u) => hexToKey(u.position) === objectiveKey);
 
   if (p1OnCenter && !p2OnCenter) return 'player1';
   if (p2OnCenter && !p1OnCenter) return 'player2';
@@ -658,10 +672,7 @@ function resolveTurnLimitTiebreaker(state: GameState): PlayerId {
 // scoreRound
 // -----------------------------------------------------------------------------
 
-export function scoreRound(
-  state: GameState,
-  roundWinner: PlayerId | null,
-): GameState {
+export function scoreRound(state: GameState, roundWinner: PlayerId | null): GameState {
   // Increment winner's roundsWon
   if (roundWinner) {
     state.players[roundWinner].roundsWon += 1;
@@ -725,6 +736,9 @@ export function scoreRound(
   state.round.objective = { occupiedBy: null, turnsHeld: 0 };
   state.round.unitsKilledThisRound = { player1: 0, player2: 0 };
 
+  // Clear all buildings for the new round
+  state.buildings = [];
+
   // Reset city ownership to neutral
   for (const key of state.cityOwnership.keys()) {
     state.cityOwnership.set(key, null);
@@ -764,7 +778,12 @@ function updateCityOwnership(state: GameState): void {
     unitByHex.set(hexToKey(unit.position), unit);
   }
 
-  const unitLabels: Record<string, string> = { infantry: 'Infantry', tank: 'Tank', artillery: 'Artillery', recon: 'Recon' };
+  const unitLabels: Record<string, string> = {
+    infantry: 'Infantry',
+    tank: 'Tank',
+    artillery: 'Artillery',
+    recon: 'Recon',
+  };
 
   for (const cityKey of state.cityOwnership.keys()) {
     const unit = unitByHex.get(cityKey);
@@ -829,9 +848,7 @@ function checkMines(state: GameState, unit: Unit, owner: PlayerId): void {
 
 function fireMortars(state: GameState, firingPlayer: PlayerId): void {
   const enemyPlayer: PlayerId = firingPlayer === 'player1' ? 'player2' : 'player1';
-  const mortars = state.buildings.filter(
-    (b) => b.type === 'mortar' && b.owner === firingPlayer,
-  );
+  const mortars = state.buildings.filter((b) => b.type === 'mortar' && b.owner === firingPlayer);
 
   for (const mortar of mortars) {
     const atk = BUILDING_STATS.mortar.atk ?? 2;
@@ -858,7 +875,10 @@ function fireMortars(state: GameState, firingPlayer: PlayerId): void {
 
     // Defensive position bonus for target
     const hasDP = state.buildings.some(
-      (b) => b.type === 'defensive-position' && b.owner === nearestEnemy!.owner && hexToKey(b.position) === terrainKey,
+      (b) =>
+        b.type === 'defensive-position' &&
+        b.owner === nearestEnemy!.owner &&
+        hexToKey(b.position) === terrainKey,
     );
     if (hasDP) {
       terrainDef += BUILDING_STATS['defensive-position'].defenseBonus ?? 0.5;
@@ -913,18 +933,15 @@ function countCitiesHeld(state: GameState, playerId: PlayerId): number {
 }
 
 function resetUnitsToDeployment(state: GameState, playerId: PlayerId): void {
-  const deploymentZone = playerId === 'player1'
-    ? state.map.player1Deployment
-    : state.map.player2Deployment;
+  const deploymentZone =
+    playerId === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
 
   const units = state.players[playerId].units;
   if (units.length === 0) return;
 
   // Hexes occupied by the other player's units are off-limits
   const otherPlayer: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
-  const otherOccupied = new Set(
-    state.players[otherPlayer].units.map((u) => hexToKey(u.position)),
-  );
+  const otherOccupied = new Set(state.players[otherPlayer].units.map((u) => hexToKey(u.position)));
 
   // Filter to available hexes, sort left-to-right then front-to-back
   const available = deploymentZone.filter((h) => !otherOccupied.has(hexToKey(h)));

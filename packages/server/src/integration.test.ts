@@ -148,7 +148,11 @@ beforeAll(
 
         socket.on(
           'place-unit',
-          (data: { unitType: string; position: { q: number; r: number; s: number }; directive: string }) => {
+          (data: {
+            unitType: string;
+            position: { q: number; r: number; s: number };
+            directive: string;
+          }) => {
             const found = getRoomBySocket(socket.id);
             if (!found) return;
             try {
@@ -207,43 +211,39 @@ beforeAll(
           handleConfirmBuild(found.room, found.playerId, ioServer);
         });
 
-        socket.on('submit-commands', (data: { commands: Parameters<typeof handleSubmitCommands>[2] }) => {
-          const found = getRoomBySocket(socket.id);
-          if (!found) return;
-          handleSubmitCommands(found.room, found.playerId, data.commands, ioServer);
-        });
-
         socket.on(
-          'reconnect-attempt',
-          (data: { roomId: string; reconnectToken: string }) => {
-            try {
-              const { room, playerId } = handleReconnect(
-                data.roomId,
-                data.reconnectToken,
-                socket.id,
-              );
-              socket.join(room.id);
-
-              if (room.gameState) {
-                const filtered = filterStateForPlayer(room.gameState, playerId);
-                socket.emit('game-start', {
-                  type: 'game-start',
-                  state: filtered,
-                  playerId,
-                });
-              }
-
-              socket.to(room.id).emit('opponent-reconnected', {
-                type: 'opponent-reconnected',
-              });
-            } catch (err) {
-              socket.emit('room-error', {
-                type: 'room-error',
-                message: (err as Error).message,
-              });
-            }
+          'submit-commands',
+          (data: { commands: Parameters<typeof handleSubmitCommands>[2] }) => {
+            const found = getRoomBySocket(socket.id);
+            if (!found) return;
+            handleSubmitCommands(found.room, found.playerId, data.commands, ioServer);
           },
         );
+
+        socket.on('reconnect-attempt', (data: { roomId: string; reconnectToken: string }) => {
+          try {
+            const { room, playerId } = handleReconnect(data.roomId, data.reconnectToken, socket.id);
+            socket.join(room.id);
+
+            if (room.gameState) {
+              const filtered = filterStateForPlayer(room.gameState, playerId);
+              socket.emit('game-start', {
+                type: 'game-start',
+                state: filtered,
+                playerId,
+              });
+            }
+
+            socket.to(room.id).emit('opponent-reconnected', {
+              type: 'opponent-reconnected',
+            });
+          } catch (err) {
+            socket.emit('room-error', {
+              type: 'room-error',
+              message: (err as Error).message,
+            });
+          }
+        });
 
         socket.on('disconnect', () => {
           const found = getRoomBySocket(socket.id);
@@ -410,10 +410,9 @@ describe('Build Phase', () => {
       const { roomId } = await created;
 
       // Wait for game to start
-      const p1Start = waitForEvent<{ state: { map: { player1Deployment: Array<{ q: number; r: number; s: number }> } } }>(
-        client1,
-        'game-start',
-      );
+      const p1Start = waitForEvent<{
+        state: { map: { player1Deployment: Array<{ q: number; r: number; s: number }> } };
+      }>(client1, 'game-start');
       client2.emit('join-room', { roomId });
       const startData = await p1Start;
 
@@ -710,10 +709,7 @@ describe('Full Game Flow', () => {
       const { roomId } = await created;
 
       client2.emit('join-room', { roomId });
-      await Promise.all([
-        waitForEvent(client1, 'game-start'),
-        waitForEvent(client2, 'game-start'),
-      ]);
+      await Promise.all([waitForEvent(client1, 'game-start'), waitForEvent(client2, 'game-start')]);
 
       // Confirm build
       const p1Battle = waitForEvent(client1, 'battle-start');

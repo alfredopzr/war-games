@@ -1,4 +1,11 @@
-import type { BuildingType, BuildingStats, Building, PlayerId, CubeCoord, GameState } from './types';
+import type {
+  BuildingType,
+  BuildingStats,
+  Building,
+  PlayerId,
+  CubeCoord,
+  GameState,
+} from './types';
 import { cubeDistance, hexToKey } from './hex';
 
 // =============================================================================
@@ -36,11 +43,7 @@ export const BUILDING_STATS: Record<BuildingType, BuildingStats> = {
 
 let buildingIdCounter = 0;
 
-export function createBuilding(
-  type: BuildingType,
-  owner: PlayerId,
-  position: CubeCoord,
-): Building {
+export function createBuilding(type: BuildingType, owner: PlayerId, position: CubeCoord): Building {
   buildingIdCounter += 1;
   return {
     id: `building-${buildingIdCounter}`,
@@ -97,9 +100,7 @@ export function validateBuild(
     return { valid: false, reason: 'Cannot build on a deployment zone hex' };
   }
 
-  const existingBuilding = state.buildings.some(
-    (b) => hexToKey(b.position) === targetKey,
-  );
+  const existingBuilding = state.buildings.some((b) => hexToKey(b.position) === targetKey);
   if (existingBuilding) {
     return { valid: false, reason: 'A building already exists on that hex' };
   }

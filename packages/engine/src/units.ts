@@ -1,4 +1,12 @@
-import type { UnitType, UnitStats, Unit, PlayerId, CubeCoord, DirectiveType, DirectiveTarget } from './types';
+import type {
+  UnitType,
+  UnitStats,
+  Unit,
+  PlayerId,
+  CubeCoord,
+  DirectiveType,
+  DirectiveTarget,
+} from './types';
 
 // =============================================================================
 // Unit Stats — design spec values for all 4 MVP unit types
@@ -97,11 +105,11 @@ export function resetUnitIdCounter(): void {
 // =============================================================================
 
 const TYPE_ADVANTAGE: Record<UnitType, Record<UnitType, number>> = {
-  infantry:  { infantry: 1.0, tank: 0.5, artillery: 1.2, recon: 1.0, engineer: 1.5 },
-  tank:      { infantry: 1.5, tank: 1.0, artillery: 1.2, recon: 1.5, engineer: 1.5 },
+  infantry: { infantry: 1.0, tank: 0.5, artillery: 1.2, recon: 1.0, engineer: 1.5 },
+  tank: { infantry: 1.5, tank: 1.0, artillery: 1.2, recon: 1.5, engineer: 1.5 },
   artillery: { infantry: 1.3, tank: 1.3, artillery: 1.0, recon: 1.3, engineer: 1.2 },
-  recon:     { infantry: 0.8, tank: 0.3, artillery: 1.5, recon: 1.0, engineer: 1.2 },
-  engineer:  { infantry: 0.5, tank: 0.3, artillery: 0.8, recon: 0.5, engineer: 1.0 },
+  recon: { infantry: 0.8, tank: 0.3, artillery: 1.5, recon: 1.0, engineer: 1.2 },
+  engineer: { infantry: 0.5, tank: 0.3, artillery: 0.8, recon: 0.5, engineer: 1.0 },
 };
 
 export function getTypeAdvantage(attacker: UnitType, defender: UnitType): number {

@@ -34,7 +34,10 @@ export function calculateDamage(
   if (buildings) {
     const defenderKey = hexToKey(defender.position);
     const hasDP = buildings.some(
-      (b) => b.type === 'defensive-position' && b.owner === defender.owner && hexToKey(b.position) === defenderKey,
+      (b) =>
+        b.type === 'defensive-position' &&
+        b.owner === defender.owner &&
+        hexToKey(b.position) === defenderKey,
     );
     if (hasDP) {
       terrainDef += BUILDING_STATS['defensive-position'].defenseBonus ?? 0.5;

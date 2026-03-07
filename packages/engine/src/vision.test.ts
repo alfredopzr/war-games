@@ -163,7 +163,13 @@ describe('recon tower vision', () => {
     }
 
     const buildings: Building[] = [
-      { id: 'b1', type: 'recon-tower', owner: 'player1', position: createHex(0, 0), isRevealed: true },
+      {
+        id: 'b1',
+        type: 'recon-tower',
+        owner: 'player1',
+        position: createHex(0, 0),
+        isRevealed: true,
+      },
     ];
 
     const visible = calculateVisibility([], terrain, buildings);

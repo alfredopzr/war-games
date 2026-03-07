@@ -65,9 +65,22 @@ export interface UnitStats {
   readonly visionRange: number;
 }
 
-export type DirectiveType = 'advance' | 'hold' | 'flank-left' | 'flank-right' | 'scout' | 'support' | 'hunt' | 'capture';
+export type DirectiveType =
+  | 'advance'
+  | 'hold'
+  | 'flank-left'
+  | 'flank-right'
+  | 'scout'
+  | 'support'
+  | 'hunt'
+  | 'capture';
 
-export type DirectiveTargetType = 'central-objective' | 'city' | 'enemy-unit' | 'friendly-unit' | 'hex';
+export type DirectiveTargetType =
+  | 'central-objective'
+  | 'city'
+  | 'enemy-unit'
+  | 'friendly-unit'
+  | 'hex';
 
 export interface DirectiveTarget {
   readonly type: DirectiveTargetType;
@@ -250,11 +263,19 @@ export interface ResolvedTarget {
 // -----------------------------------------------------------------------------
 
 export type BattleEventType =
-  | 'kill' | 'damage' | 'capture' | 'recapture'
-  | 'capture-damage' | 'capture-death'
-  | 'objective-change' | 'koth-progress'
-  | 'round-end' | 'game-end'
-  | 'mine-triggered' | 'mortar-fire' | 'building-destroyed';
+  | 'kill'
+  | 'damage'
+  | 'capture'
+  | 'recapture'
+  | 'capture-damage'
+  | 'capture-death'
+  | 'objective-change'
+  | 'koth-progress'
+  | 'round-end'
+  | 'game-end'
+  | 'mine-triggered'
+  | 'mortar-fire'
+  | 'building-destroyed';
 
 export interface BattleEvent {
   readonly type: BattleEventType;

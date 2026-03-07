@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import { UNIT_STATS, startBattlePhase, placeUnit, aiBuildPhase } from '@hexwar/engine';
-import type { GameState, Unit, CubeCoord, UnitType, DirectiveType, DirectiveTarget, Command, PlayerId } from '@hexwar/engine';
+import type {
+  GameState,
+  Unit,
+  CubeCoord,
+  UnitType,
+  DirectiveType,
+  DirectiveTarget,
+  Command,
+  PlayerId,
+  BattleEventType,
+} from '@hexwar/engine';
 import type { TurnEvent } from '../renderer/replay-sequencer';
 
 export type GameMode = 'hotseat' | 'vsAI' | 'online';
@@ -9,10 +19,7 @@ export type LobbyState = 'menu' | 'creating' | 'waiting' | 'joining' | null;
 export interface BattleLogEntry {
   turn: number;
   player: PlayerId;
-  type: 'kill' | 'capture' | 'recapture' | 'damage'
-    | 'capture-damage' | 'capture-death'
-    | 'objective-change' | 'koth-progress'
-    | 'round-end' | 'game-end';
+  type: BattleEventType;
   message: string;
 }
 
@@ -118,7 +125,11 @@ interface GameStore {
   exitPlacementMode: () => void;
   setUnitDirective: (unitId: string, directive: DirectiveType) => void;
   setTargetSelectionMode: (active: boolean, directive?: DirectiveType) => void;
-  setUnitDirectiveTarget: (unitId: string, directive: DirectiveType, target: DirectiveTarget) => void;
+  setUnitDirectiveTarget: (
+    unitId: string,
+    directive: DirectiveType,
+    target: DirectiveTarget,
+  ) => void;
   removePlacedUnit: (unitId: string) => void;
   addPendingCommand: (command: Command) => void;
   clearPendingCommands: () => void;
@@ -134,7 +145,12 @@ interface GameStore {
   showToast: (msg: string) => void;
   setTurnReplayEvents: (events: TurnEvent[]) => void;
   setReplayPlaying: (playing: boolean) => void;
-  showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown) => void;
+  showRoundResultScreen: (
+    winner: PlayerId | null,
+    reason: string,
+    p1Income?: IncomeBreakdown,
+    p2Income?: IncomeBreakdown,
+  ) => void;
   continueToNextRound: () => void;
   resetGame: () => void;
 }
@@ -186,18 +202,20 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setOpponentConnected: (connected: boolean): void => set({ opponentConnected: connected }),
 
-  setOpponentBuildConfirmed: (confirmed: boolean): void => set({ opponentBuildConfirmed: confirmed }),
+  setOpponentBuildConfirmed: (confirmed: boolean): void =>
+    set({ opponentBuildConfirmed: confirmed }),
 
   setWaitingForServer: (waiting: boolean): void => set({ waitingForServer: waiting }),
 
   setLobbyState: (state: LobbyState): void => set({ lobbyState: state }),
 
-  selectUnit: (unit: Unit | null): void => set({
-    selectedUnit: unit,
-    commandMode: 'none',
-    highlightedHexes: new Set<string>(),
-    highlightMode: 'none',
-  }),
+  selectUnit: (unit: Unit | null): void =>
+    set({
+      selectedUnit: unit,
+      commandMode: 'none',
+      highlightedHexes: new Set<string>(),
+      highlightMode: 'none',
+    }),
 
   setHoveredHex: (hex: CubeCoord | null): void => set({ hoveredHex: hex }),
 
@@ -211,11 +229,9 @@ export const useGameStore = create<GameStore>((set) => ({
   clearHighlightedHexes: (): void =>
     set({ highlightedHexes: new Set<string>(), highlightMode: 'none' }),
 
-  enterPlacementMode: (type: UnitType): void =>
-    set({ placementMode: type, selectedUnit: null }),
+  enterPlacementMode: (type: UnitType): void => set({ placementMode: type, selectedUnit: null }),
 
-  exitPlacementMode: (): void =>
-    set({ placementMode: null }),
+  exitPlacementMode: (): void => set({ placementMode: null }),
 
   setUnitDirective: (unitId: string, directive: DirectiveType): void =>
     set((prev) => {
@@ -225,9 +241,8 @@ export const useGameStore = create<GameStore>((set) => ({
       if (!unit) return {};
       unit.directive = directive;
       // Update selectedUnit reference if it matches
-      const updatedSelected = prev.selectedUnit?.id === unitId
-        ? { ...prev.selectedUnit, directive }
-        : prev.selectedUnit;
+      const updatedSelected =
+        prev.selectedUnit?.id === unitId ? { ...prev.selectedUnit, directive } : prev.selectedUnit;
       return { gameState: { ...prev.gameState }, selectedUnit: updatedSelected };
     }),
 
@@ -237,7 +252,11 @@ export const useGameStore = create<GameStore>((set) => ({
       targetSelectionDirective: directive ?? null,
     }),
 
-  setUnitDirectiveTarget: (unitId: string, directive: DirectiveType, target: DirectiveTarget): void =>
+  setUnitDirectiveTarget: (
+    unitId: string,
+    directive: DirectiveType,
+    target: DirectiveTarget,
+  ): void =>
     set((prev) => {
       if (!prev.gameState) return {};
       const player = prev.gameState.players[prev.currentPlayerView];
@@ -245,9 +264,10 @@ export const useGameStore = create<GameStore>((set) => ({
       if (!unit) return {};
       unit.directive = directive;
       unit.directiveTarget = target;
-      const updatedSelected = prev.selectedUnit?.id === unitId
-        ? { ...prev.selectedUnit, directive, directiveTarget: target }
-        : prev.selectedUnit;
+      const updatedSelected =
+        prev.selectedUnit?.id === unitId
+          ? { ...prev.selectedUnit, directive, directiveTarget: target }
+          : prev.selectedUnit;
       return {
         gameState: { ...prev.gameState },
         selectedUnit: updatedSelected,
@@ -441,7 +461,12 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setReplayPlaying: (playing: boolean): void => set({ isReplayPlaying: playing }),
 
-  showRoundResultScreen: (winner: PlayerId | null, reason: string, p1Income?: IncomeBreakdown, p2Income?: IncomeBreakdown): void =>
+  showRoundResultScreen: (
+    winner: PlayerId | null,
+    reason: string,
+    p1Income?: IncomeBreakdown,
+    p2Income?: IncomeBreakdown,
+  ): void =>
     set({
       showRoundResult: true,
       roundResult: { winner, reason, p1Income: p1Income ?? null, p2Income: p2Income ?? null },

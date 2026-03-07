@@ -101,12 +101,8 @@ describe('startGame', () => {
 
     startGame(room, io as unknown as Parameters<typeof startGame>[1]);
 
-    const p1Events = io.emitted.filter(
-      (e) => e.to === 'socket-p1' && e.event === 'game-start',
-    );
-    const p2Events = io.emitted.filter(
-      (e) => e.to === 'socket-p2' && e.event === 'game-start',
-    );
+    const p1Events = io.emitted.filter((e) => e.to === 'socket-p1' && e.event === 'game-start');
+    const p2Events = io.emitted.filter((e) => e.to === 'socket-p2' && e.event === 'game-start');
 
     expect(p1Events).toHaveLength(1);
     expect(p2Events).toHaveLength(1);
@@ -252,19 +248,11 @@ describe('handleConfirmBuild', () => {
     const io = createMockIo();
     startGame(room, io as unknown as Parameters<typeof startGame>[1]);
 
-    handleConfirmBuild(
-      room,
-      'player1',
-      io as unknown as Parameters<typeof handleConfirmBuild>[2],
-    );
+    handleConfirmBuild(room, 'player1', io as unknown as Parameters<typeof handleConfirmBuild>[2]);
 
     expect(room.gameState!.phase).toBe('build'); // still build — only one confirmed
 
-    handleConfirmBuild(
-      room,
-      'player2',
-      io as unknown as Parameters<typeof handleConfirmBuild>[2],
-    );
+    handleConfirmBuild(room, 'player2', io as unknown as Parameters<typeof handleConfirmBuild>[2]);
 
     expect(room.gameState!.phase).toBe('battle');
   });
@@ -275,11 +263,7 @@ describe('handleConfirmBuild', () => {
     startGame(room, io as unknown as Parameters<typeof startGame>[1]);
     io.emitted.length = 0;
 
-    handleConfirmBuild(
-      room,
-      'player1',
-      io as unknown as Parameters<typeof handleConfirmBuild>[2],
-    );
+    handleConfirmBuild(room, 'player1', io as unknown as Parameters<typeof handleConfirmBuild>[2]);
 
     const confirmEvents = io.emitted.filter((e) => e.event === 'build-confirmed');
     expect(confirmEvents).toHaveLength(1);
@@ -292,16 +276,8 @@ describe('handleConfirmBuild', () => {
     startGame(room, io as unknown as Parameters<typeof startGame>[1]);
     io.emitted.length = 0;
 
-    handleConfirmBuild(
-      room,
-      'player1',
-      io as unknown as Parameters<typeof handleConfirmBuild>[2],
-    );
-    handleConfirmBuild(
-      room,
-      'player2',
-      io as unknown as Parameters<typeof handleConfirmBuild>[2],
-    );
+    handleConfirmBuild(room, 'player1', io as unknown as Parameters<typeof handleConfirmBuild>[2]);
+    handleConfirmBuild(room, 'player2', io as unknown as Parameters<typeof handleConfirmBuild>[2]);
 
     const battleStartEvents = io.emitted.filter((e) => e.event === 'battle-start');
     expect(battleStartEvents).toHaveLength(2);
@@ -321,8 +297,22 @@ describe('handleSubmitCommands', () => {
     // Place at least one unit per player so elimination doesn't trigger immediately
     const p1Zone = room.gameState!.map.player1Deployment;
     const p2Zone = room.gameState!.map.player2Deployment;
-    handlePlaceUnit(room, 'player1', 'infantry', p1Zone[0]!, 'hold', io as unknown as Parameters<typeof handlePlaceUnit>[5]);
-    handlePlaceUnit(room, 'player2', 'infantry', p2Zone[0]!, 'hold', io as unknown as Parameters<typeof handlePlaceUnit>[5]);
+    handlePlaceUnit(
+      room,
+      'player1',
+      'infantry',
+      p1Zone[0]!,
+      'hold',
+      io as unknown as Parameters<typeof handlePlaceUnit>[5],
+    );
+    handlePlaceUnit(
+      room,
+      'player2',
+      'infantry',
+      p2Zone[0]!,
+      'hold',
+      io as unknown as Parameters<typeof handlePlaceUnit>[5],
+    );
 
     handleConfirmBuild(room, 'player1', io as unknown as Parameters<typeof handleConfirmBuild>[2]);
     handleConfirmBuild(room, 'player2', io as unknown as Parameters<typeof handleConfirmBuild>[2]);
@@ -371,9 +361,7 @@ describe('handleSubmitCommands', () => {
     );
 
     // Should emit room-error to player2
-    const errors = io.emitted.filter(
-      (e) => e.event === 'room-error' && e.to === 'socket-p2',
-    );
+    const errors = io.emitted.filter((e) => e.event === 'room-error' && e.to === 'socket-p2');
     expect(errors).toHaveLength(1);
 
     // Turn should NOT have advanced
@@ -404,11 +392,7 @@ describe('build timeout', () => {
     const io = createMockIo();
     startGame(room, io as unknown as Parameters<typeof startGame>[1]);
 
-    handleConfirmBuild(
-      room,
-      'player1',
-      io as unknown as Parameters<typeof handleConfirmBuild>[2],
-    );
+    handleConfirmBuild(room, 'player1', io as unknown as Parameters<typeof handleConfirmBuild>[2]);
 
     expect(room.gameState!.phase).toBe('build');
 

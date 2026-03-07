@@ -23,16 +23,12 @@ export const CUBE_DIRECTIONS: readonly CubeCoord[] = [
 
 /** Create a cube coordinate from axial q, r. Computes s = -q - r. */
 export function createHex(q: number, r: number): CubeCoord {
-  return { q, r, s: (-q - r) || 0 };
+  return { q, r, s: -q - r || 0 };
 }
 
 /** Manhattan distance in cube space: max(|dq|, |dr|, |ds|). */
 export function cubeDistance(a: CubeCoord, b: CubeCoord): number {
-  return Math.max(
-    Math.abs(a.q - b.q),
-    Math.abs(a.r - b.r),
-    Math.abs(a.s - b.s),
-  );
+  return Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.s - b.s));
 }
 
 /** Component-wise addition of two cube coords. */

@@ -34,12 +34,10 @@ export function renderDeployZones(state: GameState, currentPlayerView: PlayerId)
     return;
   }
 
-  const friendlyZone = currentPlayerView === 'player1'
-    ? state.map.player1Deployment
-    : state.map.player2Deployment;
-  const enemyZone = currentPlayerView === 'player1'
-    ? state.map.player2Deployment
-    : state.map.player1Deployment;
+  const friendlyZone =
+    currentPlayerView === 'player1' ? state.map.player1Deployment : state.map.player2Deployment;
+  const enemyZone =
+    currentPlayerView === 'player1' ? state.map.player2Deployment : state.map.player1Deployment;
 
   const friendlyKeys = new Set<string>();
   for (const h of friendlyZone) friendlyKeys.add(hexToKey(h));

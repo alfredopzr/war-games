@@ -4,7 +4,15 @@
       "Bash(/c/Users/pablo/miniconda3/python:*)",
       "Bash(pnpm exec:*)",
       "Bash(netstat:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(cd /Users/alfredopzr/Documents/Projects/war-games/packages/engine && pnpm test -- --run units.test.ts 2>&1 | tail -30)",
+      "Bash(cd /Users/alfredopzr/Documents/Projects/war-games/packages/engine && pnpm test -- --run 2>&1 | tail -15)",
+      "Bash(cd /Users/alfredopzr/Documents/Projects/war-games/packages/engine && pnpm test 2>&1)",
+      "Bash(cd /Users/alfredopzr/Documents/Projects/war-games/packages/engine && node -e \"\nconst { createGame, placeUnit, startBattlePhase } = require\\('./dist/game-state.js'\\) || {};\n\" 2>&1 | head -5)",
+      "Bash(cd /Users/alfredopzr/Documents/Projects/war-games/packages/engine && npx tsx -e \"\nimport { createGame } from './src/game-state';\nimport { hexNeighbors, hexToKey } from './src/hex';\n\nconst state = createGame\\(42\\);\nconst dzKeys = new Set\\([\n  ...state.map.player1Deployment.map\\(hexToKey\\),\n  ...state.map.player2Deployment.map\\(hexToKey\\),\n]\\);\n\n// Find a p1 deployment hex where at least one neighbor is on-map, non-mountain, non-dz\nfor \\(const dh of state.map.player1Deployment\\) {\n  const neighbors = hexNeighbors\\(dh\\);\n  const valid = neighbors.filter\\(h => {\n    const key = hexToKey\\(h\\);\n    return state.map.terrain.has\\(key\\) && state.map.terrain.get\\(key\\) !== 'mountain' && !dzKeys.has\\(key\\);\n  }\\);\n  if \\(valid.length > 0\\) {\n    console.log\\('Good deploy hex:', dh, 'valid neighbors:', valid.length, 'first:', valid[0]\\);\n    break;\n  }\n}\n\" 2>&1 | grep -v 'npm notice')",
+      "Bash(cd /Users/alfredopzr/Documents/Projects/war-games/packages/engine && npx tsx src/_debug.ts 2>&1 | grep -v 'npm notice')",
+      "Bash(pnpm format 2>&1 | tail -5)",
+      "Bash(git status -u)"
     ]
   }
 }

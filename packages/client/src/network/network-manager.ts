@@ -150,17 +150,14 @@ class NetworkManager {
 
     // -- Game start -----------------------------------------------------------
 
-    this.socket.on(
-      'game-start',
-      (data: { state: SerializableGameState; playerId: PlayerId }) => {
-        const gameState = deserializeGameState(data.state);
-        const s = store();
-        s.setGameState(gameState);
-        s.setMyPlayerId(data.playerId);
-        s.setCurrentPlayerView(data.playerId);
-        s.startBuildTimer();
-      },
-    );
+    this.socket.on('game-start', (data: { state: SerializableGameState; playerId: PlayerId }) => {
+      const gameState = deserializeGameState(data.state);
+      const s = store();
+      s.setGameState(gameState);
+      s.setMyPlayerId(data.playerId);
+      s.setCurrentPlayerView(data.playerId);
+      s.startBuildTimer();
+    });
 
     // -- State sync -----------------------------------------------------------
 
@@ -212,72 +209,54 @@ class NetworkManager {
 
     this.socket.on(
       'round-end',
-      (data: {
-        winner: PlayerId | null;
-        reason: string;
-        state: SerializableGameState;
-      }) => {
+      (data: { winner: PlayerId | null; reason: string; state: SerializableGameState }) => {
         const gameState = deserializeGameState(data.state);
         const s = store();
         s.setGameState(gameState);
         s.setWaitingForServer(false);
         s.setOpponentBuildConfirmed(false);
         s.showToast(
-          data.winner
-            ? `Round won by ${data.winner === 'player1' ? 'P1' : 'P2'}`
-            : 'Round draw',
+          data.winner ? `Round won by ${data.winner === 'player1' ? 'P1' : 'P2'}` : 'Round draw',
         );
       },
     );
 
-    this.socket.on(
-      'game-over',
-      (data: { winner: PlayerId; state: SerializableGameState }) => {
-        const gameState = deserializeGameState(data.state);
-        const s = store();
-        s.setGameState(gameState);
-        s.setWaitingForServer(false);
-      },
-    );
+    this.socket.on('game-over', (data: { winner: PlayerId; state: SerializableGameState }) => {
+      const gameState = deserializeGameState(data.state);
+      const s = store();
+      s.setGameState(gameState);
+      s.setWaitingForServer(false);
+    });
 
     // -- Timers ---------------------------------------------------------------
 
-    this.socket.on(
-      'timer-sync',
-      (data: { phase: 'build' | 'turn'; remaining: number }) => {
-        if (data.phase === 'build') {
-          store().setBuildTimeRemaining(data.remaining);
-        }
-      },
-    );
+    this.socket.on('timer-sync', (data: { phase: 'build' | 'turn'; remaining: number }) => {
+      if (data.phase === 'build') {
+        store().setBuildTimeRemaining(data.remaining);
+      }
+    });
 
     // -- Connection status ----------------------------------------------------
 
-    this.socket.on(
-      'opponent-disconnected',
-      (data: { reconnectDeadline: number }) => {
-        void data.reconnectDeadline;
-        store().setOpponentConnected(false);
-        store().showToast('Opponent disconnected — waiting for reconnection...');
-      },
-    );
+    this.socket.on('opponent-disconnected', (data: { reconnectDeadline: number }) => {
+      void data.reconnectDeadline;
+      store().setOpponentConnected(false);
+      store().showToast('Opponent disconnected — waiting for reconnection...');
+    });
 
     this.socket.on('opponent-reconnected', () => {
       store().setOpponentConnected(true);
       store().showToast('Opponent reconnected');
     });
 
-    this.socket.on(
-      'forfeit',
-      (data: { winner: PlayerId; reason: string }) => {
-        void data.winner;
-        const s = store();
-        s.showToast(
-          `Game over — ${data.reason === 'disconnect' ? 'opponent timed out' : 'opponent left'}`,
-        );
-        s.setWaitingForServer(false);
-      },
-    );
+    this.socket.on('forfeit', (data: { winner: PlayerId; reason: string }) => {
+      void data.winner;
+      const s = store();
+      s.showToast(
+        `Game over — ${data.reason === 'disconnect' ? 'opponent timed out' : 'opponent left'}`,
+      );
+      s.setWaitingForServer(false);
+    });
   }
 }
 

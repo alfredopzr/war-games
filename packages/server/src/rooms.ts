@@ -138,9 +138,7 @@ export function getRoom(roomId: string): Room | undefined {
   return rooms.get(roomId);
 }
 
-export function getRoomBySocket(
-  socketId: string,
-): { room: Room; playerId: PlayerId } | undefined {
+export function getRoomBySocket(socketId: string): { room: Room; playerId: PlayerId } | undefined {
   for (const room of rooms.values()) {
     for (const [playerId, player] of room.players) {
       if (player.socketId === socketId) {

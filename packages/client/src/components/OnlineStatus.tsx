@@ -11,9 +11,7 @@ export function OnlineStatus(): ReactElement | null {
   return (
     <div className="online-status">
       <div className="online-status-row">
-        <span
-          className={`online-status-dot ${opponentConnected ? 'connected' : 'disconnected'}`}
-        />
+        <span className={`online-status-dot ${opponentConnected ? 'connected' : 'disconnected'}`} />
         <span className="online-status-label">
           {opponentConnected ? 'Opponent connected' : 'Opponent disconnected'}
         </span>

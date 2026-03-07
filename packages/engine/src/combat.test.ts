@@ -7,9 +7,7 @@ import { createHex } from './hex';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeUnit(
-  overrides: Partial<Unit> & Pick<Unit, 'type' | 'owner' | 'position'>,
-): Unit {
+function makeUnit(overrides: Partial<Unit> & Pick<Unit, 'type' | 'owner' | 'position'>): Unit {
   return {
     id: overrides.id ?? 'test-unit',
     type: overrides.type,
@@ -70,8 +68,18 @@ describe('calculateDamage', () => {
     // Use mountain (defMod=0.4): without hold = max(1,floor(6-2*0.4))=max(1,5)=5
     //                             with hold = max(1,floor(6-3*0.4))=max(1,4)=4
     const attacker = makeUnit({ type: 'tank', owner: 'player1', position: origin });
-    const defenderNoHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, directive: 'advance' });
-    const defenderHold = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent, directive: 'hold' });
+    const defenderNoHold = makeUnit({
+      type: 'infantry',
+      owner: 'player2',
+      position: adjacent,
+      directive: 'advance',
+    });
+    const defenderHold = makeUnit({
+      type: 'infantry',
+      owner: 'player2',
+      position: adjacent,
+      directive: 'hold',
+    });
 
     const damageNoHold = calculateDamage(attacker, defenderNoHold, 'mountain', () => 1.0);
     const damageHold = calculateDamage(attacker, defenderHold, 'mountain', () => 1.0);
@@ -137,18 +145,34 @@ describe('canAttack', () => {
 describe('defensive position bonus', () => {
   it('reduces damage when defender is on defensive-position hex', () => {
     const attacker: Unit = {
-      id: 'a1', type: 'infantry', owner: 'player1', hp: 3,
-      position: createHex(0, 0), directive: 'advance',
-      directiveTarget: { type: 'central-objective' }, hasActed: false,
+      id: 'a1',
+      type: 'infantry',
+      owner: 'player1',
+      hp: 3,
+      position: createHex(0, 0),
+      directive: 'advance',
+      directiveTarget: { type: 'central-objective' },
+      hasActed: false,
     };
     const defender: Unit = {
-      id: 'd1', type: 'infantry', owner: 'player2', hp: 3,
-      position: createHex(1, 0), directive: 'advance',
-      directiveTarget: { type: 'central-objective' }, hasActed: false,
+      id: 'd1',
+      type: 'infantry',
+      owner: 'player2',
+      hp: 3,
+      position: createHex(1, 0),
+      directive: 'advance',
+      directiveTarget: { type: 'central-objective' },
+      hasActed: false,
     };
 
     const buildings: Building[] = [
-      { id: 'b1', type: 'defensive-position', owner: 'player2', position: createHex(1, 0), isRevealed: true },
+      {
+        id: 'b1',
+        type: 'defensive-position',
+        owner: 'player2',
+        position: createHex(1, 0),
+        isRevealed: true,
+      },
     ];
 
     // Plains defense = 0, with DP = 0.5

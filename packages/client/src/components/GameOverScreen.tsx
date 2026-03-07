@@ -23,17 +23,11 @@ export function GameOverScreen(): ReactElement | null {
 
   return (
     <div className="game-over">
-      <h1 className={playerTextClass(winner)}>
-        {playerLabel(winner)} Wins!
-      </h1>
+      <h1 className={playerTextClass(winner)}>{playerLabel(winner)} Wins!</h1>
       <div className="score-display">
         Final Score: P1 {p1Wins} — P2 {p2Wins}
       </div>
-      <button
-        className="play-again-btn"
-        onClick={resetGame}
-        type="button"
-      >
+      <button className="play-again-btn" onClick={resetGame} type="button">
         Play Again
       </button>
     </div>

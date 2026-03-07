@@ -65,7 +65,10 @@ describe('createBuilding', () => {
 describe('validateBuild', () => {
   let state: GameState;
 
-  function findDeployHexWithValidNeighbor(gs: GameState): { deployHex: import('./types').CubeCoord; adjacent: import('./types').CubeCoord } {
+  function findDeployHexWithValidNeighbor(gs: GameState): {
+    deployHex: import('./types').CubeCoord;
+    adjacent: import('./types').CubeCoord;
+  } {
     const dzKeys = new Set([
       ...gs.map.player1Deployment.map(hexToKey),
       ...gs.map.player2Deployment.map(hexToKey),
@@ -100,9 +103,14 @@ describe('validateBuild', () => {
   it('fails if unit is not an engineer', () => {
     const deployHex = state.map.player1Deployment[1]!;
     const infantry = {
-      id: 'test-inf', type: 'infantry' as const, owner: 'player1' as const,
-      hp: 3, position: deployHex, directive: 'advance' as const,
-      directiveTarget: { type: 'central-objective' as const }, hasActed: false,
+      id: 'test-inf',
+      type: 'infantry' as const,
+      owner: 'player1' as const,
+      hp: 3,
+      position: deployHex,
+      directive: 'advance' as const,
+      directiveTarget: { type: 'central-objective' as const },
+      hasActed: false,
     };
     state.players.player1.units.push(infantry);
     const adjacent = hexNeighbors(deployHex).find((h) => {

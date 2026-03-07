@@ -9,25 +9,35 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { CubeCoord, PlayerId, GameState } from './index';
 import {
-  createGame, placeUnit, startBattlePhase, executeTurn,
-  checkRoundEnd, scoreRound, getWinner, resetUnitIdCounter,
-  createHex, hexToKey, validateMap, UNIT_STATS,
-  calculateIncome, canAfford, createCommandPool, canIssueCommand,
-  calculateVisibility, cubeDistance, findPath,
+  createGame,
+  placeUnit,
+  startBattlePhase,
+  executeTurn,
+  checkRoundEnd,
+  scoreRound,
+  getWinner,
+  resetUnitIdCounter,
+  createHex,
+  hexToKey,
+  hexNeighbors,
+  validateMap,
+  UNIT_STATS,
+  calculateIncome,
+  canAfford,
+  createCommandPool,
+  canIssueCommand,
+  calculateVisibility,
+  cubeDistance,
+  findPath,
+  resetBuildingIdCounter,
 } from './index';
 
 /**
  * Find unoccupied deployment hexes for a player, skipping hexes where
  * surviving units already sit after being reset between rounds.
  */
-function findOpenDeploymentHexes(
-  game: GameState,
-  playerId: PlayerId,
-  count: number,
-): CubeCoord[] {
-  const zones = playerId === 'player1'
-    ? game.map.player1Deployment
-    : game.map.player2Deployment;
+function findOpenDeploymentHexes(game: GameState, playerId: PlayerId, count: number): CubeCoord[] {
+  const zones = playerId === 'player1' ? game.map.player1Deployment : game.map.player2Deployment;
 
   const allUnits = [...game.players.player1.units, ...game.players.player2.units];
   const occupied = new Set(allUnits.map((u) => hexToKey(u.position)));
@@ -260,5 +270,67 @@ describe('Full game simulation', () => {
     expect(() => {
       startBattlePhase(game);
     }).toThrow('Can only start battle from build phase');
+  });
+});
+
+describe('engineer building lifecycle', () => {
+  beforeEach(() => {
+    resetUnitIdCounter();
+    resetBuildingIdCounter();
+  });
+
+  it('engineer builds, building persists, cleared on round end', () => {
+    const state = createGame(42);
+
+    // Find valid deploy+build hexes
+    const dzKeys = new Set([
+      ...state.map.player1Deployment.map(hexToKey),
+      ...state.map.player2Deployment.map(hexToKey),
+    ]);
+
+    let deployHex: CubeCoord | undefined;
+    let buildHex: CubeCoord | undefined;
+
+    for (const dh of state.map.player1Deployment) {
+      const adj = hexNeighbors(dh).find((h) => {
+        const key = hexToKey(h);
+        return (
+          state.map.terrain.has(key) &&
+          state.map.terrain.get(key) !== 'mountain' &&
+          !dzKeys.has(key)
+        );
+      });
+      if (adj) {
+        deployHex = dh;
+        buildHex = adj;
+        break;
+      }
+    }
+
+    expect(deployHex).toBeDefined();
+    expect(buildHex).toBeDefined();
+
+    placeUnit(state, 'player1', 'engineer', deployHex!);
+    placeUnit(state, 'player2', 'infantry', state.map.player2Deployment[0]!);
+    startBattlePhase(state);
+
+    const engineer = state.players.player1.units[0]!;
+
+    // Build command
+    executeTurn(state, [
+      {
+        type: 'direct-build',
+        unitId: engineer.id,
+        buildingType: 'recon-tower',
+        targetHex: buildHex!,
+      },
+    ]);
+
+    expect(state.buildings.length).toBe(1);
+    expect(state.buildings[0]!.type).toBe('recon-tower');
+
+    // Score round — buildings cleared
+    scoreRound(state, 'player1');
+    expect(state.buildings.length).toBe(0);
   });
 });
