@@ -20,7 +20,7 @@ export type {
   BattleEventObjectiveChange, BattleEventKothProgress,
   BattleEventRoundEnd, BattleEventGameEnd, BattleEventHeal,
   BattleEventIntercept, BattleEventCounter, BattleEventMelee, BattleEventReveal,
-  BattleEventBuild, BattleEventMineTriggered, BattleEventMortarFire,
+  BattleEventBuild, BattleEventMineTriggered, BattleEventMortarFire, BattleEventBuildingDestroyed,
   // Network protocol
   ClientCreateRoom, ClientJoinRoom, ClientLeaveRoom, ClientReconnect,
   ClientPlaceUnit, ClientRemoveUnit, ClientSetDirective,

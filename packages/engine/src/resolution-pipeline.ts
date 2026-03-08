@@ -507,7 +507,7 @@ function applyRedirects(state: GameState, playerId: PlayerId, commands: Command[
   const friendlyUnits = state.players[playerId].units;
 
   for (const command of commands) {
-    if (command.type === 'build') continue; // build commands handled separately
+    if (command.type === 'build' || command.type === 'attack-building') continue; // handled separately
     const unit = friendlyUnits.find(u => u.id === command.unitId);
     if (!unit) continue;
     commandPool = spendCommand(commandPool, command);
@@ -590,6 +590,60 @@ function resolveBuildCommands(
 }
 
 // -----------------------------------------------------------------------------
+// Phase 2b — Attack Building Commands
+// -----------------------------------------------------------------------------
+
+function resolveAttackBuildingCommands(
+  state: GameState,
+  p1Commands: Command[],
+  p2Commands: Command[],
+): void {
+  const allCommands: { playerId: PlayerId; commands: Command[] }[] = [
+    { playerId: 'player1', commands: p1Commands },
+    { playerId: 'player2', commands: p2Commands },
+  ];
+
+  for (const { playerId, commands } of allCommands) {
+    const friendlyUnits = state.players[playerId].units;
+    let commandPool = state.round.commandPools[playerId];
+
+    for (const cmd of commands) {
+      if (cmd.type !== 'attack-building') continue;
+
+      const unit = friendlyUnits.find(u => u.id === cmd.unitId);
+      if (!unit) continue;
+
+      const buildingIdx = state.buildings.findIndex(b => b.id === cmd.targetBuildingId);
+      if (buildingIdx === -1) continue;
+
+      const building = state.buildings[buildingIdx]!;
+      if (building.owner === playerId) continue;
+
+      commandPool = spendCommand(commandPool, cmd);
+
+      state.pendingEvents.push({
+        type: 'building-destroyed',
+        actingPlayer: playerId,
+        phase: 'combat',
+        pipelinePhase: 2,
+        attackerId: unit.id,
+        attackerType: unit.type,
+        buildingId: building.id,
+        buildingType: building.type,
+        buildingPosition: { ...building.position },
+        buildingOwner: building.owner,
+      });
+
+      state.buildings.splice(buildingIdx, 1);
+
+      console.log(`[P2:ATTACK-BUILDING] ${playerId} ${unit.type} ${unit.id} destroyed ${building.type} ${building.id}`);
+    }
+
+    state.round.commandPools[playerId] = commandPool;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Phase 3 — Movement
 // -----------------------------------------------------------------------------
 
@@ -635,6 +689,54 @@ function resolveMovement(
 
     for (let step = 1; step < intent.path.length; step++) {
       const hex = intent.path[step]!;
+      const hexKey = hexToKey(hex);
+
+      // Mine check: trigger enemy mines at this hex before intercepts
+      const mineIdx = state.buildings.findIndex(
+        b => b.type === 'mines' && b.owner !== unit.owner && hexToKey(b.position) === hexKey,
+      );
+      if (mineIdx !== -1) {
+        const mine = state.buildings[mineIdx]!;
+        const mineDamage = BUILDING_STATS.mines.damage!;
+        unit.hp -= mineDamage;
+
+        state.pendingEvents.push({
+          type: 'mine-triggered',
+          actingPlayer: mine.owner,
+          phase: 'combat',
+          pipelinePhase: 3,
+          buildingId: mine.id,
+          triggeredByUnitId: unit.id,
+          triggeredByUnitType: unit.type,
+          position: { ...mine.position },
+          damage: mineDamage,
+          unitHpAfter: unit.hp,
+        });
+
+        state.buildings.splice(mineIdx, 1);
+
+        if (unit.hp <= 0) {
+          state.pendingEvents.push({
+            type: 'kill',
+            actingPlayer: mine.owner,
+            phase: 'combat',
+            pipelinePhase: 3,
+            attackerId: mine.id,
+            attackerType: 'engineer',
+            attackerPosition: { ...mine.position },
+            defenderId: unit.id,
+            defenderType: unit.type,
+            defenderPosition: { ...hex },
+            damage: mineDamage,
+            defenderTerrain: state.map.terrain.get(hexKey) ?? 'plains',
+          });
+          removeUnit(state, unit);
+          state.round.unitsKilledThisRound[mine.owner] += 1;
+          stopped = true;
+          stoppedAt = hex;
+          break;
+        }
+      }
 
       // Check for enemies that can intercept at this hex (using snapshot positions)
       for (const enemy of allUnits) {
@@ -1324,45 +1426,6 @@ function resolveDirectiveEffects(
         }
       }
 
-      // Recon tower vision: emit reveal events for enemies visible from recon towers
-      if (unit.type === 'engineer') {
-        const ownBuildings = state.buildings.filter(b => b.owner === playerId && b.type === 'recon-tower');
-        for (const tower of ownBuildings) {
-          const towerVision = BUILDING_STATS['recon-tower'].visionRange ?? 4;
-          // Create a virtual unit at the tower position with the tower's vision range
-          const virtualUnit: Unit = {
-            ...unit,
-            id: `tower-${tower.id}`,
-            position: tower.position,
-          };
-          const virtualStats: Record<string, { visionRange: number }> = {
-            [unit.type]: { visionRange: towerVision },
-          };
-          const towerVisibility = calculateVisibility([virtualUnit], state.map.terrain, state.map.elevation, virtualStats);
-          const enemyUnits = state.players[enemyId].units;
-          const revealedHexes: CubeCoord[] = [];
-
-          for (const enemy of enemyUnits) {
-            if (towerVisibility.has(hexToKey(enemy.position))) {
-              revealedHexes.push({ ...enemy.position });
-            }
-          }
-
-          if (revealedHexes.length > 0) {
-            state.pendingEvents.push({
-              type: 'reveal',
-              actingPlayer: playerId,
-              phase: 'combat',
-              pipelinePhase: 8,
-              unitId: tower.id,
-              unitType: 'engineer',
-              unitPosition: { ...tower.position },
-              hexes: revealedHexes,
-            });
-          }
-        }
-      }
-
       // Patrol reveal
       const intent = intents.get(unit.id);
       if (intent && intent.movementDirective === 'patrol') {
@@ -1390,6 +1453,9 @@ function resolveDirectiveEffects(
         }
       }
     }
+
+    // Recon tower vision — independent of engineer survival
+    resolveReconTowerVision(state, playerId, enemyId);
   }
 }
 
@@ -1566,6 +1632,61 @@ function countCitiesHeld(state: GameState, playerId: PlayerId): number {
 }
 
 // -----------------------------------------------------------------------------
+// Recon Tower Vision
+// -----------------------------------------------------------------------------
+
+function resolveReconTowerVision(
+  state: GameState,
+  playerId: PlayerId,
+  enemyId: PlayerId,
+): void {
+  const towers = state.buildings.filter(b => b.owner === playerId && b.type === 'recon-tower');
+  if (towers.length === 0) return;
+
+  const enemyUnits = state.players[enemyId].units;
+  const towerVision = BUILDING_STATS['recon-tower'].visionRange ?? 4;
+
+  for (const tower of towers) {
+    const virtualUnit: Unit = {
+      id: `tower-${tower.id}`,
+      type: 'engineer',
+      owner: playerId,
+      hp: 1,
+      position: tower.position,
+      movementDirective: 'hold',
+      attackDirective: 'ignore',
+      specialtyModifier: null,
+      directiveTarget: { type: 'hex', hex: tower.position },
+      hasActed: false,
+    };
+    const virtualStats: Record<string, { visionRange: number }> = {
+      engineer: { visionRange: towerVision },
+    };
+    const towerVisibility = calculateVisibility([virtualUnit], state.map.terrain, state.map.elevation, virtualStats);
+    const revealedHexes: CubeCoord[] = [];
+
+    for (const enemy of enemyUnits) {
+      if (towerVisibility.has(hexToKey(enemy.position))) {
+        revealedHexes.push({ ...enemy.position });
+      }
+    }
+
+    if (revealedHexes.length > 0) {
+      state.pendingEvents.push({
+        type: 'reveal',
+        actingPlayer: playerId,
+        phase: 'combat',
+        pipelinePhase: 8,
+        unitId: tower.id,
+        unitType: 'engineer',
+        unitPosition: { ...tower.position },
+        hexes: revealedHexes,
+      });
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Defensive Position Damage Modifier
 // -----------------------------------------------------------------------------
 
@@ -1587,68 +1708,6 @@ function applyDefensivePositionBonus(
     return Math.max(1, Math.floor(damage * (1 - defBonus)));
   }
   return damage;
-}
-
-// -----------------------------------------------------------------------------
-// Phase 3b — Mines Resolution
-// -----------------------------------------------------------------------------
-
-function resolveMines(state: GameState): void {
-  const allUnits = getAllUnits(state);
-  const minesToRemove: string[] = [];
-
-  for (const building of state.buildings) {
-    if (building.type !== 'mines') continue;
-    const mineKey = hexToKey(building.position);
-
-    // Check if any enemy unit stepped on the mines
-    for (const unit of allUnits) {
-      if (unit.owner === building.owner) continue;
-      if (hexToKey(unit.position) !== mineKey) continue;
-
-      const damage = BUILDING_STATS.mines.damage!;
-      unit.hp -= damage;
-
-      state.pendingEvents.push({
-        type: 'mine-triggered',
-        actingPlayer: building.owner,
-        phase: 'combat',
-        pipelinePhase: 3,
-        buildingId: building.id,
-        triggeredByUnitId: unit.id,
-        triggeredByUnitType: unit.type,
-        position: { ...building.position },
-        damage,
-        unitHpAfter: unit.hp,
-      });
-
-      if (unit.hp <= 0) {
-        state.pendingEvents.push({
-          type: 'kill',
-          actingPlayer: building.owner,
-          phase: 'combat',
-          pipelinePhase: 3,
-          attackerId: building.id,
-          attackerType: 'engineer',
-          attackerPosition: { ...building.position },
-          defenderId: unit.id,
-          defenderType: unit.type,
-          defenderPosition: { ...unit.position },
-          damage,
-          defenderTerrain: state.map.terrain.get(mineKey) ?? 'plains',
-        });
-        removeUnit(state, unit);
-        state.round.unitsKilledThisRound[building.owner] += 1;
-      }
-
-      // Mines are consumed on trigger
-      minesToRemove.push(building.id);
-      break; // Only trigger once per mine
-    }
-  }
-
-  // Remove triggered mines
-  state.buildings = state.buildings.filter(b => !minesToRemove.includes(b.id));
 }
 
 // -----------------------------------------------------------------------------
@@ -1778,11 +1837,11 @@ export function resolveTurn(
   // Phase 2b: Build Commands
   resolveBuildCommands(state, p1Commands, p2Commands);
 
-  // Phase 3: Movement
-  const movementResult = resolveMovement(state, intents, snapshot, randomFn);
+  // Phase 2b: Attack Building Commands
+  resolveAttackBuildingCommands(state, p1Commands, p2Commands);
 
-  // Phase 3b: Mines
-  resolveMines(state);
+  // Phase 3: Movement (includes mine triggering per-step)
+  const movementResult = resolveMovement(state, intents, snapshot, randomFn);
 
   // Phase 4: Engagement Detection
   const engagements = detectEngagements(state, intents, movementResult.interceptEngagements);

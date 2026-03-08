@@ -370,6 +370,14 @@ function animateEvent(
       revealTimers.push(timer);
       return 1000;
     }
+
+    case 'building-destroyed': {
+      const timer = setTimeout(() => {
+        callbacks.onSound?.('explosion');
+      }, scaledDelay);
+      revealTimers.push(timer);
+      return 800;
+    }
   }
 }
 

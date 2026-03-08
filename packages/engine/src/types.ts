@@ -128,6 +128,7 @@ export interface Building {
   readonly owner: PlayerId;
   readonly position: CubeCoord;
   readonly builtTurn: number;
+  readonly isRevealed: boolean;
 }
 
 // -----------------------------------------------------------------------------
@@ -155,6 +156,11 @@ export type Command =
       type: 'build';
       unitId: string;
       buildingType: BuildingType;
+    }
+  | {
+      type: 'attack-building';
+      unitId: string;
+      targetBuildingId: string;
     };
 
 export interface CommandPool {
@@ -504,6 +510,16 @@ export interface BattleEventMortarFire extends BattleEventBase {
   readonly targetHpAfter: number;
 }
 
+export interface BattleEventBuildingDestroyed extends BattleEventBase {
+  readonly type: 'building-destroyed';
+  readonly attackerId: string;
+  readonly attackerType: UnitType;
+  readonly buildingId: string;
+  readonly buildingType: BuildingType;
+  readonly buildingPosition: CubeCoord;
+  readonly buildingOwner: PlayerId;
+}
+
 export type BattleEvent =
   | BattleEventMove
   | BattleEventDamage
@@ -523,7 +539,8 @@ export type BattleEvent =
   | BattleEventReveal
   | BattleEventBuild
   | BattleEventMineTriggered
-  | BattleEventMortarFire;
+  | BattleEventMortarFire
+  | BattleEventBuildingDestroyed;
 
 export type BattleEventType = BattleEvent['type'];
 

@@ -55,6 +55,7 @@ export function createBuilding(
     owner,
     position,
     builtTurn,
+    isRevealed: type !== 'mines',
   };
 }
 

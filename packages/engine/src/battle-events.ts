@@ -85,5 +85,8 @@ export function formatBattleEvent(event: BattleEvent): string {
 
     case 'mortar-fire':
       return `Mortar fired at ${unitLabel(event.targetUnitType)} for ${event.damage} damage (${event.targetHpAfter} HP left)`;
+
+    case 'building-destroyed':
+      return `${pl(event.actingPlayer)} ${unitLabel(event.attackerType)} destroyed ${pl(event.buildingOwner)}'s ${event.buildingType}`;
   }
 }

@@ -15,12 +15,14 @@ import type {
   MegaHexInfo,
   BattleEvent,
   CubeCoord,
+  Building,
 } from '@hexwar/engine';
 
 import {
   calculateVisibility,
   hexToKey,
   CP_PER_ROUND,
+  BUILDING_STATS,
 } from '@hexwar/engine';
 
 import type { SerializableGameState } from '@hexwar/engine';
@@ -118,6 +120,8 @@ export function filterStateForPlayer(
     state.map.terrain,
     state.map.elevation,
     state.unitStats,
+    state.buildings,
+    playerId,
   );
 
   // Serialize cityOwnership (small — typically ~5 entries)
@@ -128,12 +132,14 @@ export function filterStateForPlayer(
 
   // Build SerializableGameState directly (single-pass, no intermediate clone)
   // Filter buildings: own buildings always visible, enemy buildings only on visible hexes
+  // Uses tower-aware visibility so recon towers extend building detection too
   const visibleKeys = state.phase === 'build'
     ? new Set<string>()
-    : calculateVisibility(ownUnits, state.map.terrain, state.map.elevation, state.unitStats);
+    : computeVisibilityWithTowers(ownUnits, state.buildings, playerId, state.map.terrain, state.map.elevation, state.unitStats);
 
   const filteredBuildings = state.buildings.filter(b => {
     if (b.owner === playerId) return true;
+    if (!b.isRevealed) return false;
     return visibleKeys.has(`${b.position.q},${b.position.r}`);
   }).map(b => ({ ...b, position: { ...b.position } }));
 
@@ -207,6 +213,50 @@ function serializeUnit(unit: Unit): Unit {
 // Enemy Unit Filtering
 // -----------------------------------------------------------------------------
 
+/**
+ * Compute visibility including recon tower vision sources.
+ * Returns the union of unit LOS and tower LOS.
+ */
+function computeVisibilityWithTowers(
+  ownUnits: Unit[],
+  buildings: Building[],
+  playerId: PlayerId,
+  terrain: Map<string, TerrainType>,
+  elevation: Map<string, number>,
+  unitStats: Record<string, { visionRange: number }>,
+): Set<string> {
+  const visibleKeys = calculateVisibility(ownUnits, terrain, elevation, unitStats);
+
+  const towers = buildings.filter(b => b.owner === playerId && b.type === 'recon-tower');
+  if (towers.length === 0) return visibleKeys;
+
+  const towerVision = BUILDING_STATS['recon-tower'].visionRange ?? 4;
+  const virtualStats: Record<string, { visionRange: number }> = {
+    engineer: { visionRange: towerVision },
+  };
+
+  for (const tower of towers) {
+    const virtualUnit: Unit = {
+      id: `tower-${tower.id}`,
+      type: 'engineer',
+      owner: playerId,
+      hp: 1,
+      position: tower.position,
+      movementDirective: 'hold',
+      attackDirective: 'ignore',
+      specialtyModifier: null,
+      directiveTarget: { type: 'hex', hex: tower.position },
+      hasActed: false,
+    };
+    const towerVis = calculateVisibility([virtualUnit], terrain, elevation, virtualStats);
+    for (const key of towerVis) {
+      visibleKeys.add(key);
+    }
+  }
+
+  return visibleKeys;
+}
+
 function filterEnemyUnits(
   phase: GameState['phase'],
   ownUnits: Unit[],
@@ -214,14 +264,16 @@ function filterEnemyUnits(
   terrain: Map<string, TerrainType>,
   elevation: Map<string, number>,
   unitStats: Record<string, { visionRange: number }>,
+  buildings: Building[],
+  playerId: PlayerId,
 ): Unit[] {
   // Build phase: blind deployment — no enemy units visible
   if (phase === 'build') {
     return [];
   }
 
-  // Battle phase: only include enemies on visible hexes
-  const visibleKeys = calculateVisibility(ownUnits, terrain, elevation, unitStats);
+  // Battle phase: only include enemies on visible hexes (including tower vision)
+  const visibleKeys = computeVisibilityWithTowers(ownUnits, buildings, playerId, terrain, elevation, unitStats);
 
   return enemyUnits
     .filter((unit) => visibleKeys.has(hexToKey(unit.position)))
@@ -337,5 +389,8 @@ function eventHasVisiblePosition(event: BattleEvent, losSet: Set<string>): boole
 
     case 'mortar-fire':
       return losSet.has(hexKeyFromCoord(event.buildingPosition)) || losSet.has(hexKeyFromCoord(event.targetPosition));
+
+    case 'building-destroyed':
+      return losSet.has(hexKeyFromCoord(event.buildingPosition));
   }
 }

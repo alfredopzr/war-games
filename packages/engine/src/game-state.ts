@@ -164,7 +164,7 @@ export function filterValidCommands(
   let remaining = pool.remaining;
 
   return commands.filter((cmd) => {
-    if (cmd.type !== 'redirect' && cmd.type !== 'build') return false;
+    if (cmd.type !== 'redirect' && cmd.type !== 'build' && cmd.type !== 'attack-building') return false;
     if (remaining <= 0) return false;
 
     const unit = friendlyUnits.find((u) => u.id === cmd.unitId);
@@ -176,6 +176,13 @@ export function filterValidCommands(
     // Build commands require the unit to be an engineer
     if (cmd.type === 'build') {
       if (unit.type !== 'engineer') return false;
+    }
+
+    // Attack-building: target must exist and belong to enemy
+    if (cmd.type === 'attack-building') {
+      const targetBuilding = state.buildings.find(b => b.id === cmd.targetBuildingId);
+      if (!targetBuilding) return false;
+      if (targetBuilding.owner === playerId) return false;
     }
 
     seen.add(cmd.unitId);
