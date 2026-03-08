@@ -55,6 +55,14 @@ export function hexToKey(hex: CubeCoord): string {
   return `${hex.q},${hex.r}`;
 }
 
+/** Inverse of hexToKey — parse "q,r" string back to CubeCoord. */
+export function keyToHex(key: string): CubeCoord {
+  const [qStr, rStr] = key.split(',');
+  const q = Number(qStr);
+  const r = Number(rStr);
+  return { q, r, s: -q - r };
+}
+
 // -----------------------------------------------------------------------------
 // Grid Bounds
 // -----------------------------------------------------------------------------

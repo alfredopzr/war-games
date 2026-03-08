@@ -339,6 +339,9 @@ export interface BattleEventKill extends BattleEventBase {
   readonly damage: number;
   readonly defenderTerrain: TerrainType;
   readonly approachCategory: ApproachCategory;
+  readonly typeAdvantage: number;
+  readonly expectedHitsMin: number;
+  readonly expectedHitsMax: number;
 }
 
 export interface BattleEventCapture extends BattleEventBase {

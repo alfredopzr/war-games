@@ -4,7 +4,7 @@ import { getPalette, type FactionId } from './palette';
 export type Faction = FactionId;
 
 export const PLAYER_FACTION: Record<PlayerId, Faction> = {
-  player1: 'engineer',
+  player1: 'iron-collective',
   player2: 'caravaner',
 };
 
@@ -36,7 +36,7 @@ interface ModelEntry {
 }
 
 export const MODEL_MANIFEST: Partial<Record<Faction, Record<UnitType, ModelEntry>>> = {
-  engineer: {
+  'iron-collective': {
     infantry: {
       glbPath: '/models/highdef/infantry_engineer.glb',
       clipMap: {

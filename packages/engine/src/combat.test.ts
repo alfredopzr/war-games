@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Unit, CubeCoord } from './types';
-import { calculateDamage, canAttack } from './combat';
+import { calculateDamage, canAttack, computeExpectedKillBand } from './combat';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -145,5 +145,46 @@ describe('canAttack', () => {
     const defender = makeUnit({ type: 'infantry', owner: 'player2', position: adjacent });
     // No visibleHexes arg — range-only check, should pass
     expect(canAttack(attacker, defender)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeExpectedKillBand
+// ---------------------------------------------------------------------------
+
+describe('computeExpectedKillBand', () => {
+  it('tank vs infantry on plains (counter 2.0x): expectedHitsMin=1, expectedHitsMax=2', () => {
+    // ATK=14, typeMult=2.0, DEF=2, HP=30, terrainDef=0
+    // minDmg = max(1, floor(14*2.0*0.85 - 2)) = 21
+    // maxDmg = max(1, floor(14*2.0*1.15 - 2)) = 30
+    const band = computeExpectedKillBand('tank', 'infantry', 'plains');
+    expect(band.expectedHitsMin).toBe(1);
+    expect(band.expectedHitsMax).toBe(2);
+  });
+
+  it('infantry vs infantry on plains (neutral 1.0x): expectedHitsMin=4, expectedHitsMax=5', () => {
+    // ATK=10, typeMult=1.0, DEF=2, HP=30, terrainDef=0
+    // minDmg = max(1, floor(10*1.0*0.85 - 2)) = 6
+    // maxDmg = max(1, floor(10*1.0*1.15 - 2)) = 9
+    const band = computeExpectedKillBand('infantry', 'infantry', 'plains');
+    expect(band.expectedHitsMin).toBe(4);
+    expect(band.expectedHitsMax).toBe(5);
+  });
+
+  it('infantry vs tank on plains (disadvantaged 0.6x): expectedHitsMin=10, expectedHitsMax=14', () => {
+    // ATK=10, typeMult=0.6, DEF=2, HP=40, terrainDef=0
+    // minDmg = max(1, floor(10*0.6*0.85 - 2)) = 3
+    // maxDmg = max(1, floor(10*0.6*1.15 - 2)) = 4
+    const band = computeExpectedKillBand('infantry', 'tank', 'plains');
+    expect(band.expectedHitsMin).toBe(10);
+    expect(band.expectedHitsMax).toBe(14);
+  });
+
+  it('forest defense extends kill band', () => {
+    const plains = computeExpectedKillBand('tank', 'infantry', 'plains');
+    const forest = computeExpectedKillBand('tank', 'infantry', 'forest');
+    // Forest reduces damage → more hits needed → higher expectedHitsMin/Max
+    expect(forest.expectedHitsMin).toBeGreaterThanOrEqual(plains.expectedHitsMin);
+    expect(forest.expectedHitsMax).toBeGreaterThanOrEqual(plains.expectedHitsMax);
   });
 });

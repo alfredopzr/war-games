@@ -328,7 +328,7 @@ export function App(): ReactElement {
 
       const modelT0 = performance.now();
       const modelPromise = Promise.all([
-        preloadFactionModels('engineer'),
+        preloadFactionModels('iron-collective'),
         preloadFactionModels('caravaner'),
       ]).then(() => {
         perf.record('preloadModels', performance.now() - modelT0);

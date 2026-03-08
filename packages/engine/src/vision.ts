@@ -3,7 +3,7 @@
 // =============================================================================
 
 import type { Unit, TerrainType } from './types';
-import { cubeDistance, hexToKey, hexLineDraw } from './hex';
+import { cubeDistance, hexToKey, keyToHex, hexLineDraw } from './hex';
 import { getVisionBonus } from './terrain';
 import { UNIT_STATS } from './units';
 import { FOREST_VISION_PENALTY, LOS_EYE_HEIGHT } from './map-gen-params';
@@ -36,8 +36,8 @@ export function calculateVisibility(
   // Pre-build coord array once — avoids re-parsing "q,r" strings per unit
   const hexCoords: { key: string; q: number; r: number }[] = [];
   for (const key of terrainMap.keys()) {
-    const [qStr, rStr] = key.split(',');
-    hexCoords.push({ key, q: Number(qStr), r: Number(rStr) });
+    const coord = keyToHex(key);
+    hexCoords.push({ key, q: coord.q, r: coord.r });
   }
 
   for (const unit of friendlyUnits) {

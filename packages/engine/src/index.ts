@@ -33,7 +33,7 @@ export type {
 // Hex grid
 export {
   createHex, cubeDistance, hexNeighbors, hexAdd, hexSubtract,
-  hexToKey, hexLineDraw, isValidHex, getAllHexes, cubeRound,
+  hexToKey, keyToHex, hexLineDraw, isValidHex, getAllHexes, cubeRound,
   hexesInRadius, CUBE_DIRECTIONS,
 } from './hex';
 
@@ -44,10 +44,11 @@ export { TERRAIN, getMoveCost, getDefenseModifier, getVisionBonus } from './terr
 export { UNIT_STATS, scaledUnitStats, createUnit, getTypeAdvantage, resetUnitIdCounter } from './units';
 
 // Combat
-export { calculateDamage, canAttack } from './combat';
+export { calculateDamage, canAttack, computeExpectedKillBand, COMBAT_RNG_MIN, COMBAT_RNG_RANGE } from './combat';
+export type { KillBand } from './combat';
 
 // Pathfinding
-export { findPath, pathCost, getReachableHexes } from './pathfinding';
+export { findPath, pathCost, getReachableHexes, computeMovementCostField } from './pathfinding';
 
 // Vision
 export { calculateVisibility, isUnitVisible, canSeeHex } from './vision';
@@ -94,8 +95,8 @@ export { aiBuildPhase, aiBattlePhase } from './ai';
 export type { AiBuildAction } from './ai';
 
 // AI Harness
-export { runMatch, runBatch, classifyKillTiming, computeKillThresholds } from './ai-harness';
-export type { MatchResult, KillRecord, RoundResult, BatchOptions, BatchSummary, MatchupVerdictCounts, KillVerdict, KillThresholds, MapFairness } from './ai-harness';
+export { runMatch, runBatch } from './ai-harness';
+export type { MatchResult, KillRecord, RoundResult, BatchOptions, BatchSummary, MatchupVerdictCounts, KillVerdict, MapValidity, MapValidityClass } from './ai-harness';
 
 // World coordinates
 export {

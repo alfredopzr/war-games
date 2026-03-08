@@ -1,4 +1,4 @@
-import type { Unit, TerrainType, HexModifier } from './types';
+import type { Unit, UnitType, TerrainType, HexModifier } from './types';
 import { cubeDistance, hexToKey } from './hex';
 import { getDefenseModifier } from './terrain';
 import { UNIT_STATS, getTypeAdvantage } from './units';
@@ -6,6 +6,11 @@ import { UNIT_STATS, getTypeAdvantage } from './units';
 // =============================================================================
 // HexWar — Combat Resolution
 // =============================================================================
+
+/** RNG floor for combat variance (±15% → [0.85, 1.15]) */
+export const COMBAT_RNG_MIN = 0.85;
+/** RNG range for combat variance: result = COMBAT_RNG_MIN + rng() * COMBAT_RNG_RANGE */
+export const COMBAT_RNG_RANGE = 0.3;
 
 /**
  * Calculate damage dealt by attacker to defender.
@@ -28,7 +33,7 @@ export function calculateDamage(
   attacker: Unit,
   defender: Unit,
   defenderTerrain: TerrainType,
-  randomFn: () => number = (): number => 0.85 + Math.random() * 0.3,
+  randomFn: () => number = (): number => COMBAT_RNG_MIN + Math.random() * COMBAT_RNG_RANGE,
   defenderModifier?: HexModifier,
 ): number {
   const attackerStats = UNIT_STATS[attacker.type];
@@ -67,4 +72,34 @@ export function canAttack(attacker: Unit, defender: Unit, visibleHexes?: Set<str
   const stats = UNIT_STATS[attacker.type];
 
   return distance >= stats.minAttackRange && distance <= stats.attackRange;
+}
+
+// =============================================================================
+// Kill Band — expected hits-to-kill for balance validation
+// =============================================================================
+
+export interface KillBand {
+  readonly expectedHitsMin: number;
+  readonly expectedHitsMax: number;
+}
+
+export function computeExpectedKillBand(
+  attackerType: UnitType,
+  defenderType: UnitType,
+  defenderTerrain: TerrainType,
+  defenderModifier?: HexModifier,
+): KillBand {
+  const atk = UNIT_STATS[attackerType].atk;
+  const def = UNIT_STATS[defenderType].def;
+  const hp = UNIT_STATS[defenderType].maxHp;
+  const typeMult = getTypeAdvantage(attackerType, defenderType);
+  const terrainDef = getDefenseModifier(defenderTerrain, defenderModifier);
+
+  const minDmg = Math.max(1, Math.floor((atk * typeMult * 0.85) * (1 - terrainDef) - def));
+  const maxDmg = Math.max(1, Math.floor((atk * typeMult * 1.15) * (1 - terrainDef) - def));
+
+  return {
+    expectedHitsMin: Math.ceil(hp / maxDmg),
+    expectedHitsMax: Math.ceil(hp / minDmg),
+  };
 }

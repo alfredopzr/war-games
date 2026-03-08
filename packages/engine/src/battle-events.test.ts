@@ -48,6 +48,8 @@ describe('formatBattleEvent', () => {
       defenderPosition: { q: 2, r: 0, s: -2 },
       damage: 5, defenderTerrain: 'forest',
       approachCategory: 'flank',
+      typeAdvantage: 1.0,
+      expectedHitsMin: 1, expectedHitsMax: 2,
     };
     expect(formatBattleEvent(event)).toBe('P2 Artillery destroyed Recon');
   });

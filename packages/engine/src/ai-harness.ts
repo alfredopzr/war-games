@@ -20,13 +20,13 @@ import { aiBuildPhase, aiBattlePhase } from './ai';
 import { resolveTurn } from './resolution-pipeline';
 import { createCommandPool } from './commands';
 import { mulberry32 } from './rng';
-import { UNIT_STATS, getTypeAdvantage } from './units';
 import { resetUnitIdCounter } from './units';
-import { cubeDistance, hexToKey } from './hex';
+import { cubeDistance, hexToKey, keyToHex, hexNeighbors } from './hex';
 import { findPath } from './pathfinding';
+import { computeMovementCostField } from './pathfinding';
 import { calculateVisibility } from './vision';
-import { BASE_INCOME, CITY_INCOME, KILL_BONUS } from './economy';
-import balanceData from './balance.json';
+import { COMBAT_RNG_MIN, COMBAT_RNG_RANGE } from './combat';
+import { calculateIncome, CITY_INCOME } from './economy';
 
 // =============================================================================
 // Types
@@ -59,13 +59,17 @@ export interface RoundResult {
   readonly kothTurnsHeld: number;
 }
 
-export interface MapFairness {
-  readonly cityDistP1: number;
-  readonly cityDistP2: number;
-  readonly cityDistDelta: number;
-  readonly pathCostP1: number;
-  readonly pathCostP2: number;
-  readonly pathCostDelta: number;
+export type MapValidityClass = 'VALID' | 'DEGRADED' | 'BROKEN';
+
+export interface MapValidity {
+  readonly classification: MapValidityClass;
+  readonly p1ReachableCities: number;
+  readonly p2ReachableCities: number;
+  readonly totalCities: number;
+  readonly p1DeployExits: number;
+  readonly p2DeployExits: number;
+  readonly p1AvgCityCost: number;
+  readonly p2AvgCityCost: number;
 }
 
 export interface MatchResult {
@@ -77,7 +81,7 @@ export interface MatchResult {
   readonly roundResults: RoundResult[];
   readonly p1FinalUnits: number;
   readonly p2FinalUnits: number;
-  readonly mapFairness: MapFairness;
+  readonly mapValidity: MapValidity;
 }
 
 export interface BatchOptions {
@@ -105,63 +109,10 @@ export interface BatchSummary {
   readonly maxTurns: number;
   readonly results: MatchResult[];
   readonly matchupVerdicts: Record<string, MatchupVerdictCounts>;
-  readonly avgCityDistDelta: number;
-  readonly avgPathCostDelta: number;
-}
-
-// =============================================================================
-// Kill Timing Classification — formula-derived from balance.json
-// =============================================================================
-// For each attacker×defender×terrain combo, compute min/max damage from the
-// damage formula, then derive the OK band for hits-to-kill.
-//
-//   finalDamage = max(1, floor((ATK * typeMult * rng) * (1 - terrainDef) - DEF))
-//   minDmg = max(1, floor((ATK * typeMult * 0.85) * (1 - terrainDef) - DEF))
-//   maxDmg = max(1, floor((ATK * typeMult * 1.15) * (1 - terrainDef) - DEF))
-//   okMin = ceil(HP / maxDmg)   (fastest reasonable kill)
-//   okMax = ceil(HP / minDmg)   (slowest reasonable kill)
-// =============================================================================
-
-const terrainDefense: Record<TerrainType, number> = Object.fromEntries(
-  (Object.keys(balanceData.terrain) as TerrainType[]).map((t) => [t, balanceData.terrain[t].defenseModifier]),
-) as Record<TerrainType, number>;
-
-export interface KillThresholds {
-  readonly minDmg: number;
-  readonly maxDmg: number;
-  readonly okMin: number;
-  readonly okMax: number;
-}
-
-export function computeKillThresholds(
-  attackerType: UnitType,
-  defenderType: UnitType,
-  terrainType: TerrainType,
-): KillThresholds {
-  const atk = UNIT_STATS[attackerType].atk;
-  const def = UNIT_STATS[defenderType].def;
-  const hp = UNIT_STATS[defenderType].maxHp;
-  const typeMult = getTypeAdvantage(attackerType, defenderType);
-  const terrainDef = terrainDefense[terrainType];
-
-  const minDmg = Math.max(1, Math.floor((atk * typeMult * 0.85) * (1 - terrainDef) - def));
-  const maxDmg = Math.max(1, Math.floor((atk * typeMult * 1.15) * (1 - terrainDef) - def));
-  const okMin = Math.ceil(hp / maxDmg);
-  const okMax = Math.ceil(hp / minDmg);
-
-  return { minDmg, maxDmg, okMin, okMax };
-}
-
-export function classifyKillTiming(
-  attackerType: UnitType,
-  defenderType: UnitType,
-  terrainType: TerrainType,
-  hitCount: number,
-): KillVerdict {
-  const { okMin, okMax } = computeKillThresholds(attackerType, defenderType, terrainType);
-  if (hitCount < okMin) return 'TOO_FAST';
-  if (hitCount > okMax) return 'TOO_SLOW';
-  return 'OK';
+  readonly playedMatches: number;
+  readonly validMaps: number;
+  readonly degradedMaps: number;
+  readonly brokenMaps: number;
 }
 
 // =============================================================================
@@ -173,28 +124,42 @@ const MAX_TURNS_PER_ROUND = 50;
 export function runMatch(seed: number, log = false): MatchResult {
   resetUnitIdCounter();
   const rng = mulberry32(seed);
-  // Wrap rng to [0.85, 1.15] for combat — matches server game-loop.ts:318
-  const combatRng = (): number => 0.85 + rng() * 0.3;
+  const combatRng = (): number => COMBAT_RNG_MIN + rng() * COMBAT_RNG_RANGE;
 
   const state = createGame(seed);
-  const mapFairness = computeMapFairness(state);
+  const tValidity = performance.now();
+  const mapValidity = computeMapValidity(state);
+  const validityMs = performance.now() - tValidity;
 
   if (log) {
     console.log(
-      `[MATH_AUDIT] MAP_FAIRNESS` +
-      `  city_dist_p1:${mapFairness.cityDistP1.toFixed(1)}` +
-      `  city_dist_p2:${mapFairness.cityDistP2.toFixed(1)}` +
-      `  delta:${mapFairness.cityDistDelta.toFixed(1)}`,
-    );
-    console.log(
-      `[MATH_AUDIT] MAP_PATH_COST` +
-      `  path_cost_p1:${mapFairness.pathCostP1.toFixed(1)}` +
-      `  path_cost_p2:${mapFairness.pathCostP2.toFixed(1)}` +
-      `  delta:${mapFairness.pathCostDelta.toFixed(1)}`,
+      `[MATH_AUDIT] MAP_VALIDITY` +
+      `  class:${mapValidity.classification}` +
+      `  p1_reachable:${mapValidity.p1ReachableCities}/${mapValidity.totalCities}` +
+      `  p2_reachable:${mapValidity.p2ReachableCities}/${mapValidity.totalCities}` +
+      `  p1_exits:${mapValidity.p1DeployExits}` +
+      `  p2_exits:${mapValidity.p2DeployExits}` +
+      `  p1_avg_cost:${mapValidity.p1AvgCityCost.toFixed(1)}` +
+      `  p2_avg_cost:${mapValidity.p2AvgCityCost.toFixed(1)}` +
+      `  ms:${validityMs.toFixed(1)}`,
     );
 
-    // MAP-03..11: Additional map fairness metrics
-    logExtendedMapMetrics(state);
+    // MAP-03..11: Additional map diagnostic metrics
+    logMapDiagnostics(state);
+  }
+
+  if (mapValidity.classification === 'BROKEN') {
+    return {
+      seed,
+      winner: null,
+      rounds: 0,
+      totalTurns: 0,
+      kills: [],
+      roundResults: [],
+      p1FinalUnits: 0,
+      p2FinalUnits: 0,
+      mapValidity,
+    };
   }
 
   const kills: KillRecord[] = [];
@@ -208,8 +173,13 @@ export function runMatch(seed: number, log = false): MatchResult {
 
   while (state.phase !== 'game-over') {
     // ----- Build Phase -----
-    runBuildPhase(state, 'player1', rng);
-    runBuildPhase(state, 'player2', rng);
+    // Each player gets an independent RNG fork from the same sub-seed so both
+    // select the same preset index — true mirror match, no P1-first bias.
+    const buildSeed = Math.floor(rng() * 0x7fffffff);
+    const p1BuildRng = mulberry32(buildSeed);
+    const p2BuildRng = mulberry32(buildSeed);
+    runBuildPhase(state, 'player1', p1BuildRng);
+    runBuildPhase(state, 'player2', p2BuildRng);
     startBattlePhase(state);
 
     if (log) {
@@ -263,21 +233,18 @@ export function runMatch(seed: number, log = false): MatchResult {
         }
 
         if (event.type === 'kill') {
-          const typeAdv = getTypeAdvantage(event.attackerType, event.defenderType);
           const hits = hitsPerUnit.get(event.defenderId);
           // kill event itself is the final hit; prior hits may be 0 if one-shot
           const hitCount = hits ? hits.count + 1 : 1;
-          const verdict = classifyKillTiming(
-            event.attackerType,
-            event.defenderType,
-            event.defenderTerrain,
-            hitCount,
-          );
+          const verdict: KillVerdict =
+            hitCount < event.expectedHitsMin ? 'TOO_FAST' :
+            hitCount > event.expectedHitsMax ? 'TOO_SLOW' :
+            'OK';
 
           const record: KillRecord = {
             attackerType: event.attackerType,
             defenderType: event.defenderType,
-            typeAdvantage: typeAdv,
+            typeAdvantage: event.typeAdvantage,
             hitCount,
             verdict,
             terrain: event.defenderTerrain,
@@ -374,13 +341,18 @@ export function runMatch(seed: number, log = false): MatchResult {
             for (const owner of state.cityOwnership.values()) {
               if (owner === pid) citiesHeld++;
             }
-            const baseInc = BASE_INCOME;
+            const wonRound = roundEnd.winner === pid;
+            const lostRound = roundEnd.winner !== null && roundEnd.winner !== pid;
+            const totalInc = calculateIncome({
+              citiesHeld,
+              unitsKilled: state.round.unitsKilledThisRound[pid],
+              wonRound,
+              lostRound,
+            });
             const cityInc = citiesHeld * CITY_INCOME;
-            const killInc = state.round.unitsKilledThisRound[pid] * KILL_BONUS;
-            const totalInc = baseInc + cityInc + killInc;
             const cityShare = totalInc > 0 ? ((cityInc / totalInc) * 100).toFixed(1) : '0.0';
             console.log(
-              `[MATH_AUDIT] ECONOMY  player:${pid}  base:${baseInc}  city:${cityInc}  kill:${killInc}  total:${totalInc}  city_share:${cityShare}%`,
+              `[MATH_AUDIT] ECONOMY  player:${pid}  total:${totalInc}  cities:${citiesHeld}  city_share:${cityShare}%`,
             );
           }
         }
@@ -426,73 +398,72 @@ export function runMatch(seed: number, log = false): MatchResult {
     );
   }
 
-  return { seed, winner, rounds: roundResults.length, totalTurns, kills, roundResults, p1FinalUnits: p1Final, p2FinalUnits: p2Final, mapFairness };
+  return { seed, winner, rounds: roundResults.length, totalTurns, kills, roundResults, p1FinalUnits: p1Final, p2FinalUnits: p2Final, mapValidity };
 }
 
 // =============================================================================
-// Map Fairness (MAP-01, MAP-02)
+// Map Validity Gate
 // =============================================================================
 
-function parseHexKey(key: string): { q: number; r: number; s: number } {
-  const [qStr, rStr] = key.split(',');
-  const q = Number(qStr);
-  const r = Number(rStr);
-  return { q, r, s: -q - r };
-}
-
-function computeMapFairness(state: GameState): MapFairness {
+function computeMapValidity(state: GameState): MapValidity {
   const cityKeys: string[] = [];
   for (const key of state.cityOwnership.keys()) {
     cityKeys.push(key);
   }
+  const totalCities = cityKeys.length;
 
   const p1Deploy = state.map.player1Deployment;
   const p2Deploy = state.map.player2Deployment;
-
-  // MAP-01: Average cube distance from deploy zone center to each city
   const p1Center = p1Deploy[Math.floor(p1Deploy.length / 2)]!;
   const p2Center = p2Deploy[Math.floor(p2Deploy.length / 2)]!;
 
-  let p1DistSum = 0;
-  let p2DistSum = 0;
-  for (const key of cityKeys) {
-    const cityCoord = parseHexKey(key);
-    p1DistSum += cubeDistance(p1Center, cityCoord);
-    p2DistSum += cubeDistance(p2Center, cityCoord);
-  }
-  const cityCount = cityKeys.length || 1;
-  const cityDistP1 = p1DistSum / cityCount;
-  const cityDistP2 = p2DistSum / cityCount;
+  // Single Dijkstra flood per player — weighted cost to every reachable hex
+  const p1Costs = computeMovementCostField(p1Center, state.map.terrain, 'infantry', undefined, state.map.modifiers, state.map.elevation);
+  const p2Costs = computeMovementCostField(p2Center, state.map.terrain, 'infantry', undefined, state.map.modifiers, state.map.elevation);
 
-  // MAP-02: A* path cost from deploy center to each city (infantry, no occupancy)
-  const emptyOccupied = new Set<string>();
+  let p1ReachableCities = 0;
+  let p2ReachableCities = 0;
   let p1CostSum = 0;
   let p2CostSum = 0;
-  let p1Reachable = 0;
-  let p2Reachable = 0;
   for (const key of cityKeys) {
-    const cityCoord = parseHexKey(key);
-    const p1Path = findPath(p1Center, cityCoord, state.map.terrain, 'infantry', emptyOccupied, undefined, state.map.modifiers, state.map.elevation);
-    if (p1Path) {
-      p1CostSum += p1Path.length - 1; // step count as cost proxy
-      p1Reachable++;
+    const p1Cost = p1Costs.get(key);
+    if (p1Cost !== undefined) {
+      p1CostSum += p1Cost;
+      p1ReachableCities++;
     }
-    const p2Path = findPath(p2Center, cityCoord, state.map.terrain, 'infantry', emptyOccupied, undefined, state.map.modifiers, state.map.elevation);
-    if (p2Path) {
-      p2CostSum += p2Path.length - 1;
-      p2Reachable++;
+    const p2Cost = p2Costs.get(key);
+    if (p2Cost !== undefined) {
+      p2CostSum += p2Cost;
+      p2ReachableCities++;
     }
   }
-  const pathCostP1 = p1Reachable > 0 ? p1CostSum / p1Reachable : Infinity;
-  const pathCostP2 = p2Reachable > 0 ? p2CostSum / p2Reachable : Infinity;
+
+  // Deploy exit count: neighbors of deploy center that exist in the terrain map
+  const p1Exits = hexNeighbors(p1Center).filter((n) => state.map.terrain.has(hexToKey(n))).length;
+  const p2Exits = hexNeighbors(p2Center).filter((n) => state.map.terrain.has(hexToKey(n))).length;
+
+  const p1AvgCityCost = p1ReachableCities > 0 ? p1CostSum / p1ReachableCities : Infinity;
+  const p2AvgCityCost = p2ReachableCities > 0 ? p2CostSum / p2ReachableCities : Infinity;
+
+  // Classification
+  let classification: MapValidityClass;
+  if (p1ReachableCities === 0 || p2ReachableCities === 0 || p1Exits === 0 || p2Exits === 0) {
+    classification = 'BROKEN';
+  } else if (p1ReachableCities < totalCities || p2ReachableCities < totalCities) {
+    classification = 'DEGRADED';
+  } else {
+    classification = 'VALID';
+  }
 
   return {
-    cityDistP1,
-    cityDistP2,
-    cityDistDelta: Math.abs(cityDistP1 - cityDistP2),
-    pathCostP1,
-    pathCostP2,
-    pathCostDelta: Math.abs(pathCostP1 - pathCostP2),
+    classification,
+    p1ReachableCities,
+    p2ReachableCities,
+    totalCities,
+    p1DeployExits: p1Exits,
+    p2DeployExits: p2Exits,
+    p1AvgCityCost,
+    p2AvgCityCost,
   };
 }
 
@@ -501,10 +472,7 @@ function computeMapFairness(state: GameState): MapFairness {
 // =============================================================================
 
 function runBuildPhase(state: GameState, playerId: PlayerId, rng: () => number): void {
-  const origRandom = Math.random;
-  Math.random = rng;
-  const actions = aiBuildPhase(state, playerId);
-  Math.random = origRandom;
+  const actions = aiBuildPhase(state, playerId, rng);
 
   for (const action of actions) {
     placeUnit(
@@ -523,7 +491,7 @@ function runBuildPhase(state: GameState, playerId: PlayerId, rng: () => number):
 function countTerrainNear(state: GameState, center: CubeCoord, radius: number): Record<TerrainType, number> {
   const counts: Record<TerrainType, number> = { plains: 0, forest: 0, mountain: 0, city: 0 };
   for (const [key, terrain] of state.map.terrain) {
-    const hex = parseHexKey(key);
+    const hex = keyToHex(key);
     if (cubeDistance(center, hex) <= radius) {
       counts[terrain]++;
     }
@@ -531,7 +499,7 @@ function countTerrainNear(state: GameState, center: CubeCoord, radius: number): 
   return counts;
 }
 
-function logExtendedMapMetrics(state: GameState): void {
+function logMapDiagnostics(state: GameState): void {
   const p1Center = state.map.player1Deployment[Math.floor(state.map.player1Deployment.length / 2)]!;
   const p2Center = state.map.player2Deployment[Math.floor(state.map.player2Deployment.length / 2)]!;
   const radius = Math.floor(state.map.mapRadius / 2);
@@ -550,7 +518,7 @@ function logExtendedMapMetrics(state: GameState): void {
   let p2MtnBlocking = 0;
   for (const [key, terrain] of state.map.terrain) {
     if (terrain !== 'mountain') continue;
-    const hex = parseHexKey(key);
+    const hex = keyToHex(key);
     const distToCenter = cubeDistance(hex, mapCenter);
     const distToP1 = cubeDistance(hex, p1Center);
     const distToP2 = cubeDistance(hex, p2Center);
@@ -565,7 +533,7 @@ function logExtendedMapMetrics(state: GameState): void {
   let p2CityDist = 0;
   let cityCount = 0;
   for (const key of state.cityOwnership.keys()) {
-    const hex = parseHexKey(key);
+    const hex = keyToHex(key);
     const toP1 = cubeDistance(hex, p1Center);
     const toP2 = cubeDistance(hex, p2Center);
     if (toP1 < toP2) p1CityDist += cubeDistance(hex, mapCenter);
@@ -610,7 +578,7 @@ function logExtendedMapMetrics(state: GameState): void {
   let p2HighGround = 0;
   for (const [key, elev] of state.map.elevation) {
     if (elev >= highGroundThreshold) {
-      const hex = parseHexKey(key);
+      const hex = keyToHex(key);
       const d1 = cubeDistance(hex, p1Center);
       const d2 = cubeDistance(hex, p2Center);
       if (d1 <= radius) p1HighGround++;
@@ -628,7 +596,7 @@ function logExtendedMapMetrics(state: GameState): void {
   let p2Bridges = 0;
   for (const [key, mod] of state.map.modifiers) {
     if (mod === 'bridge') {
-      const hex = parseHexKey(key);
+      const hex = keyToHex(key);
       if (cubeDistance(hex, p1Center) < cubeDistance(hex, p2Center)) p1Bridges++;
       else p2Bridges++;
     }
@@ -640,7 +608,7 @@ function logExtendedMapMetrics(state: GameState): void {
   let p2Highways = 0;
   for (const [key, mod] of state.map.modifiers) {
     if (mod === 'highway') {
-      const hex = parseHexKey(key);
+      const hex = keyToHex(key);
       if (cubeDistance(hex, p1Center) <= radius) p1Highways++;
       if (cubeDistance(hex, p2Center) <= radius) p2Highways++;
     }
@@ -666,22 +634,38 @@ export function runBatch(options: BatchOptions, log = false): BatchSummary {
   let p1Wins = 0;
   let p2Wins = 0;
   let draws = 0;
+  let validMaps = 0;
+  let degradedMaps = 0;
+  let brokenMaps = 0;
 
   for (let i = 0; i < matchCount; i++) {
     const result = runMatch(baseSeed + i, log);
     results.push(result);
-    if (result.winner === 'player1') p1Wins++;
-    else if (result.winner === 'player2') p2Wins++;
-    else draws++;
+
+    switch (result.mapValidity.classification) {
+      case 'VALID': validMaps++; break;
+      case 'DEGRADED': degradedMaps++; break;
+      case 'BROKEN': brokenMaps++; break;
+    }
+
+    // BROKEN maps are excluded from gameplay aggregation
+    if (result.mapValidity.classification !== 'BROKEN') {
+      if (result.winner === 'player1') p1Wins++;
+      else if (result.winner === 'player2') p2Wins++;
+      else draws++;
+    }
   }
 
-  const allTurns = results.map((r) => r.totalTurns);
-  const avgTurns = allTurns.reduce((a, b) => a + b, 0) / matchCount;
-  const minTurns = Math.min(...allTurns);
-  const maxTurns = Math.max(...allTurns);
+  const playedResults = results.filter((r) => r.mapValidity.classification !== 'BROKEN');
+  const playedMatches = playedResults.length;
+
+  const allTurns = playedResults.map((r) => r.totalTurns);
+  const avgTurns = playedMatches > 0 ? allTurns.reduce((a, b) => a + b, 0) / playedMatches : 0;
+  const minTurns = playedMatches > 0 ? Math.min(...allTurns) : 0;
+  const maxTurns = playedMatches > 0 ? Math.max(...allTurns) : 0;
 
   const matchupVerdicts: Record<string, MatchupVerdictCounts> = {};
-  for (const result of results) {
+  for (const result of playedResults) {
     for (const kill of result.kills) {
       const key = `${kill.attackerType} vs ${kill.defenderType} on ${kill.terrain}`;
       if (!matchupVerdicts[key]) {
@@ -693,19 +677,15 @@ export function runBatch(options: BatchOptions, log = false): BatchSummary {
     }
   }
 
-  const avgCityDistDelta = results.reduce((s, r) => s + r.mapFairness.cityDistDelta, 0) / matchCount;
-  const avgPathCostDelta = results.reduce((s, r) => s + r.mapFairness.pathCostDelta, 0) / matchCount;
-
   if (log) {
     console.log(`\n========== BATCH SUMMARY ==========`);
-    console.log(`Matches: ${matchCount}`);
-    console.log(`P1 wins: ${p1Wins} (${(p1Wins / matchCount * 100).toFixed(1)}%)`);
-    console.log(`P2 wins: ${p2Wins} (${(p2Wins / matchCount * 100).toFixed(1)}%)`);
-    console.log(`Draws:   ${draws} (${(draws / matchCount * 100).toFixed(1)}%)`);
+    console.log(`Matches: ${matchCount}  (played: ${playedMatches})`);
+    console.log(`Map validity: VALID:${validMaps}  DEGRADED:${degradedMaps}  BROKEN:${brokenMaps}`);
+    const denom = playedMatches || 1;
+    console.log(`P1 wins: ${p1Wins} (${(p1Wins / denom * 100).toFixed(1)}%)`);
+    console.log(`P2 wins: ${p2Wins} (${(p2Wins / denom * 100).toFixed(1)}%)`);
+    console.log(`Draws:   ${draws} (${(draws / denom * 100).toFixed(1)}%)`);
     console.log(`Turns: avg=${avgTurns.toFixed(1)} min=${minTurns} max=${maxTurns}`);
-    console.log(`\nMap Fairness (avg across ${matchCount} matches):`);
-    console.log(`  City distance delta: ${avgCityDistDelta.toFixed(2)}`);
-    console.log(`  Path cost delta:     ${avgPathCostDelta.toFixed(2)}`);
     console.log(`\nKill Timing Verdicts:`);
     for (const [matchup, counts] of Object.entries(matchupVerdicts)) {
       const pctOk = counts.total > 0 ? ((counts.OK / counts.total) * 100).toFixed(0) : '0';
@@ -718,5 +698,6 @@ export function runBatch(options: BatchOptions, log = false): BatchSummary {
     console.log(`===================================\n`);
   }
 
-  return { matchCount, p1Wins, p2Wins, draws, p1WinRate: p1Wins / matchCount, p2WinRate: p2Wins / matchCount, drawRate: draws / matchCount, avgTurns, minTurns, maxTurns, results, matchupVerdicts, avgCityDistDelta, avgPathCostDelta };
+  const denom = playedMatches || 1;
+  return { matchCount, p1Wins, p2Wins, draws, p1WinRate: p1Wins / denom, p2WinRate: p2Wins / denom, drawRate: draws / denom, avgTurns, minTurns, maxTurns, results, matchupVerdicts, playedMatches, validMaps, degradedMaps, brokenMaps };
 }

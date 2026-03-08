@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { GameState, PlayerId, CubeCoord, Command, Unit } from './types';
 import { resetUnitIdCounter, UNIT_STATS } from './units';
-import { hexToKey, createHex, CUBE_DIRECTIONS } from './hex';
+import { hexToKey, keyToHex, createHex, CUBE_DIRECTIONS } from './hex';
 import {
   createGame,
   placeUnit,
@@ -499,8 +499,7 @@ describe('Phase 9 — Territory', () => {
 
     // Place unit on a city hex
     const cityKey = [...state.cityOwnership.keys()][0]!;
-    const [q, r] = cityKey.split(',').map(Number);
-    state.players.player1.units[0]!.position = createHex(q!, r!);
+    state.players.player1.units[0]!.position = keyToHex(cityKey);
 
     resolveTurn(state, [], [], midRng);
 

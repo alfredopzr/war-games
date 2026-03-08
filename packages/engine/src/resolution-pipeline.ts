@@ -19,11 +19,11 @@ import type {
   AttackDirective,
 } from './types';
 import { cubeDistance, hexToKey, hexNeighbors, hexesInRadius, CUBE_DIRECTIONS } from './hex';
-import { canAttack, calculateDamage } from './combat';
+import { canAttack, calculateDamage, computeExpectedKillBand } from './combat';
 import { canSeeHex } from './vision';
 import { findPath } from './pathfinding';
 import { getMoveCost } from './terrain';
-import { UNIT_STATS } from './units';
+import { UNIT_STATS, getTypeAdvantage } from './units';
 import { spendCommand } from './commands';
 import { resolveTarget, computeFlankWaypoint } from './directives';
 
@@ -550,7 +550,14 @@ function resolveMovement(
   const skirmishShotsFired = new Map<string, number>();
 
   // Step 1: Walk paths with intercept checks
-  for (const [unitId, intent] of intents) {
+  // Shuffle intent processing order so neither player has first-mover advantage.
+  // randomFn() returns [0.85, 1.15] (combat range) — assign keys and sort.
+  const intentEntries = [...intents.entries()]
+    .map(entry => ({ entry, key: randomFn() }))
+    .sort((a, b) => a.key - b.key)
+    .map(x => x.entry);
+
+  for (const [unitId, intent] of intentEntries) {
     const unit = unitById.get(unitId);
     if (!unit) continue;
 
@@ -569,6 +576,7 @@ function resolveMovement(
       // Check for enemies that can intercept at this hex (using snapshot positions)
       for (const enemy of allUnits) {
         if (enemy.owner === unit.owner) continue;
+        if (enemy.hp <= 0) continue; // dead units can't intercept
         if (!OFFENSIVE_ROE.has(enemy.attackDirective)) continue;
 
         const enemySnap = snapshot.get(enemy.id);
@@ -630,6 +638,7 @@ function resolveMovement(
           });
 
           if (unit.hp <= 0) {
+            const killBand = computeExpectedKillBand(enemy.type, unit.type, defTerrain, defMod);
             state.pendingEvents.push({
               type: 'kill',
               actingPlayer: enemy.owner,
@@ -645,6 +654,9 @@ function resolveMovement(
               damage: interceptDamage,
               defenderTerrain: defTerrain,
               approachCategory: approach,
+              typeAdvantage: getTypeAdvantage(enemy.type, unit.type),
+              expectedHitsMin: killBand.expectedHitsMin,
+              expectedHitsMax: killBand.expectedHitsMax,
             });
             removeUnit(state, unit);
             state.round.unitsKilledThisRound[enemy.owner] += 1;
@@ -740,7 +752,7 @@ function resolveMovement(
   }
 
   // Step 2 + 3: Collision resolution
-  resolveCollisions(state, intents, proposedPositions, snapshot);
+  resolveCollisions(state, intents, proposedPositions, snapshot, randomFn);
 
   // Step 4: Apply positions and emit move events
   for (const [unitId, newPos] of proposedPositions) {
@@ -774,6 +786,7 @@ function resolveCollisions(
   intents: Map<string, TurnIntent>,
   proposedPositions: Map<string, CubeCoord>,
   snapshot: Map<string, UnitSnapshot>,
+  randomFn: () => number,
 ): void {
   const unitTypes = new Map<string, import('./types').UnitType>();
   for (const u of getAllUnits(state)) unitTypes.set(u.id, u.type);
@@ -842,17 +855,23 @@ function resolveCollisions(
           }
         }
 
-        // No unit was already here — fastest wins
+        // No unit was already here — fastest wins, RNG tiebreak
         if (!bestId) {
-          bestId = unitIds[0]!;
-          let bestRange = state.unitStats[unitTypes.get(bestId) ?? 'infantry'].moveRange;
+          // Group by moveRange, pick highest
+          let bestRange = -1;
+          const candidates: string[] = [];
           for (const uid of unitIds) {
             const range = state.unitStats[unitTypes.get(uid) ?? 'infantry'].moveRange;
             if (range > bestRange) {
               bestRange = range;
-              bestId = uid;
+              candidates.length = 0;
+              candidates.push(uid);
+            } else if (range === bestRange) {
+              candidates.push(uid);
             }
           }
+          // RNG tiebreak among units with equal moveRange
+          bestId = candidates[Math.floor(randomFn() * candidates.length)]!;
         }
 
         // Losers step back one hex along their path — stays adjacent
@@ -1087,6 +1106,7 @@ function resolveInitiativeFire(
     defender.hp -= damage;
 
     if (defender.hp <= 0) {
+      const killBand = computeExpectedKillBand(attacker.type, defender.type, defenderTerrain, defenderModifier);
       state.pendingEvents.push({
         type: 'kill',
         actingPlayer: attacker.owner,
@@ -1102,6 +1122,9 @@ function resolveInitiativeFire(
         damage,
         defenderTerrain,
         approachCategory: eng.approachCategory,
+        typeAdvantage: getTypeAdvantage(attacker.type, defender.type),
+        expectedHitsMin: killBand.expectedHitsMin,
+        expectedHitsMax: killBand.expectedHitsMax,
       });
       removeUnit(state, defender);
       deadUnits.add(defender.id);
@@ -1198,6 +1221,7 @@ function resolveCounterFire(
     defender.hp -= damage;
 
     if (defender.hp <= 0) {
+      const killBand = computeExpectedKillBand(attacker.type, defender.type, defenderTerrain, defenderModifier);
       state.pendingEvents.push({
         type: 'kill',
         actingPlayer: attacker.owner,
@@ -1213,6 +1237,9 @@ function resolveCounterFire(
         damage,
         defenderTerrain,
         approachCategory: eng.approachCategory,
+        typeAdvantage: getTypeAdvantage(attacker.type, defender.type),
+        expectedHitsMin: killBand.expectedHitsMin,
+        expectedHitsMax: killBand.expectedHitsMax,
       });
       removeUnit(state, defender);
       state.round.unitsKilledThisRound[attacker.owner] += 1;
