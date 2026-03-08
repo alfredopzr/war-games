@@ -78,6 +78,7 @@ const BUILD_PRESETS: BuildPreset[] = [
         }
         case 'artillery': return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: 'support' };
         case 'recon': return { movementDirective: 'patrol', attackDirective: 'retreat-on-contact', specialtyModifier: null };
+        case 'engineer': return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: null };
       }
     },
   },
@@ -106,6 +107,7 @@ const BUILD_PRESETS: BuildPreset[] = [
         case 'tank': return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
         case 'artillery': return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: 'support' };
         case 'recon': return { movementDirective: 'patrol', attackDirective: 'retreat-on-contact', specialtyModifier: null };
+        case 'engineer': return { movementDirective: 'advance', attackDirective: 'ignore', specialtyModifier: null };
         default: return { movementDirective: 'advance', attackDirective: 'shoot-on-sight', specialtyModifier: null };
       }
     },

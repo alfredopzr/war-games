@@ -3,7 +3,7 @@ import { UNIT_STATS } from '@hexwar/engine';
 import type { UnitType, UnitStats } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
-const UNIT_TYPES: readonly UnitType[] = ['infantry', 'tank', 'artillery', 'recon'] as const;
+const UNIT_TYPES: readonly UnitType[] = ['infantry', 'tank', 'artillery', 'recon', 'engineer'] as const;
 
 function unitDisplayName(type: UnitType): string {
   return type.charAt(0).toUpperCase() + type.slice(1);

@@ -5,7 +5,7 @@ import { useGameStore } from '../store/game-store';
 
 const MOVEMENTS: readonly MovementDirective[] = ['advance', 'flank-left', 'flank-right', 'patrol', 'hold'];
 const ATTACKS: readonly AttackDirective[] = ['shoot-on-sight', 'skirmish', 'retreat-on-contact', 'hunt', 'ignore'];
-const SPECIALTIES: readonly (SpecialtyModifier | null)[] = [null, 'support', 'engineer', 'sniper'];
+const SPECIALTIES: readonly (SpecialtyModifier | null)[] = [null, 'support', 'sniper'];
 
 const MOVEMENT_LABELS: Record<MovementDirective, string> = {
   advance: 'Advance',
@@ -26,17 +26,17 @@ const ATTACK_LABELS: Record<AttackDirective, string> = {
 const SPECIALTY_LABELS: Record<string, string> = {
   '': 'None',
   support: 'Support',
-  engineer: 'Engineer',
   sniper: 'Sniper',
 };
 
-const HUNT_TARGET_OPTIONS: readonly (UnitType | null)[] = [null, 'infantry', 'tank', 'artillery', 'recon'];
+const HUNT_TARGET_OPTIONS: readonly (UnitType | null)[] = [null, 'infantry', 'tank', 'artillery', 'recon', 'engineer'];
 const HUNT_TARGET_LABELS: Record<string, string> = {
   '': 'Any',
   infantry: 'Infantry',
   tank: 'Tank',
   artillery: 'Artillery',
   recon: 'Recon',
+  engineer: 'Engineer',
 };
 
 interface OrderMatrixProps {

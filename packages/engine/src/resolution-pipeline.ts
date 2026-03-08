@@ -22,11 +22,12 @@ import { cubeDistance, hexToKey, hexNeighbors, hexLineDraw, hexesInRadius, CUBE_
 import { canAttack, calculateDamage } from './combat';
 import { calculateVisibility } from './vision';
 import { findPath } from './pathfinding';
-import { getMoveCost, getVisionBonus } from './terrain';
+import { getMoveCost, getVisionBonus, getDefenseModifier } from './terrain';
 import { FOREST_VISION_PENALTY, LOS_EYE_HEIGHT } from './map-gen-params';
 import { UNIT_STATS } from './units';
 import { spendCommand } from './commands';
 import { resolveTarget, computeFlankWaypoint } from './directives';
+import { BUILDING_STATS, createBuilding, getDefensivePositionBonus } from './buildings';
 
 // -----------------------------------------------------------------------------
 // Constants
@@ -506,6 +507,7 @@ function applyRedirects(state: GameState, playerId: PlayerId, commands: Command[
   const friendlyUnits = state.players[playerId].units;
 
   for (const command of commands) {
+    if (command.type === 'build') continue; // build commands handled separately
     const unit = friendlyUnits.find(u => u.id === command.unitId);
     if (!unit) continue;
     commandPool = spendCommand(commandPool, command);
@@ -523,6 +525,68 @@ function applyRedirects(state: GameState, playerId: PlayerId, commands: Command[
   }
 
   state.round.commandPools[playerId] = commandPool;
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2b — Build Commands
+// -----------------------------------------------------------------------------
+
+function resolveBuildCommands(
+  state: GameState,
+  p1Commands: Command[],
+  p2Commands: Command[],
+): void {
+  const allCommands: { playerId: PlayerId; commands: Command[] }[] = [
+    { playerId: 'player1', commands: p1Commands },
+    { playerId: 'player2', commands: p2Commands },
+  ];
+
+  for (const { playerId, commands } of allCommands) {
+    const friendlyUnits = state.players[playerId].units;
+    let commandPool = state.round.commandPools[playerId];
+
+    for (const cmd of commands) {
+      if (cmd.type !== 'build') continue;
+
+      const unit = friendlyUnits.find(u => u.id === cmd.unitId);
+      if (!unit || unit.type !== 'engineer') continue;
+
+      const buildingStats = BUILDING_STATS[cmd.buildingType];
+      if (state.players[playerId].resources < buildingStats.cost) continue;
+
+      // Spend command point
+      commandPool = spendCommand(commandPool, cmd);
+
+      // Deduct cost
+      state.players[playerId].resources -= buildingStats.cost;
+
+      // Create building
+      const building = createBuilding(
+        cmd.buildingType,
+        playerId,
+        { ...unit.position },
+        state.round.turnNumber,
+      );
+      state.buildings.push(building);
+
+      // Emit event
+      state.pendingEvents.push({
+        type: 'building-built',
+        actingPlayer: playerId,
+        phase: 'combat',
+        pipelinePhase: 2,
+        unitId: unit.id,
+        unitType: unit.type,
+        buildingType: cmd.buildingType,
+        position: { ...unit.position },
+        cost: buildingStats.cost,
+      });
+
+      console.log(`[P2:BUILD] ${playerId} engineer ${unit.id} built ${cmd.buildingType} at (${unit.position.q},${unit.position.r}) for ${buildingStats.cost}g`);
+    }
+
+    state.round.commandPools[playerId] = commandPool;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -1047,7 +1111,8 @@ function resolveInitiativeFire(
 
     const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
     const defenderModifier = state.map.modifiers.get(hexToKey(defender.position));
-    const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn, defenderModifier);
+    const rawDamage = calculateDamage(attacker, defender, defenderTerrain, randomFn, defenderModifier);
+    const damage = applyDefensivePositionBonus(rawDamage, defender, state);
     defender.hp -= damage;
 
     console.log(`[P5:INITIATIVE] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) → ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) | dmg=${damage} hp=${defender.hp}/${state.unitStats[defender.type].maxHp} rt=${eng.responseTime} ${eng.approachCategory}${defender.hp <= 0 ? ' KILL' : ''}`);
@@ -1158,7 +1223,8 @@ function resolveCounterFire(
 
     const defenderTerrain = state.map.terrain.get(hexToKey(defender.position)) ?? 'plains';
     const defenderModifier = state.map.modifiers.get(hexToKey(defender.position));
-    const damage = calculateDamage(attacker, defender, defenderTerrain, randomFn, defenderModifier);
+    const rawDamage = calculateDamage(attacker, defender, defenderTerrain, randomFn, defenderModifier);
+    const damage = applyDefensivePositionBonus(rawDamage, defender, state);
     defender.hp -= damage;
 
     console.log(`[P6:COUNTER] ${attacker.owner} ${attacker.type} (${attacker.position.q},${attacker.position.r}) → ${defender.owner} ${defender.type} (${defender.position.q},${defender.position.r}) | dmg=${damage} hp=${defender.hp}/${state.unitStats[defender.type].maxHp}${defender.hp <= 0 ? ' KILL' : ''}`);
@@ -1255,6 +1321,45 @@ function resolveDirectiveEffects(
             healAmount: 1,
             targetHpAfter: bestTarget.hp,
           });
+        }
+      }
+
+      // Recon tower vision: emit reveal events for enemies visible from recon towers
+      if (unit.type === 'engineer') {
+        const ownBuildings = state.buildings.filter(b => b.owner === playerId && b.type === 'recon-tower');
+        for (const tower of ownBuildings) {
+          const towerVision = BUILDING_STATS['recon-tower'].visionRange ?? 4;
+          // Create a virtual unit at the tower position with the tower's vision range
+          const virtualUnit: Unit = {
+            ...unit,
+            id: `tower-${tower.id}`,
+            position: tower.position,
+          };
+          const virtualStats: Record<string, { visionRange: number }> = {
+            [unit.type]: { visionRange: towerVision },
+          };
+          const towerVisibility = calculateVisibility([virtualUnit], state.map.terrain, state.map.elevation, virtualStats);
+          const enemyUnits = state.players[enemyId].units;
+          const revealedHexes: CubeCoord[] = [];
+
+          for (const enemy of enemyUnits) {
+            if (towerVisibility.has(hexToKey(enemy.position))) {
+              revealedHexes.push({ ...enemy.position });
+            }
+          }
+
+          if (revealedHexes.length > 0) {
+            state.pendingEvents.push({
+              type: 'reveal',
+              actingPlayer: playerId,
+              phase: 'combat',
+              pipelinePhase: 8,
+              unitId: tower.id,
+              unitType: 'engineer',
+              unitPosition: { ...tower.position },
+              hexes: revealedHexes,
+            });
+          }
         }
       }
 
@@ -1460,6 +1565,171 @@ function countCitiesHeld(state: GameState, playerId: PlayerId): number {
   return count;
 }
 
+// -----------------------------------------------------------------------------
+// Defensive Position Damage Modifier
+// -----------------------------------------------------------------------------
+
+/**
+ * Apply defensive position building bonus to damage.
+ * Reduces damage by the defenseBonus fraction (e.g. 0.3 = 30% reduction).
+ */
+function applyDefensivePositionBonus(
+  damage: number,
+  defender: Unit,
+  state: GameState,
+): number {
+  const defBonus = getDefensivePositionBonus(
+    state.buildings,
+    hexToKey(defender.position),
+    defender.owner,
+  );
+  if (defBonus > 0) {
+    return Math.max(1, Math.floor(damage * (1 - defBonus)));
+  }
+  return damage;
+}
+
+// -----------------------------------------------------------------------------
+// Phase 3b — Mines Resolution
+// -----------------------------------------------------------------------------
+
+function resolveMines(state: GameState): void {
+  const allUnits = getAllUnits(state);
+  const minesToRemove: string[] = [];
+
+  for (const building of state.buildings) {
+    if (building.type !== 'mines') continue;
+    const mineKey = hexToKey(building.position);
+
+    // Check if any enemy unit stepped on the mines
+    for (const unit of allUnits) {
+      if (unit.owner === building.owner) continue;
+      if (hexToKey(unit.position) !== mineKey) continue;
+
+      const damage = BUILDING_STATS.mines.damage!;
+      unit.hp -= damage;
+
+      state.pendingEvents.push({
+        type: 'mine-triggered',
+        actingPlayer: building.owner,
+        phase: 'combat',
+        pipelinePhase: 3,
+        buildingId: building.id,
+        triggeredByUnitId: unit.id,
+        triggeredByUnitType: unit.type,
+        position: { ...building.position },
+        damage,
+        unitHpAfter: unit.hp,
+      });
+
+      if (unit.hp <= 0) {
+        state.pendingEvents.push({
+          type: 'kill',
+          actingPlayer: building.owner,
+          phase: 'combat',
+          pipelinePhase: 3,
+          attackerId: building.id,
+          attackerType: 'engineer',
+          attackerPosition: { ...building.position },
+          defenderId: unit.id,
+          defenderType: unit.type,
+          defenderPosition: { ...unit.position },
+          damage,
+          defenderTerrain: state.map.terrain.get(mineKey) ?? 'plains',
+        });
+        removeUnit(state, unit);
+        state.round.unitsKilledThisRound[building.owner] += 1;
+      }
+
+      // Mines are consumed on trigger
+      minesToRemove.push(building.id);
+      break; // Only trigger once per mine
+    }
+  }
+
+  // Remove triggered mines
+  state.buildings = state.buildings.filter(b => !minesToRemove.includes(b.id));
+}
+
+// -----------------------------------------------------------------------------
+// Phase 7b — Mortar Fire
+// -----------------------------------------------------------------------------
+
+function resolveMortarFire(
+  state: GameState,
+  randomFn: () => number,
+): void {
+  for (const building of state.buildings) {
+    if (building.type !== 'mortar') continue;
+
+    const mortarStats = BUILDING_STATS.mortar;
+    const mortarRange = mortarStats.attackRange!;
+    const mortarMinRange = mortarStats.minAttackRange!;
+    const mortarAtk = mortarStats.atk!;
+
+    // Find nearest enemy in range
+    const enemyId: PlayerId = building.owner === 'player1' ? 'player2' : 'player1';
+    const enemies = state.players[enemyId].units;
+
+    let bestTarget: Unit | null = null;
+    let bestDist = Infinity;
+
+    for (const enemy of enemies) {
+      const dist = cubeDistance(building.position, enemy.position);
+      if (dist >= mortarMinRange && dist <= mortarRange && dist < bestDist) {
+        bestDist = dist;
+        bestTarget = enemy;
+      }
+    }
+
+    if (!bestTarget) continue;
+
+    // Calculate damage — simplified: atk * randomFactor, no type advantage
+    const randomFactor = randomFn();
+    const defenderTerrain = state.map.terrain.get(hexToKey(bestTarget.position)) ?? 'plains';
+    const terrainDef = getDefenseModifier(defenderTerrain, state.map.modifiers.get(hexToKey(bestTarget.position)));
+    const defenderStats = UNIT_STATS[bestTarget.type];
+    const effectiveDef = defenderStats.def + (bestTarget.movementDirective === 'hold' ? 1 : 0);
+    const baseDamage = mortarAtk * randomFactor;
+    const finalDamage = Math.max(1, Math.floor(baseDamage * (1 - terrainDef) - effectiveDef));
+
+    bestTarget.hp -= finalDamage;
+
+    state.pendingEvents.push({
+      type: 'mortar-fire',
+      actingPlayer: building.owner,
+      phase: 'combat',
+      pipelinePhase: 7,
+      buildingId: building.id,
+      targetUnitId: bestTarget.id,
+      targetUnitType: bestTarget.type,
+      buildingPosition: { ...building.position },
+      targetPosition: { ...bestTarget.position },
+      damage: finalDamage,
+      targetHpAfter: bestTarget.hp,
+    });
+
+    if (bestTarget.hp <= 0) {
+      state.pendingEvents.push({
+        type: 'kill',
+        actingPlayer: building.owner,
+        phase: 'combat',
+        pipelinePhase: 7,
+        attackerId: building.id,
+        attackerType: 'engineer',
+        attackerPosition: { ...building.position },
+        defenderId: bestTarget.id,
+        defenderType: bestTarget.type,
+        defenderPosition: { ...bestTarget.position },
+        damage: finalDamage,
+        defenderTerrain,
+      });
+      removeUnit(state, bestTarget);
+      state.round.unitsKilledThisRound[building.owner] += 1;
+    }
+  }
+}
+
 /**
  * Clear hunt lock-on for any unit whose target was killed this tick.
  */
@@ -1502,11 +1772,17 @@ export function resolveTurn(
   // Phase 1: Snapshot
   const snapshot = takeSnapshot(state);
 
-  // Phase 2: Intent Collection
+  // Phase 2: Intent Collection (includes redirect commands)
   const intents = collectIntents(state, p1Commands, p2Commands);
+
+  // Phase 2b: Build Commands
+  resolveBuildCommands(state, p1Commands, p2Commands);
 
   // Phase 3: Movement
   const movementResult = resolveMovement(state, intents, snapshot, randomFn);
+
+  // Phase 3b: Mines
+  resolveMines(state);
 
   // Phase 4: Engagement Detection
   const engagements = detectEngagements(state, intents, movementResult.interceptEngagements);
@@ -1523,8 +1799,14 @@ export function resolveTurn(
   // Phase 7: Melee (deferred)
   resolveMelee(state, engagements);
 
+  // Phase 7b: Mortar Fire (buildings)
+  resolveMortarFire(state, randomFn);
+
   // Phase 8: Directive Effects
   resolveDirectiveEffects(state, intents);
+
+  // Phase 8b: Defensive Position bonus is integrated into combat damage calculations
+  // (handled inline in initiative/counter fire via getDefensivePositionBonus)
 
   // Phase 9: Territory
   resolveTerritoryPhase(state);

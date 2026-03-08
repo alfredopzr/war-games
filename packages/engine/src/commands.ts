@@ -1,4 +1,4 @@
-import type { Command, CommandPool, MovementDirective, DirectiveTarget } from './types';
+import type { CommandPool, MovementDirective, DirectiveTarget } from './types';
 
 export const CP_PER_ROUND = 4;
 
@@ -9,7 +9,7 @@ export function createCommandPool(): CommandPool {
   };
 }
 
-export function spendCommand(pool: CommandPool, command: Command): CommandPool {
+export function spendCommand(pool: CommandPool, command: { unitId: string }): CommandPool {
   if (pool.remaining <= 0) {
     throw new Error('No command points remaining');
   }

@@ -127,6 +127,16 @@ export function filterStateForPlayer(
   }
 
   // Build SerializableGameState directly (single-pass, no intermediate clone)
+  // Filter buildings: own buildings always visible, enemy buildings only on visible hexes
+  const visibleKeys = state.phase === 'build'
+    ? new Set<string>()
+    : calculateVisibility(ownUnits, state.map.terrain, state.map.elevation, state.unitStats);
+
+  const filteredBuildings = state.buildings.filter(b => {
+    if (b.owner === playerId) return true;
+    return visibleKeys.has(`${b.position.q},${b.position.r}`);
+  }).map(b => ({ ...b, position: { ...b.position } }));
+
   return {
     phase: state.phase,
     players: {
@@ -167,6 +177,7 @@ export function filterStateForPlayer(
     maxRounds: state.maxRounds,
     winner: state.winner,
     cityOwnership,
+    buildings: filteredBuildings,
   } as SerializableGameState;
 }
 
@@ -242,6 +253,7 @@ function stripDirective(unit: Unit): Unit {
 
 const STRUCTURAL_EVENT_TYPES = new Set([
   'round-end', 'game-end', 'koth-progress', 'objective-change',
+  'building-built',
 ]);
 
 function hexKeyFromCoord(c: CubeCoord): string {
@@ -317,6 +329,13 @@ function eventHasVisiblePosition(event: BattleEvent, losSet: Set<string>): boole
     case 'game-end':
     case 'koth-progress':
     case 'objective-change':
+    case 'building-built':
       return true; // structural — already handled above, but exhaust the switch
+
+    case 'mine-triggered':
+      return losSet.has(hexKeyFromCoord(event.position));
+
+    case 'mortar-fire':
+      return losSet.has(hexKeyFromCoord(event.buildingPosition)) || losSet.has(hexKeyFromCoord(event.targetPosition));
   }
 }

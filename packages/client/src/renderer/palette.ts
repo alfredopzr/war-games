@@ -71,10 +71,10 @@ export interface FactionColors {
   readonly css: string;
 }
 
-export type FactionId = 'engineer' | 'caravaner' | 'greaser' | 'pistolero' | 'warden';
+export type FactionId = 'iron-collective' | 'caravaner' | 'greaser' | 'pistolero' | 'warden';
 
 export const FACTION_COLORS: Record<FactionId, FactionColors> = {
-  engineer:  { primary: 0xffee00, light: 0xffff66, dark: 0xccbb00, css: '#ffee00' },
+  'iron-collective':  { primary: 0xffee00, light: 0xffff66, dark: 0xccbb00, css: '#ffee00' },
   caravaner: { primary: 0x00ffff, light: 0x66ffff, dark: 0x00cccc, css: '#00ffff' },
   greaser:   { primary: 0xcc44ff, light: 0xdd88ff, dark: 0x9922cc, css: '#cc44ff' },
   pistolero: { primary: 0x00ff66, light: 0x66ff99, dark: 0x00cc44, css: '#00ff66' },

@@ -4,7 +4,7 @@ import { getPalette, type FactionId } from './palette';
 export type Faction = FactionId;
 
 export const PLAYER_FACTION: Record<PlayerId, Faction> = {
-  player1: 'engineer',
+  player1: 'iron-collective',
   player2: 'caravaner',
 };
 
@@ -22,6 +22,7 @@ export const UNIT_LABELS: Record<string, string> = {
   tank: 'T',
   artillery: 'A',
   recon: 'R',
+  engineer: 'E',
 };
 
 // ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@ interface ModelEntry {
 }
 
 export const MODEL_MANIFEST: Partial<Record<Faction, Record<UnitType, ModelEntry>>> = {
-  engineer: {
+  'iron-collective': {
     infantry: {
       glbPath: '/models/highdef/infantry_engineer.glb',
       clipMap: {
@@ -52,6 +53,7 @@ export const MODEL_MANIFEST: Partial<Record<Faction, Record<UnitType, ModelEntry
     tank:      { glbPath: '/models/highdef/tank_engineer.glb' },
     artillery: { glbPath: '/models/highdef/artillery_engineer.glb' },
     recon:     { glbPath: '/models/highdef/scout_engineer.glb' },
+    engineer:  { glbPath: '/models/highdef/engineer_engineer.glb' },
   },
   caravaner: {
     infantry: {
@@ -69,5 +71,6 @@ export const MODEL_MANIFEST: Partial<Record<Faction, Record<UnitType, ModelEntry
     tank:      { glbPath: '/models/highdef/tank_caravaner.glb' },
     artillery: { glbPath: '/models/highdef/artillery_caravaner.glb' },
     recon:     { glbPath: '/models/highdef/scout_caravaner.glb' },
+    engineer:  { glbPath: '/models/highdef/engineer_caravaner.glb' },
   },
 };

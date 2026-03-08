@@ -350,6 +350,26 @@ function animateEvent(
       revealTimers.push(timer);
       return 1200;
     }
+
+    case 'building-built': {
+      return 500;
+    }
+
+    case 'mine-triggered': {
+      const timer = setTimeout(() => {
+        callbacks.onSound?.('explosion');
+      }, scaledDelay);
+      revealTimers.push(timer);
+      return 1000;
+    }
+
+    case 'mortar-fire': {
+      const timer = setTimeout(() => {
+        callbacks.onSound?.('attack');
+      }, scaledDelay);
+      revealTimers.push(timer);
+      return 1000;
+    }
   }
 }
 

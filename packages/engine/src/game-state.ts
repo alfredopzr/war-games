@@ -71,6 +71,7 @@ export function createGame(seed?: number): GameState {
     winner: null,
     cityOwnership,
     pendingEvents: [],
+    buildings: [],
   };
 }
 
@@ -163,7 +164,7 @@ export function filterValidCommands(
   let remaining = pool.remaining;
 
   return commands.filter((cmd) => {
-    if (cmd.type !== 'redirect') return false;
+    if (cmd.type !== 'redirect' && cmd.type !== 'build') return false;
     if (remaining <= 0) return false;
 
     const unit = friendlyUnits.find((u) => u.id === cmd.unitId);
@@ -171,6 +172,11 @@ export function filterValidCommands(
 
     if (seen.has(cmd.unitId)) return false;
     if (pool.commandedUnitIds.has(cmd.unitId)) return false;
+
+    // Build commands require the unit to be an engineer
+    if (cmd.type === 'build') {
+      if (unit.type !== 'engineer') return false;
+    }
 
     seen.add(cmd.unitId);
     remaining--;
@@ -326,6 +332,9 @@ export function scoreRound(
   for (const key of state.cityOwnership.keys()) {
     state.cityOwnership.set(key, null);
   }
+
+  // Clear all buildings (ephemeral per round)
+  state.buildings = [];
 
   // Reset all units' hasActed
   for (const player of Object.values(state.players)) {

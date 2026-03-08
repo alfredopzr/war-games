@@ -3,12 +3,13 @@ import { UNIT_STATS } from '@hexwar/engine';
 import type { UnitType } from '@hexwar/engine';
 import { useGameStore } from '../store/game-store';
 
-const UNIT_TYPES: UnitType[] = ['infantry', 'tank', 'artillery', 'recon'];
+const UNIT_TYPES: UnitType[] = ['infantry', 'tank', 'artillery', 'recon', 'engineer'];
 const LABELS: Record<UnitType, string> = {
   infantry: 'INFANTRY',
   tank: 'TANK',
   artillery: 'ARTILLERY',
   recon: 'RECON',
+  engineer: 'ENGINEER',
 };
 
 export function DeployManifest(): ReactElement | null {
@@ -20,7 +21,7 @@ export function DeployManifest(): ReactElement | null {
   if (selectedUnit) return null;
 
   const units = gameState.players[currentPlayerView].units;
-  const counts: Record<UnitType, number> = { infantry: 0, tank: 0, artillery: 0, recon: 0 };
+  const counts: Record<UnitType, number> = { infantry: 0, tank: 0, artillery: 0, recon: 0, engineer: 0 };
   let totalCost = 0;
 
   for (const unit of units) {

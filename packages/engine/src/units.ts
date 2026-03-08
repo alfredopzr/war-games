@@ -1,9 +1,9 @@
 import type { UnitType, UnitStats, Unit, PlayerId, CubeCoord, MovementDirective, AttackDirective, SpecialtyModifier, DirectiveTarget } from './types';
 import {
   MOVE_DIVISOR_INFANTRY, MOVE_DIVISOR_TANK,
-  MOVE_DIVISOR_ARTILLERY, MOVE_DIVISOR_RECON,
+  MOVE_DIVISOR_ARTILLERY, MOVE_DIVISOR_RECON, MOVE_DIVISOR_ENGINEER,
   VISION_DIVISOR_INFANTRY, VISION_DIVISOR_TANK,
-  VISION_DIVISOR_ARTILLERY, VISION_DIVISOR_RECON,
+  VISION_DIVISOR_ARTILLERY, VISION_DIVISOR_RECON, VISION_DIVISOR_ENGINEER,
 } from './map-gen-params';
 import balanceData from './balance.json';
 
@@ -25,6 +25,7 @@ const MOVE_DIVISORS: Record<UnitType, number> = {
   tank: MOVE_DIVISOR_TANK,
   artillery: MOVE_DIVISOR_ARTILLERY,
   recon: MOVE_DIVISOR_RECON,
+  engineer: MOVE_DIVISOR_ENGINEER,
 };
 
 const VISION_DIVISORS: Record<UnitType, number> = {
@@ -32,6 +33,7 @@ const VISION_DIVISORS: Record<UnitType, number> = {
   tank: VISION_DIVISOR_TANK,
   artillery: VISION_DIVISOR_ARTILLERY,
   recon: VISION_DIVISOR_RECON,
+  engineer: VISION_DIVISOR_ENGINEER,
 };
 
 /**

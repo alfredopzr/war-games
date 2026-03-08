@@ -769,7 +769,7 @@ describe('filterValidCommands', () => {
   it('rejects non-redirect command types', () => {
     const state = setupBattle();
     const unitId = state.players.player1.units[0]!.id;
-    const commands = [{ ...makeRedirect(unitId), type: 'bogus' as Command['type'] }];
+    const commands = [{ ...makeRedirect(unitId), type: 'bogus' } as unknown as Command];
 
     const valid = filterValidCommands(state, commands, 'player1');
     expect(valid.length).toBe(0);

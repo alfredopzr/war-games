@@ -76,5 +76,14 @@ export function formatBattleEvent(event: BattleEvent): string {
 
     case 'reveal':
       return `${pl(event.actingPlayer)} ${unitLabel(event.unitType)} revealed ${event.hexes.length} hexes`;
+
+    case 'building-built':
+      return `${pl(event.actingPlayer)} ${unitLabel(event.unitType)} built ${event.buildingType} (${event.cost}g)`;
+
+    case 'mine-triggered':
+      return `${unitLabel(event.triggeredByUnitType)} triggered mines for ${event.damage} damage (${event.unitHpAfter} HP left)`;
+
+    case 'mortar-fire':
+      return `Mortar fired at ${unitLabel(event.targetUnitType)} for ${event.damage} damage (${event.targetHpAfter} HP left)`;
   }
 }

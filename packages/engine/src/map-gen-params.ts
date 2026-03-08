@@ -249,6 +249,7 @@ export const MOVE_DIVISOR_INFANTRY = 8;
 export const MOVE_DIVISOR_TANK = 7;
 export const MOVE_DIVISOR_ARTILLERY = 12;
 export const MOVE_DIVISOR_RECON = 5;
+export const MOVE_DIVISOR_ENGINEER = 8;
 
 /**
  * Vision range divisors per unit type.
@@ -261,6 +262,7 @@ export const VISION_DIVISOR_INFANTRY = 11;
 export const VISION_DIVISOR_TANK = 11;
 export const VISION_DIVISOR_ARTILLERY = 15;
 export const VISION_DIVISOR_RECON = 5;
+export const VISION_DIVISOR_ENGINEER = 11;
 
 /** Highways won't route through hexes above this elevation. */
 export const HIGHWAY_MAX_ELEVATION = 2.0;

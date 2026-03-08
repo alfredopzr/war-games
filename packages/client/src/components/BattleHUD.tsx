@@ -114,6 +114,7 @@ function resolveSimultaneousLocal(
   console.log(`[TURN ${turnNum}] P1 units: ${gameState.players.player1.units.length}, P2 units: ${gameState.players.player2.units.length}`);
   console.log(`[TURN ${turnNum}] P1 commands (${p1Commands.length}):`, p1Commands.map((c) => `${c.type}:${c.unitId}`));
   console.log(`[TURN ${turnNum}] AI commands (${aiCommands.length}):`, aiCommands.map((c) => {
+    if (c.type === 'build') return `build:${c.unitId}→${c.buildingType}`;
     return `redirect:${c.unitId}→${c.newMovementDirective}/${c.newAttackDirective}`;
   }));
   for (const u of gameState.players.player2.units) {

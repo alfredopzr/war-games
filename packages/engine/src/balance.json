@@ -3,13 +3,15 @@
     "infantry":  { "cost": 100, "maxHp": 30, "atk": 10, "def": 2, "moveRange": 3, "attackRange": 1, "minAttackRange": 1, "visionRange": 3, "canClimb": true,  "responseTime": 2 },
     "tank":      { "cost": 250, "maxHp": 40, "atk": 14, "def": 2, "moveRange": 4, "attackRange": 1, "minAttackRange": 1, "visionRange": 3, "canClimb": false, "responseTime": 3 },
     "artillery": { "cost": 200, "maxHp": 20, "atk": 10, "def": 1, "moveRange": 2, "attackRange": 3, "minAttackRange": 2, "visionRange": 3, "canClimb": false, "responseTime": 4 },
-    "recon":     { "cost": 100, "maxHp": 20, "atk":  7, "def": 1, "moveRange": 5, "attackRange": 1, "minAttackRange": 1, "visionRange": 6, "canClimb": true,  "responseTime": 1 }
+    "recon":     { "cost": 100, "maxHp": 20, "atk":  7, "def": 1, "moveRange": 5, "attackRange": 1, "minAttackRange": 1, "visionRange": 6, "canClimb": true,  "responseTime": 1 },
+    "engineer":  { "cost":  75, "maxHp": 20, "atk":  3, "def": 1, "moveRange": 3, "attackRange": 1, "minAttackRange": 1, "visionRange": 3, "canClimb": true,  "responseTime": 4 }
   },
   "typeAdvantage": {
-    "infantry":  { "infantry": 1.0, "tank": 0.6, "artillery": 1.0, "recon": 2.0 },
-    "tank":      { "infantry": 2.0, "tank": 1.0, "artillery": 0.6, "recon": 1.0 },
-    "artillery": { "infantry": 1.0, "tank": 2.0, "artillery": 1.0, "recon": 0.6 },
-    "recon":     { "infantry": 0.6, "tank": 1.0, "artillery": 2.0, "recon": 1.0 }
+    "infantry":  { "infantry": 1.0, "tank": 0.6, "artillery": 1.0, "recon": 2.0, "engineer": 1.5 },
+    "tank":      { "infantry": 2.0, "tank": 1.0, "artillery": 0.6, "recon": 1.0, "engineer": 1.5 },
+    "artillery": { "infantry": 1.0, "tank": 2.0, "artillery": 1.0, "recon": 0.6, "engineer": 1.5 },
+    "recon":     { "infantry": 0.6, "tank": 1.0, "artillery": 2.0, "recon": 1.0, "engineer": 1.5 },
+    "engineer":  { "infantry": 0.5, "tank": 0.3, "artillery": 0.8, "recon": 0.5, "engineer": 1.0 }
   },
   "terrain": {
     "plains":   { "moveCost": 1, "defenseModifier": 0 },

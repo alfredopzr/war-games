@@ -87,7 +87,7 @@ export function executeDirective(unit: Unit, context: DirectiveContext): UnitAct
   // Specialty modifiers with custom behavior (TEMPORARY: overrides movement.
   // When combat timeline lands, these move to Phase 8 and movement always runs.)
   if (unit.specialtyModifier === 'support') return executeSupport(unit, context);
-  // 'engineer' and 'sniper' are no-ops, fall through to movement
+  // 'sniper' is a no-op, falls through to movement
 
   switch (unit.movementDirective) {
     case 'advance': return executeAdvance(unit, context);

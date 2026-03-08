@@ -132,6 +132,7 @@ describe('formatBattleEvent', () => {
     const event: BattleEvent = {
       type: 'intercept', actingPlayer: 'player1', phase: 'combat', pipelinePhase: 0,
       attackerId: 'u1', attackerType: 'recon',
+      attackerPosition: { q: 2, r: 0, s: -2 },
       defenderId: 'u2', defenderType: 'infantry',
       hex: { q: 3, r: -1, s: -2 }, damage: 2, defenderResponse: 'engage',
     };
@@ -142,6 +143,7 @@ describe('formatBattleEvent', () => {
     const event: BattleEvent = {
       type: 'intercept', actingPlayer: 'player1', phase: 'combat', pipelinePhase: 0,
       attackerId: 'u1', attackerType: 'recon',
+      attackerPosition: { q: 2, r: 0, s: -2 },
       defenderId: 'u2', defenderType: 'infantry',
       hex: { q: 3, r: -1, s: -2 }, damage: 5, defenderResponse: 'flee',
     };
@@ -152,6 +154,7 @@ describe('formatBattleEvent', () => {
     const event: BattleEvent = {
       type: 'intercept', actingPlayer: 'player1', phase: 'combat', pipelinePhase: 0,
       attackerId: 'u1', attackerType: 'recon',
+      attackerPosition: { q: 2, r: 0, s: -2 },
       defenderId: 'u2', defenderType: 'infantry',
       hex: { q: 3, r: -1, s: -2 }, damage: 3, defenderResponse: 'none',
     };

@@ -8,6 +8,7 @@ export type {
   TerrainType, TerrainDefinition, HexTile, HexModifier, MegaHexInfo,
   UnitType, UnitStats, Unit, MovementDirective, AttackDirective, SpecialtyModifier, DirectiveTarget, DirectiveTargetType, PlayerId,
   UnitAction, Command, CommandPool,
+  BuildingType, BuildingStats, Building,
   GamePhase, ObjectiveState, PlayerState, RoundState, GameState, GameMap,
   IncomeParams, MapValidation, RoundEndResult, DirectiveContext, ResolvedTarget,
   // Resolution pipeline
@@ -19,6 +20,7 @@ export type {
   BattleEventObjectiveChange, BattleEventKothProgress,
   BattleEventRoundEnd, BattleEventGameEnd, BattleEventHeal,
   BattleEventIntercept, BattleEventCounter, BattleEventMelee, BattleEventReveal,
+  BattleEventBuild, BattleEventMineTriggered, BattleEventMortarFire,
   // Network protocol
   ClientCreateRoom, ClientJoinRoom, ClientLeaveRoom, ClientReconnect,
   ClientPlaceUnit, ClientRemoveUnit, ClientSetDirective,
@@ -89,6 +91,9 @@ export {
 // Resolution pipeline
 export { resolveTurn, computeApproachAngle, computeFacing } from './resolution-pipeline';
 
+// Buildings
+export { BUILDING_STATS, createBuilding, resetBuildingIdCounter, canAffordBuilding, getBuildingsAtHex, getBuildingsByOwner, getDefensivePositionBonus } from './buildings';
+
 // AI
 export { aiBuildPhase, aiBattlePhase } from './ai';
 export type { AiBuildAction } from './ai';
@@ -126,4 +131,5 @@ export {
   HIGHWAY_ENABLED, HIGHWAY_COUNT,
   CLIMB_COST_PER_ELEV, CLIMB_THRESHOLD, DOWNHILL_COST_MULT,
   MOVE_DIVISOR_INFANTRY, MOVE_DIVISOR_TANK, MOVE_DIVISOR_ARTILLERY, MOVE_DIVISOR_RECON,
+  MOVE_DIVISOR_ENGINEER, VISION_DIVISOR_ENGINEER,
 } from './map-gen-params';

@@ -21,6 +21,7 @@ import type {
   ObjectiveState,
   MegaHexInfo,
   HexModifier,
+  Building,
 } from './types';
 
 // -----------------------------------------------------------------------------
@@ -66,6 +67,7 @@ export interface SerializableGameState {
   maxRounds: number;
   winner: PlayerId | null;
   cityOwnership: Record<string, PlayerId | null>;
+  buildings?: Building[];
 }
 
 // -----------------------------------------------------------------------------
@@ -171,6 +173,7 @@ export function serializeGameState(state: GameState): SerializableGameState {
     maxRounds: state.maxRounds,
     winner: state.winner,
     cityOwnership,
+    buildings: state.buildings.map(b => ({ ...b, position: { ...b.position } })),
   };
 }
 
@@ -302,5 +305,6 @@ export function deserializeGameState(data: SerializableGameState): GameState {
     winner: data.winner,
     cityOwnership,
     pendingEvents: [],
+    buildings: (data.buildings ?? []).map(b => ({ ...b, position: { ...b.position } })),
   };
 }

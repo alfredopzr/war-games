@@ -58,7 +58,7 @@ export interface HexTile {
 // Units
 // -----------------------------------------------------------------------------
 
-export type UnitType = 'infantry' | 'tank' | 'artillery' | 'recon';
+export type UnitType = 'infantry' | 'tank' | 'artillery' | 'recon' | 'engineer';
 
 export interface UnitStats {
   readonly type: UnitType;
@@ -76,7 +76,7 @@ export interface UnitStats {
 
 export type MovementDirective = 'advance' | 'flank-left' | 'flank-right' | 'patrol' | 'hold';
 export type AttackDirective = 'shoot-on-sight' | 'skirmish' | 'retreat-on-contact' | 'hunt' | 'ignore';
-export type SpecialtyModifier = 'support' | 'engineer' | 'sniper';
+export type SpecialtyModifier = 'support' | 'sniper';
 
 export type DirectiveTargetType = 'enemy-unit' | 'friendly-unit' | 'hex' | 'deployment-zone';
 
@@ -106,24 +106,56 @@ export interface Unit {
 }
 
 // -----------------------------------------------------------------------------
+// Buildings
+// -----------------------------------------------------------------------------
+
+export type BuildingType = 'recon-tower' | 'mortar' | 'mines' | 'defensive-position';
+
+export interface BuildingStats {
+  readonly type: BuildingType;
+  readonly cost: number;
+  readonly visionRange?: number;
+  readonly attackRange?: number;
+  readonly minAttackRange?: number;
+  readonly atk?: number;
+  readonly damage?: number;
+  readonly defenseBonus?: number;
+}
+
+export interface Building {
+  readonly id: string;
+  readonly type: BuildingType;
+  readonly owner: PlayerId;
+  readonly position: CubeCoord;
+  readonly builtTurn: number;
+}
+
+// -----------------------------------------------------------------------------
 // Actions & Commands
 // -----------------------------------------------------------------------------
 
 export type UnitAction =
   | { type: 'move'; targetHex: CubeCoord }
   | { type: 'attack'; targetUnitId: string }
-  | { type: 'hold' };
+  | { type: 'hold' }
+  | { type: 'build'; buildingType: BuildingType };
 
-export interface Command {
-  type: 'redirect';
-  unitId: string;
-  newMovementDirective: MovementDirective;
-  newAttackDirective: AttackDirective;
-  newSpecialtyModifier: SpecialtyModifier | null;
-  target?: DirectiveTarget;
-  patrolRadius?: number;
-  huntPriorityType?: UnitType;
-}
+export type Command =
+  | {
+      type: 'redirect';
+      unitId: string;
+      newMovementDirective: MovementDirective;
+      newAttackDirective: AttackDirective;
+      newSpecialtyModifier: SpecialtyModifier | null;
+      target?: DirectiveTarget;
+      patrolRadius?: number;
+      huntPriorityType?: UnitType;
+    }
+  | {
+      type: 'build';
+      unitId: string;
+      buildingType: BuildingType;
+    };
 
 export interface CommandPool {
   remaining: number;
@@ -183,6 +215,7 @@ export interface GameState {
   winner: PlayerId | null;
   cityOwnership: Map<string, PlayerId | null>;
   pendingEvents: BattleEvent[];
+  buildings: Building[];
 }
 
 // -----------------------------------------------------------------------------
@@ -441,6 +474,36 @@ export interface BattleEventReveal extends BattleEventBase {
   readonly hexes: CubeCoord[];
 }
 
+export interface BattleEventBuild extends BattleEventBase {
+  readonly type: 'building-built';
+  readonly unitId: string;
+  readonly unitType: UnitType;
+  readonly buildingType: BuildingType;
+  readonly position: CubeCoord;
+  readonly cost: number;
+}
+
+export interface BattleEventMineTriggered extends BattleEventBase {
+  readonly type: 'mine-triggered';
+  readonly buildingId: string;
+  readonly triggeredByUnitId: string;
+  readonly triggeredByUnitType: UnitType;
+  readonly position: CubeCoord;
+  readonly damage: number;
+  readonly unitHpAfter: number;
+}
+
+export interface BattleEventMortarFire extends BattleEventBase {
+  readonly type: 'mortar-fire';
+  readonly buildingId: string;
+  readonly targetUnitId: string;
+  readonly targetUnitType: UnitType;
+  readonly buildingPosition: CubeCoord;
+  readonly targetPosition: CubeCoord;
+  readonly damage: number;
+  readonly targetHpAfter: number;
+}
+
 export type BattleEvent =
   | BattleEventMove
   | BattleEventDamage
@@ -457,7 +520,10 @@ export type BattleEvent =
   | BattleEventIntercept
   | BattleEventCounter
   | BattleEventMelee
-  | BattleEventReveal;
+  | BattleEventReveal
+  | BattleEventBuild
+  | BattleEventMineTriggered
+  | BattleEventMortarFire;
 
 export type BattleEventType = BattleEvent['type'];
 
