@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { aiBuildPhase, aiBattlePhase } from './ai';
 import { createGame, placeUnit, startBattlePhase } from './game-state';
-import { hexToKey } from './hex';
+import { createHex, cubeDistance, hexToKey } from './hex';
+import { calculateVisibility } from './vision';
 
 describe('aiBuildPhase', () => {
   it('spends resources on units without exceeding budget', () => {
@@ -68,5 +69,69 @@ describe('aiBattlePhase', () => {
     for (const cmd of commands) {
       expect(p2UnitIds.has(cmd.unitId)).toBe(true);
     }
+  });
+
+  it('does not target enemies outside vision range', () => {
+    const game = createGame(42);
+    // Deployment zones are at opposite corners — far beyond any unit's vision range
+    const p1Zone = game.map.player1Deployment;
+    const p2Zone = game.map.player2Deployment;
+    placeUnit(game, 'player1', 'infantry', p1Zone[0]!);
+    placeUnit(game, 'player2', 'infantry', p2Zone[0]!);
+    startBattlePhase(game);
+    game.round.currentPlayer = 'player2';
+
+    // Confirm units are beyond vision range
+    const p2Units = game.players.player2.units;
+    const p1Units = game.players.player1.units;
+    const visibleHexes = calculateVisibility(
+      p2Units,
+      game.map.terrain,
+      game.map.elevation,
+      game.unitStats,
+    );
+    const enemyVisible = visibleHexes.has(hexToKey(p1Units[0]!.position));
+    expect(enemyVisible).toBe(false);
+
+    // AI should produce no attack-related redirects targeting the invisible enemy
+    const commands = aiBattlePhase(game, 'player2');
+    for (const cmd of commands) {
+      if (cmd.target && cmd.target.type === 'unit') {
+        expect(cmd.target.unitId).not.toBe(p1Units[0]!.id);
+      }
+      // No shoot-on-sight redirect (which would indicate the AI "saw" the enemy)
+      expect(cmd.newAttackDirective).not.toBe('shoot-on-sight');
+    }
+  });
+
+  it('targets visible enemies normally', () => {
+    const game = createGame(42);
+    const p1Zone = game.map.player1Deployment;
+    const p2Zone = game.map.player2Deployment;
+    placeUnit(game, 'player1', 'infantry', p1Zone[0]!);
+    placeUnit(game, 'player2', 'infantry', p2Zone[0]!);
+    startBattlePhase(game);
+    game.round.currentPlayer = 'player2';
+
+    // Move p1 unit adjacent to p2 unit so it's guaranteed visible
+    const p2Pos = game.players.player2.units[0]!.position;
+    const adjacentHex = createHex(p2Pos.q + 1, p2Pos.r);
+    game.players.player1.units[0]!.position = adjacentHex;
+
+    // Confirm visibility
+    const visibleHexes = calculateVisibility(
+      game.players.player2.units,
+      game.map.terrain,
+      game.map.elevation,
+      game.unitStats,
+    );
+    expect(visibleHexes.has(hexToKey(adjacentHex))).toBe(true);
+
+    // AI should see the enemy and produce attack-related commands
+    const commands = aiBattlePhase(game, 'player2');
+    const hasAttackRedirect = commands.some(
+      (c) => c.newAttackDirective === 'shoot-on-sight',
+    );
+    expect(hasAttackRedirect).toBe(true);
   });
 });

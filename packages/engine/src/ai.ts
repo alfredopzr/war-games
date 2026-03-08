@@ -26,6 +26,7 @@ import { canAttack, calculateDamage } from './combat';
 import { canIssueCommand, CP_PER_ROUND } from './commands';
 import { findPath } from './pathfinding';
 import { getDefenseModifier } from './terrain';
+import { calculateVisibility } from './vision';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -299,7 +300,15 @@ function scoreAttack(
 export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
   const enemyId: PlayerId = playerId === 'player1' ? 'player2' : 'player1';
   const myUnits = state.players[playerId].units;
-  const enemyUnits = state.players[enemyId].units;
+  const visibleHexes = calculateVisibility(
+    myUnits,
+    state.map.terrain,
+    state.map.elevation,
+    state.unitStats,
+  );
+  const enemyUnits = state.players[enemyId].units.filter(
+    (e) => visibleHexes.has(hexToKey(e.position)),
+  );
 
   const commands: Command[] = [];
   let pool: CommandPool = state.round.commandPools[playerId];
@@ -330,7 +339,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
   for (const unit of myUnits) {
     if (!canIssueCommand(pool, unit.id)) continue;
     for (const enemy of enemyUnits) {
-      if (!canAttack(unit, enemy)) continue;
+      if (!canAttack(unit, enemy, visibleHexes)) continue;
       allAttacks.push(scoreAttack(unit, enemy, getUnitTerrain(enemy), focusTargetId));
     }
   }
@@ -394,7 +403,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
 
     // Artillery shouldn't move if it can already hit someone
     if (unit.type === 'artillery') {
-      const canHitSomeone = enemyUnits.some((e) => canAttack(unit, e));
+      const canHitSomeone = enemyUnits.some((e) => canAttack(unit, e, visibleHexes));
       if (canHitSomeone) continue;
     }
 
