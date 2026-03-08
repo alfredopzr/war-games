@@ -16,13 +16,12 @@ import type {
   DirectiveTarget,
   Command,
   RoundEndResult,
-  Unit,
 } from './types';
 import { generateMap } from './map-gen';
 import { createUnit, UNIT_STATS, scaledUnitStats } from './units';
 import { canAfford, calculateIncome, applyCarryover, applyMaintenance } from './economy';
 import { createCommandPool } from './commands';
-import { hexToKey, cubeDistance } from './hex';
+import { hexToKey } from './hex';
 
 // -----------------------------------------------------------------------------
 // createGame
@@ -219,50 +218,18 @@ export function checkRoundEnd(state: GameState): RoundEndResult {
     return { roundOver: true, winner: 'player1', reason: 'elimination' };
   }
   if (p1Units === 0 && p2Units === 0) {
-    // Both eliminated — first-mover tiebreak
-    return { roundOver: true, winner: 'player1', reason: 'elimination' };
+    return { roundOver: true, winner: null, reason: 'elimination' };
   }
 
-  // c. Turn limit
+  // c. Turn limit — draw, no winner
   if (state.round.turnsPlayed >= state.round.maxTurns) {
-    const winner = resolveTurnLimitTiebreaker(state);
-    return { roundOver: true, winner, reason: 'turn-limit' };
+    return { roundOver: true, winner: null, reason: 'turn-limit' };
   }
 
   return { roundOver: false, winner: null, reason: null };
 }
 
-function resolveTurnLimitTiebreaker(state: GameState): PlayerId {
-  const objectiveKey = hexToKey(state.map.centralObjective);
 
-  // 1. Who has a unit on the central hex
-  const p1OnCenter = state.players.player1.units.some(
-    (u) => hexToKey(u.position) === objectiveKey,
-  );
-  const p2OnCenter = state.players.player2.units.some(
-    (u) => hexToKey(u.position) === objectiveKey,
-  );
-
-  if (p1OnCenter && !p2OnCenter) return 'player1';
-  if (p2OnCenter && !p1OnCenter) return 'player2';
-
-  // 2. Closest unit to central hex
-  const p1Closest = getClosestDistance(state.players.player1.units, state.map.centralObjective);
-  const p2Closest = getClosestDistance(state.players.player2.units, state.map.centralObjective);
-
-  if (p1Closest < p2Closest) return 'player1';
-  if (p2Closest < p1Closest) return 'player2';
-
-  // 3. More total surviving HP
-  const p1Hp = getTotalHp(state.players.player1.units);
-  const p2Hp = getTotalHp(state.players.player2.units);
-
-  if (p1Hp > p2Hp) return 'player1';
-  if (p2Hp > p1Hp) return 'player2';
-
-  // 4. First-mover tiebreak
-  return 'player1';
-}
 
 // -----------------------------------------------------------------------------
 // scoreRound
@@ -311,11 +278,16 @@ export function scoreRound(
   state.players.player1.resources = Math.max(0, p1Carryover - p1Maintenance + p1Income);
   state.players.player2.resources = Math.max(0, p2Carryover - p2Maintenance + p2Income);
 
-  // Check if game is over
+  // Check if game is over — winner found, or all rounds exhausted (draw)
   const gameWinner = getWinner(state);
   if (gameWinner) {
     state.phase = 'game-over';
     state.winner = gameWinner;
+    return state;
+  }
+  if (state.round.roundNumber >= state.maxRounds) {
+    state.phase = 'game-over';
+    state.winner = null;
     return state;
   }
 
@@ -369,15 +341,6 @@ export function getWinner(state: GameState): PlayerId | null {
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
-
-function getClosestDistance(units: Unit[], target: CubeCoord): number {
-  if (units.length === 0) return Infinity;
-  return Math.min(...units.map((u) => cubeDistance(u.position, target)));
-}
-
-function getTotalHp(units: Unit[]): number {
-  return units.reduce((sum, u) => sum + u.hp, 0);
-}
 
 function countCitiesHeld(state: GameState, playerId: PlayerId): number {
   let count = 0;

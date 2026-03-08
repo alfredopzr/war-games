@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { GameState, PlayerId, CubeCoord, Command } from './types';
 import { resetUnitIdCounter, UNIT_STATS } from './units';
-import { hexToKey, createHex } from './hex';
+import { hexToKey } from './hex';
 import {
   createGame,
   placeUnit,
@@ -320,76 +320,13 @@ describe('checkRoundEnd', () => {
     expect(result.reason).toBe('elimination');
   });
 
-  it('turn limit tiebreaker — unit on central hex wins', () => {
-    let state = setupBattleGame();
+  it('turn limit — emits draw (null winner)', () => {
+    const state = setupBattleGame();
     state.round.turnsPlayed = 12;
-
-    // Put player2 unit on central hex
-    state.players.player2.units[0]!.position = state.map.centralObjective;
 
     const result = checkRoundEnd(state);
     expect(result.roundOver).toBe(true);
-    expect(result.winner).toBe('player2');
-    expect(result.reason).toBe('turn-limit');
-  });
-
-  it('turn limit tiebreaker — closer to center wins', () => {
-    let state = setupBattleGame();
-    state.round.turnsPlayed = 12;
-
-    const central = state.map.centralObjective;
-    // Place player1 unit 1 hex away, player2 unit 3 hexes away
-    state.players.player1.units = [state.players.player1.units[0]!];
-    state.players.player2.units = [state.players.player2.units[0]!];
-
-    state.players.player1.units[0]!.position = createHex(central.q + 1, central.r);
-    state.players.player2.units[0]!.position = createHex(central.q + 3, central.r);
-
-    const result = checkRoundEnd(state);
-    expect(result.roundOver).toBe(true);
-    expect(result.winner).toBe('player1');
-    expect(result.reason).toBe('turn-limit');
-  });
-
-  it('turn limit tiebreaker — more HP wins', () => {
-    let state = setupBattleGame();
-    state.round.turnsPlayed = 12;
-
-    // Same distance from center, but different HP
-    const central = state.map.centralObjective;
-    state.players.player1.units = [state.players.player1.units[0]!];
-    state.players.player2.units = [state.players.player2.units[0]!];
-
-    state.players.player1.units[0]!.position = createHex(central.q + 1, central.r);
-    state.players.player2.units[0]!.position = createHex(central.q - 1, central.r);
-
-    state.players.player1.units[0]!.hp = 25;
-    state.players.player2.units[0]!.hp = 10;
-
-    const result = checkRoundEnd(state);
-    expect(result.roundOver).toBe(true);
-    expect(result.winner).toBe('player1');
-    expect(result.reason).toBe('turn-limit');
-  });
-
-  it('turn limit tiebreaker — player1 wins when fully tied', () => {
-    let state = setupBattleGame();
-    state.round.turnsPlayed = 12;
-
-    // Same distance, same HP
-    const central = state.map.centralObjective;
-    state.players.player1.units = [state.players.player1.units[0]!];
-    state.players.player2.units = [state.players.player2.units[0]!];
-
-    state.players.player1.units[0]!.position = createHex(central.q + 1, central.r);
-    state.players.player2.units[0]!.position = createHex(central.q - 1, central.r);
-
-    state.players.player1.units[0]!.hp = 25;
-    state.players.player2.units[0]!.hp = 25;
-
-    const result = checkRoundEnd(state);
-    expect(result.roundOver).toBe(true);
-    expect(result.winner).toBe('player1');
+    expect(result.winner).toBeNull();
     expect(result.reason).toBe('turn-limit');
   });
 

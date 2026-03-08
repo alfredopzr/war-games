@@ -212,6 +212,58 @@ export function getReachableHexes(
 }
 
 // -----------------------------------------------------------------------------
+// Movement Cost Field (unbounded Dijkstra flood)
+// -----------------------------------------------------------------------------
+
+/**
+ * Unbounded Dijkstra flood from `start`. Returns a map of hex key → minimum
+ * weighted movement cost to reach that hex. Uses the same `getMoveCost` edge
+ * weights as `findPath` and `getReachableHexes`.
+ */
+export function computeMovementCostField(
+  start: CubeCoord,
+  terrainMap: Map<string, TerrainType>,
+  unitType: UnitType,
+  movementDirective?: MovementDirective,
+  modifiers?: Map<string, HexModifier>,
+  elevationMap?: Map<string, number>,
+): Map<string, number> {
+  const costField = new Map<string, number>();
+  const startKey = hexToKey(start);
+  costField.set(startKey, 0);
+
+  const heap = new MinHeap<{ coord: CubeCoord; g: number }>((a, b) => a.g - b.g);
+  heap.push({ coord: start, g: 0 });
+
+  while (heap.size > 0) {
+    const current = heap.pop()!;
+    const currentKey = hexToKey(current.coord);
+
+    if (current.g > (costField.get(currentKey) ?? Infinity)) continue;
+
+    for (const neighbor of hexNeighbors(current.coord)) {
+      const neighborKey = hexToKey(neighbor);
+      const terrain = terrainMap.get(neighborKey);
+      if (terrain === undefined) continue;
+
+      const elevFrom = elevationMap?.get(currentKey);
+      const elevTo = elevationMap?.get(neighborKey);
+      const cost = getMoveCost(terrain, unitType, movementDirective, modifiers?.get(neighborKey), elevFrom, elevTo);
+      if (cost === Infinity) continue;
+
+      const totalCost = current.g + cost;
+      const prev = costField.get(neighborKey);
+      if (prev !== undefined && totalCost >= prev) continue;
+
+      costField.set(neighborKey, totalCost);
+      heap.push({ coord: neighbor, g: totalCost });
+    }
+  }
+
+  return costField;
+}
+
+// -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
 

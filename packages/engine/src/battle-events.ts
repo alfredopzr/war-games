@@ -16,8 +16,11 @@ function unitLabel(type: string): string {
 
 export function formatBattleEvent(event: BattleEvent): string {
   switch (event.type) {
+    case 'turn-start':
+      return `Turn ${event.turnNumber} | P1: ${event.p1UnitsAlive} units ${event.p1CommandsRemaining} CP (${event.p1OutOfRangeUnits} OOR) | P2: ${event.p2UnitsAlive} units ${event.p2CommandsRemaining} CP (${event.p2OutOfRangeUnits} OOR)`;
+
     case 'move':
-      return `${pl(event.actingPlayer)} ${unitLabel(event.unitType)} moved to (${event.to.q},${event.to.r})`;
+      return `${pl(event.actingPlayer)} ${unitLabel(event.unitType)} [${event.movementDirective}] moved to (${event.to.q},${event.to.r})`;
 
     case 'damage':
       return `${pl(event.actingPlayer)} ${unitLabel(event.attackerType)} dealt ${event.damage} damage to ${unitLabel(event.defenderType)} (${event.defenderHpAfter} HP left)`;

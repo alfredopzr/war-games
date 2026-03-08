@@ -264,6 +264,31 @@ export const VISION_DIVISOR_ARTILLERY = 15;
 export const VISION_DIVISOR_RECON = 5;
 export const VISION_DIVISOR_ENGINEER = 11;
 
+/**
+ * Attack range divisors per unit type.
+ * attackRange = floor(mapDiameter / divisor)
+ * Attack < vision for most units (you see them before you can shoot).
+ * Artillery outranges its own vision — needs recon spotters.
+ * Recon sees far, shoots short (scout, not fighter).
+ */
+export const ATTACK_RANGE_DIVISOR_INFANTRY = 19;
+export const ATTACK_RANGE_DIVISOR_TANK = 15;
+export const ATTACK_RANGE_DIVISOR_ARTILLERY = 8;
+export const ATTACK_RANGE_DIVISOR_RECON = 25;
+export const ATTACK_RANGE_DIVISOR_ENGINEER = 19;
+
+/**
+ * Min attack range divisors per unit type.
+ * minAttackRange = max(1, floor(mapDiameter / divisor))
+ * Only artillery has a meaningful dead zone — can't fire at close range.
+ * All others use a large divisor that resolves to 1 (no dead zone).
+ */
+export const MIN_ATTACK_RANGE_DIVISOR_INFANTRY = 76;
+export const MIN_ATTACK_RANGE_DIVISOR_TANK = 76;
+export const MIN_ATTACK_RANGE_DIVISOR_ARTILLERY = 19;
+export const MIN_ATTACK_RANGE_DIVISOR_RECON = 76;
+export const MIN_ATTACK_RANGE_DIVISOR_ENGINEER = 76;
+
 /** Highways won't route through hexes above this elevation. */
 export const HIGHWAY_MAX_ELEVATION = 2.0;
 

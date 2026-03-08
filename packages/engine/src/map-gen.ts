@@ -1264,6 +1264,11 @@ function generateMapAttempt(seed: number): { map: GameMap; fairness: FairnessRes
   // 10. Central objective
   const centralObjective = ORIGIN;
 
+  // Sort deploy zones by distance to objective so the AI places units
+  // on the closest hexes first — symmetric for both players.
+  player1Deployment.sort((a, b) => cubeDistance(a, centralObjective) - cubeDistance(b, centralObjective));
+  player2Deployment.sort((a, b) => cubeDistance(a, centralObjective) - cubeDistance(b, centralObjective));
+
   // 10.5. Hex modifiers (rivers, then highways)
   const modifiers = generateRivers(
     allHexes, terrain, elevation, deployHexKeys,

@@ -21,7 +21,7 @@ import type {
   TerrainType,
 } from './types';
 import { UNIT_STATS, getTypeAdvantage } from './units';
-import { hexToKey, cubeDistance, hexesInRadius, createHex } from './hex';
+import { hexToKey, keyToHex, cubeDistance, hexesInRadius, createHex } from './hex';
 import { canAttack, calculateDamage } from './combat';
 import { canIssueCommand, CP_PER_ROUND } from './commands';
 import { findPath } from './pathfinding';
@@ -159,14 +159,14 @@ const BUILD_PRESETS: BuildPreset[] = [
 // aiBuildPhase
 // -----------------------------------------------------------------------------
 
-export function aiBuildPhase(state: GameState, playerId: PlayerId): AiBuildAction[] {
+export function aiBuildPhase(state: GameState, playerId: PlayerId, rng: () => number = Math.random): AiBuildAction[] {
   const budget = state.players[playerId].resources;
   const deploymentZone = playerId === 'player1'
     ? state.map.player1Deployment
     : state.map.player2Deployment;
 
   // Pick a random preset
-  const preset = BUILD_PRESETS[Math.floor(Math.random() * BUILD_PRESETS.length)]!;
+  const preset = BUILD_PRESETS[Math.floor(rng() * BUILD_PRESETS.length)]!;
 
   // Build set of occupied hex keys
   const allUnits = [...state.players.player1.units, ...state.players.player2.units];
@@ -386,8 +386,7 @@ export function aiBattlePhase(state: GameState, playerId: PlayerId): Command[] {
   const valuableCityHexes: CubeCoord[] = [];
   for (const [key, owner] of state.cityOwnership) {
     if (owner !== playerId) {
-      const [cq, cr] = key.split(',');
-      valuableCityHexes.push(createHex(Number(cq), Number(cr)));
+      valuableCityHexes.push(keyToHex(key));
     }
   }
 

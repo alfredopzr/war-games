@@ -322,7 +322,7 @@ export interface Engagement {
 // Each variant maps to a phase in the 10-phase resolution pipeline.
 // -----------------------------------------------------------------------------
 
-export type BattleEventPhase = 'movement' | 'combat' | 'capture' | 'objective' | 'round';
+export type BattleEventPhase = 'planning' | 'movement' | 'combat' | 'capture' | 'objective' | 'round';
 
 interface BattleEventBase {
   readonly actingPlayer: PlayerId;
@@ -332,10 +332,20 @@ interface BattleEventBase {
 
 // --- Emitted now ---
 
+export interface BattleEventRedirect extends BattleEventBase {
+  readonly type: 'redirect';
+  readonly unitId: string;
+  readonly unitType: UnitType;
+  readonly newMovementDirective: MovementDirective;
+  readonly newAttackDirective: AttackDirective;
+  readonly newSpecialtyModifier: SpecialtyModifier;
+}
+
 export interface BattleEventMove extends BattleEventBase {
   readonly type: 'move';
   readonly unitId: string;
   readonly unitType: UnitType;
+  readonly movementDirective: MovementDirective;
   readonly from: CubeCoord;
   readonly to: CubeCoord;
 }
@@ -345,12 +355,14 @@ export interface BattleEventDamage extends BattleEventBase {
   readonly attackerId: string;
   readonly attackerType: UnitType;
   readonly attackerPosition: CubeCoord;
+  readonly attackerAttackDirective: AttackDirective;
   readonly defenderId: string;
   readonly defenderType: UnitType;
   readonly defenderPosition: CubeCoord;
   readonly damage: number;
   readonly defenderHpAfter: number;
   readonly defenderTerrain: TerrainType;
+  readonly approachCategory: ApproachCategory;
   readonly response?: 'none';
 }
 
@@ -359,11 +371,16 @@ export interface BattleEventKill extends BattleEventBase {
   readonly attackerId: string;
   readonly attackerType: UnitType;
   readonly attackerPosition: CubeCoord;
+  readonly attackerAttackDirective: AttackDirective;
   readonly defenderId: string;
   readonly defenderType: UnitType;
   readonly defenderPosition: CubeCoord;
   readonly damage: number;
   readonly defenderTerrain: TerrainType;
+  readonly approachCategory: ApproachCategory;
+  readonly typeAdvantage: number;
+  readonly expectedHitsMin: number;
+  readonly expectedHitsMax: number;
 }
 
 export interface BattleEventCapture extends BattleEventBase {
@@ -456,11 +473,14 @@ export interface BattleEventCounter extends BattleEventBase {
   readonly attackerId: string;
   readonly attackerType: UnitType;
   readonly attackerPosition: CubeCoord;
+  readonly attackerAttackDirective: AttackDirective;
   readonly defenderId: string;
   readonly defenderType: UnitType;
   readonly defenderPosition: CubeCoord;
   readonly damage: number;
   readonly defenderHpAfter: number;
+  readonly defenderTerrain: TerrainType;
+  readonly approachCategory: ApproachCategory;
 }
 
 export interface BattleEventMelee extends BattleEventBase {
@@ -520,7 +540,20 @@ export interface BattleEventBuildingDestroyed extends BattleEventBase {
   readonly buildingOwner: PlayerId;
 }
 
+export interface BattleEventTurnStart extends BattleEventBase {
+  readonly type: 'turn-start';
+  readonly turnNumber: number;
+  readonly p1CommandsRemaining: number;
+  readonly p2CommandsRemaining: number;
+  readonly p1UnitsAlive: number;
+  readonly p2UnitsAlive: number;
+  readonly p1OutOfRangeUnits: number;
+  readonly p2OutOfRangeUnits: number;
+}
+
 export type BattleEvent =
+  | BattleEventRedirect
+  | BattleEventTurnStart
   | BattleEventMove
   | BattleEventDamage
   | BattleEventKill

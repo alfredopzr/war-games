@@ -6,6 +6,22 @@ Status key: INSTRUMENTED = logging exists | UNINSTRUMENTED = no logging | PLANNE
 
 ---
 
+## 0. Harness Architecture Constraint
+
+The AI vs AI harness (`ai-harness.ts`) is a **thin consumer**. It exists to call engine functions, read `state.pendingEvents`, and aggregate statistics. It does not contain game logic.
+
+**Rules:**
+
+1. The harness **never mutates game state**. No touching `turnsPlayed`, `turnNumber`, `hp`, `position`, or any field on `GameState`. The 10-phase resolution pipeline (`resolveTurn`) owns all state transitions.
+2. The harness **never reimplements game logic**. No damage calculations, no win condition checks, no turn counting. If the harness needs a result, it calls the engine function that produces it.
+3. The harness call chain is: `resolveTurn()` -> read `state.pendingEvents` -> `checkRoundEnd()` -> `scoreRound()`. No manual state manipulation between these calls.
+4. Kill timing verdicts and fairness metrics are derived **from event log data**, not from re-running formulas on raw state.
+5. If the harness needs data the event log doesn't provide, **fix the event log** (add the field to the relevant `BattleEvent` variant in `types.ts`). Do not compute it in the harness.
+
+**Why this matters:** The harness validates the engine. If the harness contains its own game logic, it can mask engine bugs or introduce phantom bugs that don't exist in real games. Every data point the harness reports must trace back to an engine output, not a harness computation.
+
+---
+
 ## 1. Map Generation Fairness
 
 These measure whether the procedural map (no mirror symmetry) creates asymmetric advantage.

@@ -521,7 +521,7 @@ terrainDef = TERRAIN[defenderTerrain].defenseModifier
 effectiveDef = defenderStats.def + (defender.directive === 'hold' ? 1 : 0)
 randomFactor = randomFn()                          // default: 0.85 + Math.random() * 0.3
 baseDamage = attackerStats.atk * typeMultiplier * randomFactor
-finalDamage = max(1, floor(baseDamage - effectiveDef * terrainDef))
+finalDamage = max(1, floor(baseDamage * (1 - terrainDef) - effectiveDef))
 ```
 
 **Inputs:**
@@ -706,8 +706,8 @@ map-gen.ts:14     const GRID: GridSize = { width: 20, height: 14 }
 | `tank.visionRange` | 3 | `units.ts:28` | ~21% of map width |
 | `artillery.visionRange` | 3 | `units.ts:39` | ~21% of map width |
 | `recon.visionRange` | 6 | `units.ts:50` | ~43% of map width |
-| `mountain.visionModifier` | +2 | `terrain.ts:24` | Recon on mountain = 8, sees 57% of map width |
-| `forest.blocksLoS` | true | `terrain.ts:16` | Only LoS blocker |
+| `getVisionBonus(elev, base)` | `floor(base * elev / MTN_PEAK_MAX)` | `terrain.ts:62` | Elevation-scaled; e.g. recon at elev 20 gets +6 bonus |
+| `forest.blocksLoS` | true (adjacency-only visibility) | `vision.ts:123` | Forest concealment: only forest observers see forest units |
 
 ### 4.4 Turn/Round Limits
 
@@ -937,7 +937,7 @@ Every tunable parameter currently in the engine:
 Elevation map exists but is never read by combat, movement, or any game mechanic.
 
 ### 8.5 DEF Does Nothing on Plains
-`terrainDef = 0` on plains → `effectiveDef × 0 = 0`. The entire DEF stat is nullified on the majority of the map.
+**RESOLVED.** Formula updated to `max(1, floor(baseDamage * (1 - terrainDef) - DEF))`. DEF subtracts flat after terrain percentage reduction, so DEF is meaningful on all terrain including plains (`terrainDef = 0` → `baseDamage * 1 - DEF`). Current balance.json terrain defense: plains=0%, forest=25%, mountain=0%, city=0%.
 
 ### 8.6 First-Mover Advantage
 `player1` always goes first. All tiebreakers favor `player1`. **Resolved by D1 (simultaneous resolution).**
